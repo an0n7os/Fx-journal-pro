@@ -60,7 +60,11 @@ async function register(email, referralCode) {
 const stamp = Date.now();
 
 // ── setup ─────────────────────────────────────────────────────────────────
-const admin = await signIn('admin@axyfx.com', 'LocalAdmin123');
+// See the note in plan-gates.test.mjs: the seeded admin's password follows
+// DEV_ADMIN_PASSWORD, and hardcoding it made every later assertion fail as
+// soon as the seed password changed.
+const adminPassword = process.env.DEV_ADMIN_PASSWORD?.trim() || 'LocalAdmin123';
+const admin = await signIn('admin@axyfx.com', adminPassword);
 ok('setup: signed in as super admin', !!admin.cookie);
 
 const partnerA = await signIn(`pa_${stamp}@example.com`);

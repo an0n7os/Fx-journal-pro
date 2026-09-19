@@ -33,7 +33,13 @@ async function signIn(email, password = 'PlanTest12345') {
 }
 
 const stamp = Date.now();
-const admin = await signIn('admin@axyfx.com', 'LocalAdmin123');
+// The seeded admin's password is whatever DEV_ADMIN_PASSWORD was set to when
+// db.json was written. Hardcoding it here meant that changing the seed
+// password silently turned every assertion below into a failure, because the
+// admin login returned no cookie and nothing after it could run.
+const adminPassword = process.env.DEV_ADMIN_PASSWORD?.trim() || 'LocalAdmin123';
+const admin = await signIn('admin@axyfx.com', adminPassword);
+ok('setup: signed in as super admin', !!admin.cookie);
 const free = await signIn(`plan_free_${stamp}@example.com`);
 ok('setup: free user signed in', !!free.cookie);
 
