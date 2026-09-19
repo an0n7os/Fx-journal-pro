@@ -42,6 +42,34 @@ const IS_SERVERLESS = !!(
   process.env.AWS_LAMBDA_FUNCTION_NAME
 );
 
+/**
+ * True only on a developer's own machine.
+ *
+ * Every convenience that must never reach users hangs off this: signing in
+ * with an unknown email creates the account, Turnstile is skipped, OTP codes
+ * come back in the response, and admin@axyfx.com is a SUPER_ADMIN back door.
+ *
+ * These used to test NODE_ENV alone. A Netlify deploy where NODE_ENV was not
+ * set in the site's own variables — netlify.toml's [build.environment] does
+ * not reach the function runtime — therefore ran as "development" on the
+ * public internet, and anyone could sign in as anyone, including the seeded
+ * admin. A serverless deployment is never a dev box, so it is excluded
+ * regardless of what NODE_ENV says.
+ */
+const IS_DEV = !IS_SERVERLESS && process.env.NODE_ENV !== 'production';
+
+/**
+ * True wherever real users can reach this process.
+ *
+ * The counterpart to IS_DEV, used by the guards that refuse to start: no
+ * Supabase, no email provider, no SESSION_SECRET. Those tested NODE_ENV alone
+ * too, so the same unset variable that opened the dev back doors also let the
+ * server fall back to db.json — a file on a function instance's own disk,
+ * wiped on every deploy and not shared between instances. Signups and trades
+ * would disappear with no error anywhere.
+ */
+const IS_PRODUCTION_LIKE = IS_SERVERLESS || process.env.NODE_ENV === 'production';
+
 // Absolute file paths for database persistence
 const DB_FILE = path.join(process.cwd(), 'db.json');
 
@@ -108,7 +136,7 @@ try {
         'anonymous visitor already has, and every admin route silently reads nothing. ' +
         'Use the secret key: Supabase dashboard, Settings, API keys, "sb_secret_..." ' +
         '(formerly service_role).';
-      if (process.env.NODE_ENV === 'production') {
+      if (IS_PRODUCTION_LIKE) {
         console.error(message);
         throw new Error('A public Supabase key cannot be used as the server key');
       }
@@ -142,7 +170,7 @@ try {
     // trades quietly disappear and nobody sees an error. A typo in SUPABASE_URL
     // looks exactly like a normal boot. Fail loudly instead, the way the
     // SESSION_SECRET check below does.
-    if (process.env.NODE_ENV === 'production') {
+    if (IS_PRODUCTION_LIKE) {
       console.error(
         '[AxyFx Journal Server] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set. ' +
         'Refusing to start in production on the local db.json fallback — all data would be ' +
@@ -472,7 +500,7 @@ async function sendOtpEmail(email, otp, subject = 'Your FX Journal Pro Verificat
     const resendFrom = configuredFrom
       ? `FX Journal Pro <${configuredFrom}>`
       : 'FX Journal Pro <onboarding@resend.dev>';
-    if (!configuredFrom && process.env.NODE_ENV === 'production') {
+    if (!configuredFrom && IS_PRODUCTION_LIKE) {
       console.warn('[Resend] RESEND_FROM_EMAIL is not set — sending from the shared sandbox domain. Expect codes to land in spam.');
     }
     try {
@@ -520,7 +548,7 @@ async function sendOtpEmail(email, otp, subject = 'Your FX Journal Pro Verificat
  */
 const DEV_DEMO_PASSWORD_HASH = (() => {
   const custom = process.env.DEV_ADMIN_PASSWORD?.trim();
-  if (custom && process.env.NODE_ENV !== 'production') return bcrypt.hashSync(custom, 10);
+  if (custom && IS_DEV) return bcrypt.hashSync(custom, 10);
   return '$2b$10$x/DpFt5V7kARrWcHgIw5jeXY4ZCjlzor4yv//aoF2pQBKBRKYRT6m';
 })();
 
@@ -532,7 +560,7 @@ function createEmptyUserDb(userId?: string, email?: string, injectDummyUser = fa
   // anywhere else, so it is confined to non-production. It is only reachable
   // at all when Supabase is unavailable, which in production means an
   // outage — exactly when a free admin login would do the most damage.
-  const isDemo = process.env.NODE_ENV !== 'production'
+  const isDemo = IS_DEV
     && (cleanEmail === 'admin@axyfx.com' || cleanEmail === 'demo@axyfx.com');
 
   const users = [];
@@ -703,7 +731,7 @@ const SESSION_COOKIE = 'fx_auth_session';
 const SESSION_SECRET = (() => {
   const explicit = process.env.SESSION_SECRET?.trim();
   if (explicit && explicit.length >= 32) return explicit;
-  if (process.env.NODE_ENV === 'production') {
+  if (IS_PRODUCTION_LIKE) {
     if (explicit) {
       console.error('[Auth] SESSION_SECRET is shorter than 32 characters. Refusing to start.');
       throw new Error('SESSION_SECRET must be at least 32 characters in production');
@@ -763,7 +791,7 @@ function verifySessionValue(raw: string | undefined): { userId: string; email: s
  * does. ALLOW_NO_EMAIL=true is the escape hatch for a deliberately
  * console-only deployment.
  */
-if (process.env.NODE_ENV === 'production') {
+if (IS_PRODUCTION_LIKE) {
   const hasSendgrid = !!process.env.SENDGRID_API_KEY?.trim();
   const hasResend = !!process.env.RESEND_API_KEY?.trim();
   if (!hasSendgrid && !hasResend) {
@@ -809,7 +837,7 @@ function isSessionRevoked(session: { userId: string; email: string }, issuedAt: 
 function sessionCookieOptions() {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: IS_PRODUCTION_LIKE,
     sameSite: 'lax' as const,
     path: '/',
   };
@@ -851,7 +879,7 @@ function sanitizeUsers(users: any[]): any[] {
 // Whether the OTP may be echoed back in an API response. Never in production —
 // otherwise anyone can request a code for any address and read it straight back.
 function canExposeOtp(): boolean {
-  return process.env.NODE_ENV !== 'production' && process.env.EXPOSE_DEV_OTP !== 'false';
+  return IS_DEV && process.env.EXPOSE_DEV_OTP !== 'false';
 }
 
 // ==========================================
@@ -2452,7 +2480,7 @@ async function verifyTurnstile(token: string): Promise<boolean> {
   if (!configured) {
     // '1x0000...AA' is Cloudflare's always-pass test secret. Falling back to it
     // in production silently disables bot protection, so fail closed instead.
-    if (process.env.NODE_ENV === 'production') {
+    if (IS_PRODUCTION_LIKE) {
       console.error('[Turnstile] TURNSTILE_SECRET_KEY is not set — rejecting the request.');
       return false;
     }
@@ -2714,7 +2742,7 @@ app.use(async (req, res, next) => {
 app.get('/api/debug/env', async (req, res) => {
   // Diagnostics only — this reports infrastructure details and raw provider
   // errors, so it must never be reachable on a public production deployment.
-  if (process.env.NODE_ENV === 'production') {
+  if (IS_PRODUCTION_LIKE) {
     return res.status(404).json({ error: 'Not found' });
   }
   let sbError = null;
@@ -3036,7 +3064,7 @@ app.post('/api/auth/login', authIpBackstopLimiter, authRateLimiter, async (req, 
     const { email, password, id, userId, turnstileToken } = req.body;
 
     // Skip Turnstile in development mode (NODE_ENV not set or 'development')
-    const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+    const isDev = IS_DEV;
     if (!isDev) {
       const isHuman = await verifyTurnstile(turnstileToken);
       if (!isHuman) {
@@ -5471,7 +5499,7 @@ const PRO_PLAN_AMOUNT_PAISE = 39900; // ₹399/month
  * in production.
  */
 const allowTestBilling = () =>
-  process.env.NODE_ENV !== 'production' && process.env.ALLOW_TEST_BILLING === 'true';
+  IS_DEV && process.env.ALLOW_TEST_BILLING === 'true';
 const RAZORPAY_API = 'https://api.razorpay.com/v1';
 
 const razorpayAuth = () => {
@@ -8710,7 +8738,7 @@ app.get('/api/economic-calendar', async (req, res) => {
 // ==========================================
 
 // In development on a long-lived host, load the Vite dev server
-if (process.env.NODE_ENV !== 'production' && !IS_SERVERLESS) {
+if (IS_DEV) {
   import('vite').then(({ createServer }) => {
     createServer({
       server: { middlewareMode: true },
