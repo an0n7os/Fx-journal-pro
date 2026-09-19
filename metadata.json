@@ -1,0 +1,6 @@
+{
+  "name": "FX Journal Pro",
+  "description": "Professional Forex Trading Journal SaaS Platform featuring manual trade logging, MT5 Expert Advisor synchronization, risk management analytics, and AI-powered trading performance insights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

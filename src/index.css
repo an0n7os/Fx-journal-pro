@@ -1,0 +1,2931 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@400;700&family=Orbitron:wght@500;600&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scaleY(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.25s ease-out origin-top both;
+}
+
+@keyframes float-slow {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s ease-out both;
+}
+
+.animate-float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+.animate-float-slower {
+  animation: float-slow 8s ease-in-out infinite;
+}
+
+@keyframes shine {
+  0% {
+    transform: translateX(-150%) skewX(-25deg);
+  }
+
+  100% {
+    transform: translateX(250%) skewX(-25deg);
+  }
+}
+
+/* ───── Collapsible Note Field Entrance ───── */
+@keyframes note-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in.fade-in.slide-in-from-top-2 {
+  animation: note-in 0.18s ease-out both;
+}
+
+
+/* ───── Premium Trading Title Ticker ───── */
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-track {
+  animation: ticker-scroll 60s linear infinite;
+  will-change: transform;
+}
+
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
+.ticker-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 7%, black 93%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 7%, black 93%, transparent);
+}
+
+.ticker-font-elegant {
+  font-family: "Playfair Display", Georgia, serif;
+}
+
+.ticker-font-future {
+  font-family: "Orbitron", "Space Grotesk", sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+}
+
+details.faq summary .faq-chevron {
+  transition: transform 0.25s ease;
+}
+
+details.faq[open] summary .faq-chevron {
+  transform: rotate(180deg);
+}
+
+details.faq summary {
+  list-style: none;
+}
+
+details.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Custom scrollbars for a cleaner SaaS interface */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+
+/* Custom styling for Trading Performance Calendar Card */
+#trading-calendar-card {
+  background-color: transparent !important;
+  background-image: none !important;
+  /* Clear Tailwind gradient in light mode */
+  border: none !important;
+}
+
+html.dark #trading-calendar-card,
+.dark #trading-calendar-card {
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+}
+
+/* Light mode — force all calendar day buttons to soft off-white */
+#trading-calendar-card button {
+  background-color: #f5f7fa !important;
+  background-image: none !important;
+  border: 1px solid #d8e0ea !important;
+  color: #0f172a !important;
+}
+
+/* Keep profit days green */
+#trading-calendar-card button.border-emerald-200 {
+  background-color: #ecfdf5 !important;
+  border-color: #6ee7b7 !important;
+}
+
+/* Keep loss days red */
+#trading-calendar-card button.border-rose-200 {
+  background-color: #fff1f2 !important;
+  border-color: #fda4af !important;
+}
+
+/* Dark mode — revert day buttons to dark */
+html.dark #trading-calendar-card button,
+.dark #trading-calendar-card button {
+  background-color: rgba(30, 41, 59, 0.35) !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+  color: #f1f5f9 !important;
+}
+
+html.dark #trading-calendar-card button.border-emerald-200,
+.dark #trading-calendar-card button.border-emerald-200 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+html.dark #trading-calendar-card button.border-rose-200,
+.dark #trading-calendar-card button.border-rose-200 {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Light mode sidebar / stats panels */
+#trading-calendar-card .lg\:col-span-1>div {
+  background-color: #eef1f6 !important;
+  background-image: none !important;
+  border: 1px solid #d1dce8 !important;
+}
+
+html.dark #trading-calendar-card .lg\:col-span-1>div,
+.dark #trading-calendar-card .lg\:col-span-1>div {
+  background-color: rgba(30, 41, 59, 0.4) !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Explicit high-contrast text styles for light theme to guarantee visibility */
+#trading-calendar-card .trading-calendar-title,
+#trading-calendar-card h2 {
+  color: #000000 !important;
+}
+
+#trading-calendar-card .trading-calendar-desc,
+#trading-calendar-card p {
+  color: #1e293b !important;
+}
+
+#trading-calendar-card .trading-calendar-month {
+  color: #000000 !important;
+}
+
+#trading-calendar-card .calendar-day-name {
+  color: #334155 !important;
+}
+
+/* Dark mode resets for the custom calendar classes */
+html.dark #trading-calendar-card .trading-calendar-title,
+.dark #trading-calendar-card .trading-calendar-title,
+html.dark #trading-calendar-card h2,
+.dark #trading-calendar-card h2 {
+  color: #ffffff !important;
+}
+
+html.dark #trading-calendar-card .trading-calendar-desc,
+.dark #trading-calendar-card .trading-calendar-desc,
+html.dark #trading-calendar-card p,
+.dark #trading-calendar-card p {
+  color: #cbd5e1 !important;
+}
+
+html.dark #trading-calendar-card .trading-calendar-month,
+.dark #trading-calendar-card .trading-calendar-month {
+  color: #ffffff !important;
+}
+
+html.dark #trading-calendar-card .calendar-day-name,
+.dark #trading-calendar-card .calendar-day-name {
+  color: #f1f5f9 !important;
+}
+
+/* Explicit date numbers inside day boxes - Black in light theme, off-white in dark theme */
+#trading-calendar-card .calendar-day-number {
+  color: #000000 !important;
+}
+
+html.dark #trading-calendar-card .calendar-day-number,
+.dark #trading-calendar-card .calendar-day-number {
+  color: #f8fafc !important;
+}
+
+/* Calendar padding boxes (empty slots) */
+.calendar-day-box {
+  background-color: #e8ecf2 !important;
+  background-image: none !important;
+  border: 1px solid #d1dce8 !important;
+}
+
+html.dark .calendar-day-box,
+.dark .calendar-day-box {
+  background-color: rgba(30, 41, 59, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Calendar Sidebar/Stats Boxes - Crisp white inside, clear borders in light mode */
+.calendar-sidebar-box {
+  background-color: #eef1f6 !important;
+  background-image: none !important;
+  border: 1.5px solid #d1dce8 !important;
+}
+
+html.dark .calendar-sidebar-box,
+.dark .calendar-sidebar-box {
+  background-color: rgba(30, 41, 59, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Comprehensive Dark Mode Overrides - Premium Obsidian & Indigo Glow Theme */
+html.dark,
+html.dark body {
+  background-color: #03060d !important;
+  color: #f8fafc !important;
+  background-image: radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.04) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.01) 0px, transparent 50%) !important;
+}
+
+/* Base layouts */
+.dark .bg-\[\#FBFBFA\]\/40,
+.dark .bg-slate-50,
+.dark .bg-slate-100\/50,
+.dark .bg-slate-100\/30,
+.dark .bg-[#FBFBFA]\/40 {
+  background-color: #1a1e2a !important;
+}
+
+.dark .bg-slate-100 {
+  background-color: #050811 !important;
+}
+
+.dark .bg-white {
+  background-color: #060913 !important;
+  border-color: #1e293b !important;
+}
+
+.dark .bg-\[\#FBFBFA\] {
+  background-color: #04060b !important;
+}
+
+.dark .bg-\[\#f4f4f3\] {
+  background-color: #060913 !important;
+}
+
+.dark .bg-\[\#efefee\] {
+  background-color: #090d19 !important;
+}
+
+/* Sidebar navigation active/inactive states */
+.dark .bg-\[\#efefee\] {
+  background-color: rgba(99, 102, 241, 0.12) !important;
+  color: #a5b4fc !important;
+  border: 1px solid rgba(99, 102, 241, 0.22) !important;
+}
+
+.dark .hover\:bg-\[\#efefee\]\/60:hover {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  color: #f8fafc !important;
+}
+
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-slate-100\/40:hover {
+  background-color: #060913 !important;
+}
+
+/* Text Overrides - High-contrast premium typography */
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: #e2e8f0 !important;
+}
+
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700,
+.dark .text-gray-900,
+.dark .text-gray-800 {
+  color: #e2e8f0 !important;
+}
+
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-slate-400,
+.dark .text-gray-600,
+.dark .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-indigo-600,
+.dark .text-indigo-700 {
+  color: #818cf8 !important;
+}
+
+/* Borders - Elegant, high-fidelity thin borders */
+.dark .border,
+.dark .border-slate-50,
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-200\/80,
+.dark .border-slate-300,
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-slate-200\/60,
+.dark .border-slate-200\/50,
+.dark .border-slate-100\/80 {
+  border-color: #334155 !important;
+}
+
+.dark .border-b,
+.dark .border-t,
+.dark .border-r,
+.dark .border-l {
+  border-color: #334155 !important;
+}
+
+/* Inputs, Selects, Textareas - Premium field styling */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #04060d !important;
+  color: #f8fafc !important;
+  border: 1px solid #334155 !important;
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15) !important;
+  outline: none;
+}
+
+.dark input::placeholder,
+.dark select::placeholder,
+.dark textarea::placeholder {
+  color: #475569 !important;
+}
+
+/* Interactive badges, indicators, & alert boxes */
+.dark .bg-emerald-50,
+.dark .bg-emerald-50\/50,
+.dark .bg-emerald-100\/50,
+.dark .bg-emerald-100,
+.dark .bg-emerald-500\/10 {
+  background-color: rgba(16, 185, 129, 0.06) !important;
+  border: 1px solid rgba(16, 185, 129, 0.15) !important;
+}
+
+.dark .text-emerald-950,
+.dark .text-emerald-800,
+.dark .text-emerald-700,
+.dark .text-emerald-600 {
+  color: #34d399 !important;
+}
+
+.dark .bg-indigo-50,
+.dark .bg-indigo-100\/50,
+.dark .bg-indigo-100,
+.dark .bg-indigo-50\/70,
+.dark .bg-[#efefee] {
+  background-color: rgba(99, 102, 241, 0.06) !important;
+  border: 1px solid rgba(99, 102, 241, 0.15) !important;
+}
+
+.dark .text-indigo-900,
+.dark .text-indigo-800,
+.dark .text-indigo-700,
+.dark .text-indigo-950\/90 {
+  color: #a5b4fc !important;
+}
+
+.dark .bg-blue-50,
+.dark .bg-blue-50\/40,
+.dark .bg-blue-100\/50,
+.dark .bg-blue-100,
+.dark .bg-blue-50\/60 {
+  background-color: rgba(59, 130, 246, 0.06) !important;
+  border: 1px solid rgba(59, 130, 246, 0.15) !important;
+}
+
+.dark .text-blue-900,
+.dark .text-blue-800,
+.dark .text-blue-700,
+.dark .text-blue-700\/80 {
+  color: #60a5fa !important;
+}
+
+.dark .bg-rose-50,
+.dark .bg-rose-100\/50,
+.dark .bg-rose-100,
+.dark .bg-rose-50\/70 {
+  background-color: rgba(239, 68, 68, 0.06) !important;
+  border: 1px solid rgba(239, 68, 68, 0.15) !important;
+}
+
+.dark .text-rose-950,
+.dark .text-rose-900,
+.dark .text-rose-800,
+.dark .text-rose-700,
+.dark .text-rose-600 {
+  color: #f87171 !important;
+}
+
+.dark .bg-amber-50,
+.dark .bg-amber-100\/50,
+.dark .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.06) !important;
+  border: 1px solid rgba(245, 158, 11, 0.15) !important;
+}
+
+.dark .text-amber-900,
+.dark .text-amber-800,
+.dark .text-amber-700 {
+  color: #fbbf24 !important;
+}
+
+/* Color Badge & Border Overrides */
+.dark .border-emerald-100,
+.dark .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+.dark .border-blue-100,
+.dark .border-blue-200 {
+  border-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+.dark .border-rose-100,
+.dark .border-rose-200 {
+  border-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+.dark .border-amber-100,
+.dark .border-amber-200 {
+  border-color: rgba(245, 158, 11, 0.15) !important;
+}
+
+/* Count badges and tag badges */
+.dark .bg-slate-200,
+.dark .bg-slate-200\/50,
+.dark .bg-slate-200\/80 {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: #cbd5e1 !important;
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Hover background lists and tags */
+.dark .hover\:bg-slate-50\/50:hover {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* Premium Buttons in Dark Mode */
+.dark button.bg-slate-900,
+.dark .bg-slate-900[type="button"],
+.dark .bg-slate-900[type="submit"] {
+  background-color: #4f46e5 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 4px 14px 0 rgba(79, 70, 229, 0.4) !important;
+}
+
+.dark button.bg-slate-900:hover,
+.dark .bg-slate-900[type="button"]:hover,
+.dark .bg-slate-900[type="submit"]:hover {
+  background-color: #4338ca !important;
+  box-shadow: 0 6px 20px 0 rgba(79, 70, 229, 0.5) !important;
+}
+
+.dark button.bg-white,
+.dark button.bg-slate-50,
+.dark button.bg-slate-100 {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid #1e293b !important;
+  color: #cbd5e1 !important;
+}
+
+.dark button.bg-white:hover,
+.dark button.bg-slate-50:hover,
+.dark button.bg-slate-100:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+/* Cards & UI Panels */
+.dark .rounded-xl.bg-white,
+.dark .rounded-2xl.bg-white,
+.dark .rounded-3xl.bg-white {
+  background-color: #060913 !important;
+  border: 1px solid #1e293b !important;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Primary indigo buttons glow */
+.dark .bg-indigo-600,
+.dark .bg-indigo-700 {
+  background-color: #4f46e5 !important;
+  box-shadow: 0 4px 14px 0 rgba(79, 70, 229, 0.3) !important;
+}
+
+.dark .bg-indigo-600:hover,
+.dark .bg-indigo-700:hover {
+  background-color: #4338ca !important;
+  box-shadow: 0 6px 20px 0 rgba(79, 70, 229, 0.4) !important;
+}
+
+.dark .bg-slate-900 {
+  background-color: #03060d !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Scrollbars & Recharts Tooltip in Dark */
+.dark ::-webkit-scrollbar-thumb {
+  background: #1e293b;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+.dark .recharts-default-tooltip {
+  background-color: #060913 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6) !important;
+  color: #f1f5f9 !important;
+}
+
+.dark .recharts-tooltip-item {
+  color: #f1f5f9 !important;
+}
+
+/* Beautiful grid lines in dark mode */
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line {
+  stroke: rgba(255, 255, 255, 0.04) !important;
+}
+
+.dark .recharts-text {
+  fill: #64748b !important;
+}
+
+/* Accent glass borders */
+.dark .glass-panel {
+  background: rgba(6, 9, 19, 0.7) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Direct specific overrides for opacity backgrounds inside layout nodes */
+.dark .bg-slate-50\/95 {
+  background-color: rgba(6, 9, 19, 0.95) !important;
+}
+
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/70 {
+  background-color: rgba(6, 9, 19, 0.5) !important;
+}
+
+.dark .bg-white\/80 {
+  background-color: rgba(6, 9, 19, 0.8) !important;
+}
+
+/* ───── AI Mentor / AI Insights - Light Mode Overrides ───── */
+/* Ensure the premium teaser renders correctly in light mode */
+#ai-insights-premium-teaser {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%) !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.dark #ai-insights-premium-teaser,
+.dark #ai-insights-premium-teaser {
+  background: linear-gradient(135deg, #0f172a 0%, #020617 100%) !important;
+  border: 1px solid #1e293b !important;
+  color: #f8fafc !important;
+}
+
+/* Light mode heading and paragraph text in AI teaser */
+#ai-insights-premium-teaser h2,
+#ai-insights-premium-teaser h3 {
+  color: #0f172a !important;
+}
+
+#ai-insights-premium-teaser p {
+  color: #475569 !important;
+}
+
+html.dark #ai-insights-premium-teaser h2,
+html.dark #ai-insights-premium-teaser h3,
+.dark #ai-insights-premium-teaser h2,
+.dark #ai-insights-premium-teaser h3 {
+  color: #f1f5f9 !important;
+}
+
+html.dark #ai-insights-premium-teaser p,
+.dark #ai-insights-premium-teaser p {
+  color: #94a3b8 !important;
+}
+
+/* ───── AI Mentor Chat (Pro) - Light / Dark Mode Overrides ───── */
+
+/* Outer card */
+#ai-mentor-card {
+  background-color: #f0f4f8 !important;
+  background-image: none !important;
+  border: 1px solid #d1dce8 !important;
+}
+
+html.dark #ai-mentor-card,
+.dark #ai-mentor-card {
+  background-color: #060913 !important;
+  background-image: none !important;
+  border: 1px solid #1e293b !important;
+}
+
+/* Header bar */
+#ai-mentor-card>div:first-child {
+  background-color: #e8edf4 !important;
+  background-image: none !important;
+  border-bottom-color: #d1dce8 !important;
+}
+
+html.dark #ai-mentor-card>div:first-child,
+.dark #ai-mentor-card>div:first-child {
+  background-color: rgba(6, 9, 19, 0.6) !important;
+  border-bottom-color: #1e293b !important;
+}
+
+/* Header text */
+#ai-mentor-card h2 {
+  color: #0f172a !important;
+}
+
+#ai-mentor-card p {
+  color: #475569 !important;
+}
+
+html.dark #ai-mentor-card h2,
+.dark #ai-mentor-card h2 {
+  color: #f1f5f9 !important;
+}
+
+html.dark #ai-mentor-card p,
+.dark #ai-mentor-card p {
+  color: #94a3b8 !important;
+}
+
+/* Chat message area (scrollable body) */
+#ai-mentor-card .flex-1.overflow-y-auto {
+  background-color: #eef2f7 !important;
+  background-image: none !important;
+}
+
+html.dark #ai-mentor-card .flex-1.overflow-y-auto,
+.dark #ai-mentor-card .flex-1.overflow-y-auto {
+  background-color: rgba(3, 6, 13, 0.5) !important;
+}
+
+/* Mentor message bubble (bg-white inside chat) */
+#ai-mentor-card .rounded-tl-none {
+  background-color: #ffffff !important;
+  border-color: #d1dce8 !important;
+  color: #1e293b !important;
+}
+
+html.dark #ai-mentor-card .rounded-tl-none,
+.dark #ai-mentor-card .rounded-tl-none {
+  background-color: rgba(30, 41, 59, 0.5) !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+  color: #cbd5e1 !important;
+}
+
+/* User avatar circle */
+#ai-mentor-card .bg-slate-200 {
+  background-color: #dde3ec !important;
+}
+
+html.dark #ai-mentor-card .bg-slate-200,
+.dark #ai-mentor-card .bg-slate-200 {
+  background-color: rgba(51, 65, 85, 0.8) !important;
+}
+
+/* Input footer bar */
+#ai-mentor-card>div:last-child {
+  background-color: #e8edf4 !important;
+  background-image: none !important;
+  border-top-color: #d1dce8 !important;
+}
+
+html.dark #ai-mentor-card>div:last-child,
+.dark #ai-mentor-card>div:last-child {
+  background-color: #060913 !important;
+  border-top-color: #1e293b !important;
+}
+
+/* Input field */
+#ai-mentor-card input[type="text"] {
+  background-color: #f5f7fa !important;
+  border-color: #c8d3e0 !important;
+  color: #0f172a !important;
+}
+
+#ai-mentor-card input[type="text"]::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.dark #ai-mentor-card input[type="text"],
+.dark #ai-mentor-card input[type="text"] {
+  background-color: #04060d !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark #ai-mentor-card input[type="text"]::placeholder,
+.dark #ai-mentor-card input[type="text"]::placeholder {
+  color: #475569 !important;
+}
+
+@keyframes flame-flicker {
+  0% {
+    transform: scaleY(1) scaleX(1) rotate(0deg);
+    opacity: 1;
+    filter: brightness(1);
+  }
+
+  25% {
+    transform: scaleY(1.1) scaleX(0.95) rotate(-2deg);
+    opacity: 0.9;
+    filter: brightness(1.2);
+  }
+
+  50% {
+    transform: scaleY(0.95) scaleX(1.05) rotate(3deg);
+    opacity: 0.8;
+    filter: brightness(0.9);
+  }
+
+  75% {
+    transform: scaleY(1.05) scaleX(0.98) rotate(-1deg);
+    opacity: 0.95;
+    filter: brightness(1.1);
+  }
+
+  100% {
+    transform: scaleY(1) scaleX(1) rotate(0deg);
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+
+.animate-flame {
+  animation: flame-flicker 1.2s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+
+.fire-wrapper {
+  width: 120px;
+  height: 120px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.fire-flame-outer {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(-45deg, #ef4444 0%, #f97316 100%);
+  border-radius: 80px 80px 0 80px;
+  transform: rotate(45deg);
+  animation: fire-flicker-outer 1s ease-in-out infinite alternate;
+  position: absolute;
+  bottom: 10px;
+  box-shadow: 0 0 30px #ef4444, 0 0 60px #f97316;
+}
+
+.fire-flame-inner {
+  width: 45px;
+  height: 45px;
+  background: linear-gradient(-45deg, #fef08a 0%, #f59e0b 100%);
+  border-radius: 45px 45px 0 45px;
+  transform: rotate(45deg);
+  position: absolute;
+  bottom: 15px;
+  animation: fire-flicker-inner 0.8s ease-in-out infinite alternate;
+  box-shadow: 0 0 20px #f59e0b;
+}
+
+@keyframes fire-flicker-outer {
+  0% {
+    transform: rotate(45deg) scale(0.9) skew(0deg);
+  }
+
+  50% {
+    transform: rotate(43deg) scale(1.05) skew(2deg);
+  }
+
+  100% {
+    transform: rotate(48deg) scale(1) skew(-2deg);
+  }
+}
+
+@keyframes fire-flicker-inner {
+  0% {
+    transform: rotate(45deg) scale(1) skew(0deg);
+  }
+
+  50% {
+    transform: rotate(48deg) scale(0.9) skew(-3deg);
+  }
+
+  100% {
+    transform: rotate(42deg) scale(1.05) skew(3deg);
+  }
+}
+
+
+.blue-fire-outer {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(-45deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 80px 80px 0 80px;
+  transform: rotate(45deg);
+  animation: fire-flicker-outer 1s ease-in-out infinite alternate;
+  position: absolute;
+  bottom: 10px;
+  box-shadow: 0 0 30px #2563eb, 0 0 60px #3b82f6;
+}
+
+.blue-fire-inner {
+  width: 45px;
+  height: 45px;
+  background: linear-gradient(-45deg, #ffffff 0%, #60a5fa 100%);
+  border-radius: 45px 45px 0 45px;
+  transform: rotate(45deg);
+  position: absolute;
+  bottom: 15px;
+  animation: fire-flicker-inner 0.8s ease-in-out infinite alternate;
+  box-shadow: 0 0 20px #60a5fa;
+}
+
+
+@keyframes flame-sway {
+
+  0%,
+  100% {
+    transform: rotate(-1deg) scaleY(0.98);
+  }
+
+  50% {
+    transform: rotate(1deg) scaleY(1.02);
+  }
+}
+
+@keyframes spark-rise {
+  0% {
+    transform: translateY(0) scale(1) translateX(0);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: translateY(-15px) scale(0.8) translateX(3px);
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: translateY(-30px) scale(0) translateX(-3px);
+    opacity: 0;
+  }
+}
+
+
+/* ============================================================
+   LANDING PAGE — premium surface system
+   Dark console aesthetic: near-black ground, violet accent,
+   glass cards with a single top highlight, mono micro-labels.
+   Emerald stays reserved for profit/positive semantics.
+   ============================================================ */
+
+.lp {
+  --lp-ground: #07080c;
+  --lp-ground-soft: #0b0d13;
+  --lp-accent: 139 92 246;
+  /* violet 500 */
+  --lp-accent-hi: 167 139 250;
+  /* violet 400 */
+  --lp-positive: 52 211 153;
+  /* emerald 400 */
+  --lp-hair: rgba(255, 255, 255, .07);
+  --lp-hair-hi: rgba(255, 255, 255, .14);
+  --lp-text-dim: #8a93a3;
+  background: var(--lp-ground);
+}
+
+/* Ambient light: one broad wash behind the fold, not three competing blobs */
+.lp-aura {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.lp-aura::before {
+  content: "";
+  position: absolute;
+  top: -340px;
+  left: 50%;
+  width: min(1180px, 130vw);
+  height: 720px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, rgb(var(--lp-accent) / .22), transparent 68%);
+  filter: blur(90px);
+}
+
+.lp-aura::after {
+  content: "";
+  position: absolute;
+  top: 46%;
+  right: -18%;
+  width: 620px;
+  height: 620px;
+  background: radial-gradient(circle at center, rgb(var(--lp-positive) / .07), transparent 70%);
+  filter: blur(120px);
+}
+
+/* Hairline grid, faded out from the top — texture, not pattern */
+.lp-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .022) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 72% 58% at 50% 0%, #000 35%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 72% 58% at 50% 0%, #000 35%, transparent 100%);
+}
+
+/* ── Cards ─────────────────────────────────────────────────── */
+.lp-card {
+  position: relative;
+  background:
+    linear-gradient(162deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, .018) 42%, rgba(255, 255, 255, .012) 100%);
+  border: 1px solid var(--lp-hair);
+  border-radius: 20px;
+  backdrop-filter: blur(12px);
+  transition: border-color .25s ease, transform .25s ease, box-shadow .25s ease;
+}
+
+/* Single specular line along the top edge — the detail that reads as "glass" */
+.lp-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: 20px 20px 0 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .22), transparent);
+  opacity: .7;
+}
+
+.lp-card:hover {
+  border-color: var(--lp-hair-hi);
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px -28px rgb(var(--lp-accent) / .55);
+}
+
+/* The one filled card per group — anchors the eye, spends the accent */
+.lp-card-accent {
+  background:
+    radial-gradient(120% 140% at 12% 0%, rgb(var(--lp-accent) / .42) 0%, rgb(var(--lp-accent) / .14) 46%, rgba(255, 255, 255, .02) 100%);
+  border-color: rgb(var(--lp-accent) / .32);
+}
+
+.lp-card-accent:hover {
+  border-color: rgb(var(--lp-accent) / .5);
+}
+
+/* Icon chip */
+.lp-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .03));
+  border: 1px solid var(--lp-hair);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  transition: border-color .25s ease, box-shadow .25s ease;
+}
+
+.lp-card:hover .lp-chip {
+  border-color: rgb(var(--lp-accent) / .38);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 0 18px -6px rgb(var(--lp-accent) / .7);
+}
+
+/* ── Micro-labels ──────────────────────────────────────────── */
+.lp-eyebrow {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--lp-text-dim);
+}
+
+.lp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--lp-hair);
+  backdrop-filter: blur(8px);
+}
+
+/* ── Navigation ────────────────────────────────────────────── */
+.lp-nav {
+  background: rgba(7, 8, 12, .72);
+  backdrop-filter: blur(20px) saturate(140%);
+  border-bottom: 1px solid var(--lp-hair);
+}
+
+/* Segmented pill group, like a terminal's view switcher.
+   No `display` here — the markup owns it, so Tailwind's `hidden` still wins
+   at phone width instead of this rule forcing the nav back on. */
+.lp-navgroup {
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid var(--lp-hair);
+}
+
+.lp-navlink {
+  position: relative;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lp-text-dim);
+  outline: none;
+  transition: color .15s ease, background-color .15s ease, box-shadow .15s ease;
+}
+
+.lp-navlink:hover {
+  color: #fff;
+  background: transparent;
+}
+
+.lp-navlink.active,
+.lp-navlink[data-active="true"] {
+  color: #fff;
+  font-weight: 600;
+  background: rgba(255, 255, 255, .12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.lp-btn-primary {
+  position: relative;
+  background: linear-gradient(180deg, rgb(var(--lp-accent-hi)) 0%, rgb(var(--lp-accent)) 100%);
+  color: #fff;
+  border: 1px solid rgb(var(--lp-accent-hi) / .6);
+  box-shadow: 0 10px 28px -12px rgb(var(--lp-accent) / .9), inset 0 1px 0 rgba(255, 255, 255, .28);
+  transition: filter .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+
+.lp-btn-primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 14px 34px -12px rgb(var(--lp-accent) / 1), inset 0 1px 0 rgba(255, 255, 255, .32);
+}
+
+.lp-btn-primary:active {
+  transform: translateY(1px);
+}
+
+.lp-btn-ghost {
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid var(--lp-hair);
+  color: #fff;
+  transition: background-color .2s ease, border-color .2s ease;
+}
+
+.lp-btn-ghost:hover {
+  background: rgba(255, 255, 255, .075);
+  border-color: var(--lp-hair-hi);
+}
+
+/* ── Section rules ─────────────────────────────────────────── */
+/* Fades at both ends so the divider never collides with the gutter */
+.lp-rule {
+  border-top: 0;
+  position: relative;
+}
+
+.lp-rule::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .11), transparent);
+}
+
+.lp-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.lp :focus-visible {
+  outline: 2px solid rgb(var(--lp-accent-hi));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .lp-card,
+  .lp-btn-primary,
+  .lp-chip {
+    transition: none;
+  }
+
+  .lp-card:hover {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   DASHBOARD — same surface language as the landing page.
+   The app markup carries Tailwind `dark:` utilities in the slate
+   family; this layer remaps those surfaces onto the .lp tokens
+   (near-black ground, violet accent, glass panels) so the product
+   and the marketing page read as one design.
+   Loaded last so it wins over the earlier dark block.
+   ============================================================ */
+
+html.dark {
+  --dash-ground: #07080c;
+  --dash-panel: rgba(255, 255, 255, .038);
+  --dash-panel-hi: rgba(255, 255, 255, .06);
+  --dash-hair: rgba(255, 255, 255, .075);
+  --dash-hair-hi: rgba(255, 255, 255, .14);
+  --dash-accent: 139 92 246;
+  --dash-accent-hi: 167 139 250;
+}
+
+html.dark,
+html.dark body {
+  background-color: var(--dash-ground) !important;
+  color: #e8eaf0 !important;
+  /* One broad violet wash from the top-left, matching the landing aura */
+  background-image:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgb(var(--dash-accent) / .10) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 100% 100%, rgba(52, 211, 153, .035) 0%, transparent 60%) !important;
+  background-attachment: fixed !important;
+}
+
+/* ── Ground layers ─────────────────────────────────────────── */
+.dark .bg-\[\#FBFBFA\],
+.dark .bg-\[\#FBFBFA\]\/40,
+.dark .bg-\[\#FBFBFA\]\/90,
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+.dark .bg-slate-100\/50,
+.dark .bg-slate-100\/30 {
+  background-color: transparent !important;
+}
+
+/* ── Panels: glass, not flat fills ─────────────────────────── */
+.dark .bg-white,
+.dark .bg-slate-900,
+.dark .bg-slate-900\/50,
+.dark .bg-\[\#f4f4f3\] {
+  background-color: transparent !important;
+  background-image: linear-gradient(162deg, rgba(255, 255, 255, .052) 0%, rgba(255, 255, 255, .016) 45%, rgba(255, 255, 255, .01) 100%) !important;
+  border-color: var(--dash-hair) !important;
+  backdrop-filter: blur(10px);
+}
+
+/* Chips, toggles, table zebra rows, secondary fills */
+.dark .bg-slate-800,
+.dark .bg-slate-800\/80,
+.dark .bg-slate-800\/50,
+.dark .bg-slate-700 {
+  background-color: var(--dash-panel-hi) !important;
+  border-color: var(--dash-hair) !important;
+}
+
+/* ── Hairlines ─────────────────────────────────────────────── */
+.dark .border-slate-800,
+.dark .border-slate-800\/80,
+.dark .border-slate-900,
+.dark .border-slate-700,
+.dark .border-slate-700\/50 {
+  border-color: var(--dash-hair) !important;
+}
+
+.dark .divide-slate-800> :not([hidden])~ :not([hidden]),
+.dark .divide-slate-700> :not([hidden])~ :not([hidden]) {
+  border-color: var(--dash-hair) !important;
+}
+
+/* ── Header + sidebar: same blur/hairline as the landing nav ── */
+.dark header.fixed {
+  background-color: rgba(7, 8, 12, .72) !important;
+  background-image: none !important;
+  backdrop-filter: blur(20px) saturate(140%);
+  border-bottom: 1px solid var(--dash-hair) !important;
+}
+
+.dark aside {
+  background-color: rgba(9, 10, 15, .6) !important;
+  background-image: none !important;
+  border-right: 1px solid var(--dash-hair) !important;
+  backdrop-filter: blur(16px);
+}
+
+/* Active nav item — violet, replacing the old indigo */
+.dark .bg-\[\#efefee\] {
+  background-color: rgb(var(--dash-accent) / .14) !important;
+  color: rgb(var(--dash-accent-hi)) !important;
+  border: 1px solid rgb(var(--dash-accent) / .26) !important;
+}
+
+/* ── Accent recolour: indigo/blue controls become violet ───── */
+.dark .bg-blue-600,
+.dark .bg-blue-500,
+.dark .bg-indigo-600,
+.dark .bg-indigo-500 {
+  background-color: rgb(var(--dash-accent)) !important;
+  box-shadow: 0 10px 26px -14px rgb(var(--dash-accent) / .95), inset 0 1px 0 rgba(255, 255, 255, .24);
+}
+
+.dark .text-blue-600,
+.dark .text-blue-500,
+.dark .text-blue-400,
+.dark .text-indigo-400,
+.dark .text-indigo-500 {
+  color: rgb(var(--dash-accent-hi)) !important;
+}
+
+.dark .border-blue-600,
+.dark .border-blue-500,
+.dark .border-indigo-500 {
+  border-color: rgb(var(--dash-accent) / .55) !important;
+}
+
+.dark .bg-blue-50,
+.dark .bg-blue-50\/50,
+.dark .bg-indigo-50 {
+  background-color: rgb(var(--dash-accent) / .12) !important;
+}
+
+/* Focus rings follow the accent */
+.dark .focus\:ring-blue-500:focus,
+.dark .focus\:ring-blue-600:focus,
+.dark .focus\:ring-indigo-500:focus {
+  --tw-ring-color: rgb(var(--dash-accent) / .45) !important;
+}
+
+/* ── Typography tuning for the darker ground ───────────────── */
+.dark .text-slate-800,
+.dark .text-slate-900 {
+  color: #eceef4 !important;
+}
+
+.dark .text-slate-700 {
+  color: #cfd4de !important;
+}
+
+.dark .text-slate-600 {
+  color: #aab1bd !important;
+}
+
+.dark .text-slate-500 {
+  color: #8b93a1 !important;
+}
+
+/* Numbers line up in the metric tiles and trade tables */
+.dark table td,
+.dark table th {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scrollbars stop being light-theme artifacts */
+.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .1);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, .18);
+  background-clip: content-box;
+}
+
+/* Active sidebar item carries the accent, so the current section is readable
+   at a glance. Scoped to the sidebar — the same slate fill is used for neutral
+   chips elsewhere and those must stay neutral. */
+.dark aside .bg-slate-800,
+.dark aside .bg-slate-800\/80 {
+  background-color: rgb(var(--dash-accent) / .16) !important;
+  border-color: rgb(var(--dash-accent) / .30) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 0 22px -10px rgb(var(--dash-accent) / .8) !important;
+}
+
+/* The dashboard writes its dark surfaces as `dark:`-prefixed utilities, so the
+   plain `.dark .bg-slate-800` selectors above never match them. These target the
+   generated variant classes directly. Hover/focus variants are deliberately left
+   out so interactive feedback still reads. */
+html.dark .dark\:bg-slate-950,
+html.dark .dark\:bg-slate-950\/90,
+html.dark .dark\:bg-slate-900,
+html.dark .dark\:bg-slate-900\/50,
+html.dark .dark\:bg-slate-900\/80 {
+  background-color: transparent !important;
+  background-image: linear-gradient(162deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, .015) 45%, rgba(255, 255, 255, .01) 100%) !important;
+  border-color: var(--dash-hair) !important;
+  backdrop-filter: blur(10px);
+}
+
+html.dark .dark\:bg-slate-800,
+html.dark .dark\:bg-slate-800\/80,
+html.dark .dark\:bg-slate-800\/50,
+html.dark .dark\:bg-slate-700 {
+  background-color: var(--dash-panel-hi) !important;
+}
+
+html.dark .dark\:border-slate-800,
+html.dark .dark\:border-slate-800\/80,
+html.dark .dark\:border-slate-900,
+html.dark .dark\:border-slate-700,
+html.dark .dark\:border-slate-700\/50 {
+  border-color: var(--dash-hair) !important;
+}
+
+/* Header and sidebar shells */
+html.dark header.fixed,
+html.dark header.fixed.dark\:bg-slate-950\/90 {
+  background-color: rgba(7, 8, 12, .72) !important;
+  background-image: none !important;
+}
+
+html.dark aside {
+  background-color: rgba(9, 10, 15, .55) !important;
+  background-image: none !important;
+}
+
+/* Active sidebar item — violet, so the current section reads at a glance */
+html.dark aside .dark\:bg-slate-800,
+html.dark aside .dark\:bg-slate-800\/80 {
+  background-color: rgb(var(--dash-accent) / .17) !important;
+  border-color: rgb(var(--dash-accent) / .32) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 0 24px -10px rgb(var(--dash-accent) / .85) !important;
+}
+
+
+/* ============================================================
+   SCROLL REVEALS
+   The hidden state is gated behind .js-reveal, a class the script
+   adds to <html> itself. No JS (or a crashed bundle) means the
+   rule never applies and every section renders normally — content
+   is never parked at opacity 0 waiting on an observer.
+   ============================================================ */
+
+.js-reveal [data-reveal] {
+  opacity: 0;
+  will-change: opacity, transform;
+  transition:
+    opacity .55s cubic-bezier(.22, .61, .36, 1),
+    transform .55s cubic-bezier(.22, .61, .36, 1);
+  transition-delay: calc(var(--reveal-i, 0) * 55ms);
+}
+
+.js-reveal [data-reveal="up"] {
+  transform: translateY(26px);
+}
+
+.js-reveal [data-reveal="left"] {
+  transform: translateX(-26px);
+}
+
+.js-reveal [data-reveal="right"] {
+  transform: translateX(26px);
+}
+
+.js-reveal [data-reveal="scale"] {
+  transform: scale(.965);
+}
+
+.js-reveal [data-reveal="fade"] {
+  transform: none;
+}
+
+.js-reveal [data-reveal].is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Once a section has played, drop the compositing hint */
+.js-reveal [data-reveal].is-visible {
+  will-change: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js-reveal [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* Nav condenses once the page leaves the top — small signal that
+   you have moved, without a second sticky bar appearing. */
+.lp-nav {
+  transition: height .3s ease, background-color .3s ease, border-color .3s ease;
+}
+
+.lp-nav[data-scrolled="true"] {
+  background: rgba(7, 8, 12, .88);
+  border-bottom-color: var(--lp-hair-hi);
+  box-shadow: 0 8px 28px -20px rgba(0, 0, 0, .9);
+}
+
+.lp-nav[data-scrolled="true"] .lp-navbar {
+  height: 58px;
+}
+
+.lp-navbar {
+  transition: height .3s ease;
+}
+
+/* ============================================================
+   DASHBOARD CONTROLS
+   One button, input and chip treatment shared with the landing
+   page, so a control looks the same wherever it appears.
+   ============================================================ */
+
+:root {
+  --gauge-track: #e2e8f0;
+  --gauge-pips: rgba(255, 255, 255, .9);
+}
+
+html.dark {
+  --gauge-track: rgba(255, 255, 255, .08);
+  --gauge-pips: rgba(255, 255, 255, .16);
+}
+
+.gauge-chip {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+}
+
+.gauge-chip-value {
+  color: #0f172a;
+}
+
+html.dark .gauge-chip {
+  background: rgba(255, 255, 255, .06);
+  border-color: var(--dash-hair);
+  color: #aab1bd;
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+}
+
+html.dark .gauge-chip-value {
+  color: #fff;
+}
+
+/* ── Primary actions ───────────────────────────────────────── */
+/* The dashboard writes these as bg-blue-600 / bg-indigo-600. Rather
+   than only swapping the hue, give them the same gradient, inset
+   highlight and colored shadow as the landing CTA. */
+html.dark button.bg-blue-600,
+html.dark button.bg-blue-500,
+html.dark button.bg-indigo-600,
+html.dark a.bg-blue-600,
+html.dark .bg-violet-600 {
+  background-color: transparent !important;
+  background-image: linear-gradient(180deg, rgb(var(--dash-accent-hi)) 0%, rgb(var(--dash-accent)) 100%) !important;
+  border: 1px solid rgb(var(--dash-accent-hi) / .55);
+  box-shadow: 0 10px 26px -14px rgb(var(--dash-accent) / .95), inset 0 1px 0 rgba(255, 255, 255, .26) !important;
+  transition: filter .2s ease, transform .12s ease, box-shadow .2s ease;
+}
+
+html.dark button.bg-blue-600:hover,
+html.dark button.bg-blue-500:hover,
+html.dark button.bg-indigo-600:hover {
+  filter: brightness(1.09);
+  box-shadow: 0 14px 32px -14px rgb(var(--dash-accent)), inset 0 1px 0 rgba(255, 255, 255, .3) !important;
+}
+
+html.dark button.bg-blue-600:active,
+html.dark button.bg-blue-500:active,
+html.dark button.bg-indigo-600:active {
+  transform: translateY(1px);
+}
+
+/* Disabled must read as disabled — not as a slightly dimmer live button */
+html.dark button:disabled {
+  filter: grayscale(.45) brightness(.8);
+  box-shadow: none !important;
+  cursor: not-allowed;
+}
+
+/* ── Secondary / outline actions ───────────────────────────── */
+html.dark button.border-slate-200,
+html.dark button.border-slate-300,
+html.dark .dark\:border-slate-700>button {
+  border-color: var(--dash-hair) !important;
+}
+
+/* ── Form controls ─────────────────────────────────────────── */
+html.dark input[type="text"],
+html.dark input[type="email"],
+html.dark input[type="password"],
+html.dark input[type="number"],
+html.dark input[type="date"],
+html.dark input[type="datetime-local"],
+html.dark input[type="search"],
+html.dark select,
+html.dark textarea {
+  background-color: rgba(255, 255, 255, .04) !important;
+  border-color: var(--dash-hair) !important;
+  color: #e8eaf0 !important;
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #6b7381 !important;
+}
+
+html.dark input:hover,
+html.dark select:hover,
+html.dark textarea:hover {
+  border-color: var(--dash-hair-hi) !important;
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  outline: none;
+  border-color: rgb(var(--dash-accent) / .6) !important;
+  box-shadow: 0 0 0 3px rgb(var(--dash-accent) / .18) !important;
+  background-color: rgba(255, 255, 255, .06) !important;
+}
+
+/* Native date/time pickers render a black glyph on a dark field */
+html.dark input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(.55);
+  cursor: pointer;
+}
+
+html.dark input[type="date"]::-webkit-calendar-picker-indicator:hover,
+html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(1) opacity(.9);
+}
+
+/* Dropdown options inherit the OS colour without this */
+html.dark select option {
+  background-color: #12151c;
+  color: #e8eaf0;
+}
+
+/* ── Keyboard focus, everywhere ────────────────────────────── */
+html.dark :focus-visible {
+  outline: 2px solid rgb(var(--dash-accent-hi));
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ── Calendar: mark today ──────────────────────────────────── */
+/* Every cell looked identical, so there was no way to find today. */
+/* outline, not border: the generic .dark border overrides carry !important
+   and a higher specificity, so a border here silently lost. */
+html .calendar-day-box[data-today="true"],
+html.dark .calendar-day-box[data-today="true"] {
+  outline: 2px solid rgb(var(--dash-accent) / .65);
+  outline-offset: -2px;
+}
+
+html .calendar-day-box[data-today="true"]>* {
+  position: relative;
+}
+
+/* ============================================================
+   AVATAR + ACCOUNT MENU
+   ============================================================ */
+
+/* Gradient ring around the initials. The ring is the padding of the button
+   itself, so the inner disc stays perfectly circular at any size. */
+.avatar-ring {
+  display: inline-flex;
+  background: linear-gradient(140deg, rgb(var(--lp-accent-hi, 167 139 250)) 0%, rgb(var(--lp-accent, 139 92 246)) 45%, rgba(99, 102, 241, .9) 100%);
+  box-shadow: 0 4px 14px -6px rgba(139, 92, 246, .8);
+  transition: box-shadow .22s ease;
+}
+
+.avatar-ring:hover {
+  box-shadow: 0 6px 20px -6px rgba(139, 92, 246, 1);
+}
+
+:root:not(.dark) .avatar-ring>span {
+  background: #fff !important;
+  color: #6d28d9;
+}
+
+/* Menu panel: same glass as the cards, with a heavier shadow so it reads as
+   floating above the page rather than pasted onto it. */
+.profile-menu {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 50px -20px rgba(15, 23, 42, .35), 0 2px 6px rgba(15, 23, 42, .06);
+}
+
+html.dark .profile-menu {
+  background: linear-gradient(162deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, .025) 50%, rgba(255, 255, 255, .015) 100%), #0b0d13;
+  border-color: var(--dash-hair-hi, rgba(255, 255, 255, .14));
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, .95), inset 0 1px 0 rgba(255, 255, 255, .07);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+.profile-menu-item {
+  transition: background-color .16s ease, color .16s ease;
+}
+
+.profile-menu-item:hover {
+  background: rgba(15, 23, 42, .05);
+}
+
+html.dark .profile-menu-item:hover {
+  background: rgba(255, 255, 255, .07);
+  color: #fff;
+}
+
+html.dark .profile-menu-item:hover svg {
+  color: rgb(var(--dash-accent-hi, 167 139 250));
+}
+
+.profile-menu-item-danger:hover {
+  background: rgba(244, 63, 94, .08);
+}
+
+html.dark .profile-menu-item-danger:hover {
+  background: rgba(244, 63, 94, .14);
+  color: #fda4af;
+}
+
+html.dark .profile-menu-item-danger:hover svg {
+  color: #fda4af;
+}
+
+/* ============================================================
+   HERO EQUITY CURVE
+   The chart draws itself on load, the way a terminal fills in a
+   session. Everything ends in its final state, and reduced-motion
+   skips straight to it — the panel is never blank while waiting.
+   ============================================================ */
+
+@keyframes lp-draw-line {
+  from {
+    stroke-dashoffset: var(--lp-path-len, 700);
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes lp-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.lp-spark-line {
+  stroke-dasharray: var(--lp-path-len, 700);
+  stroke-dashoffset: var(--lp-path-len, 700);
+  animation: lp-draw-line 1.9s cubic-bezier(.33, .9, .3, 1) .25s forwards;
+}
+
+.lp-spark-fill {
+  opacity: 0;
+  /* Starts once the line is most of the way across, so the fill follows the
+     stroke instead of appearing under a half-drawn curve. */
+  animation: lp-fade-in .9s ease-out 1.25s forwards;
+}
+
+.lp-spark-dot {
+  opacity: 0;
+  animation: lp-fade-in .4s ease-out 2s forwards;
+}
+
+.lp-spark-grid {
+  opacity: 0;
+  animation: lp-fade-in .6s ease-out .1s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .lp-spark-line,
+  .lp-spark-fill,
+  .lp-spark-dot,
+  .lp-spark-grid {
+    animation: none;
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── Equity curve markers & crosshair ──────────────────────── */
+/* Positioned in HTML rather than SVG: the chart stretches horizontally
+   (preserveAspectRatio="none"), which turns any SVG circle into an ellipse. */
+
+.lp-curve {
+  cursor: crosshair;
+}
+
+.lp-curve-dot,
+.lp-curve-marker {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.lp-curve-dot {
+  background: #10b981;
+  box-shadow: 0 0 12px 2px rgba(16, 185, 129, .55);
+}
+
+.lp-curve-marker {
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .18);
+}
+
+/* Radar ping on the latest point — the one "live" cue on the panel */
+.lp-curve-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1.5px solid rgba(52, 211, 153, .9);
+  animation: lp-curve-ping 2.6s cubic-bezier(0, 0, .2, 1) 2.2s infinite;
+}
+
+@keyframes lp-curve-ping {
+  0% {
+    transform: scale(1);
+    opacity: .7;
+  }
+
+  70% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+.lp-curve-readout {
+  position: absolute;
+  transform: translate(-50%, -175%);
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: rgba(10, 11, 18, .94);
+  border: 1px solid rgba(255, 255, 255, .14);
+  box-shadow: 0 8px 20px -10px rgba(0, 0, 0, .9);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-curve-ping {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* ============================================================
+   DASHBOARD — REFERENCE THEME PASS
+   Retunes the dark dashboard onto the reference design: a
+   near-black ground, flat matte cards with a crisp hairline and
+   a real drop shadow, and nested "pill" rows inside those cards.
+   The nesting is what makes the reference read as premium — one
+   card, containing labelled rows that are themselves surfaces.
+   Loaded last so it wins over the earlier dash-remap block.
+   Everything is scoped to html.dark; the light theme is untouched.
+   ============================================================ */
+
+html.dark {
+  /* Reference ground is essentially black. The old #07080c read grey
+     next to the cards, which flattened the whole page. */
+  --dash-ground: #04040a;
+  --dash-card: #0a0a11;
+  --dash-card-hi: #0d0d16;
+  --dash-inset: rgba(255, 255, 255, .032);
+  --dash-inset-hi: rgba(255, 255, 255, .055);
+  --dash-hair: rgba(255, 255, 255, .065);
+  --dash-hair-hi: rgba(255, 255, 255, .11);
+  --dash-shadow: 0 24px 50px -30px rgba(0, 0, 0, .95), 0 2px 6px -2px rgba(0, 0, 0, .6);
+  --dash-radius: 20px;
+  --dash-radius-sm: 14px;
+}
+
+html.dark,
+html.dark body {
+  background-color: var(--dash-ground) !important;
+  /* One violet aura, top-left. The second emerald wash the old rule
+     added put a green cast in the bottom-right that matched nothing. */
+  background-image:
+    radial-gradient(ellipse 70% 45% at 8% -12%, rgb(var(--dash-accent) / .10) 0%, transparent 62%) !important;
+}
+
+/* ── Cards ──────────────────────────────────────────────────
+   Flat and matte, not a glass gradient: at this ground darkness a
+   translucent panel picks up whatever is behind it and the grid
+   stops looking like one set of cards. */
+html.dark .bg-white,
+html.dark .dark\:bg-slate-900,
+html.dark .dark\:bg-slate-900\/50,
+html.dark .dark\:bg-slate-900\/80,
+html.dark .dark\:bg-slate-950,
+html.dark .dark\:bg-slate-950\/90 {
+  background-color: var(--dash-card) !important;
+  background-image: none !important;
+  border-color: var(--dash-hair) !important;
+  backdrop-filter: none !important;
+}
+
+/* Rounder than Tailwind's rounded-xl, matching the reference's soft
+   containers, and lifted off the ground with a shadow. */
+html.dark .bg-white.rounded-xl,
+html.dark .bg-white.rounded-2xl,
+html.dark .dark\:bg-slate-900.rounded-xl,
+html.dark .dark\:bg-slate-900.rounded-2xl,
+html.dark .dark\:bg-slate-900\/50.rounded-xl,
+html.dark .dark\:bg-slate-900\/50.rounded-2xl {
+  border-radius: var(--dash-radius) !important;
+  box-shadow: var(--dash-shadow) !important;
+}
+
+html.dark .bg-white:hover.rounded-xl,
+html.dark .bg-white.rounded-xl:hover {
+  border-color: var(--dash-hair-hi) !important;
+}
+
+/* ── Nested rows ────────────────────────────────────────────
+   The reference's signature: inside a card, each labelled row is
+   its own slightly-lighter rounded surface. These utilities were
+   forced transparent by the earlier layer, which lost the nesting. */
+html.dark .bg-slate-50,
+html.dark .bg-slate-100,
+html.dark .bg-slate-100\/50,
+html.dark .bg-slate-100\/30,
+html.dark .dark\:bg-slate-800\/40,
+html.dark .dark\:bg-slate-800\/50,
+html.dark .dark\:bg-white\/\[0\.02\],
+html.dark .dark\:bg-white\/\[0\.03\] {
+  background-color: var(--dash-inset) !important;
+  border-color: var(--dash-hair) !important;
+}
+
+html.dark .bg-slate-50.rounded-lg,
+html.dark .bg-slate-50.rounded-xl,
+html.dark .bg-slate-100.rounded-lg,
+html.dark .bg-slate-100.rounded-xl {
+  border-radius: var(--dash-radius-sm) !important;
+}
+
+/* Chips, toggles and secondary fills sit one step brighter again. */
+html.dark .dark\:bg-slate-800,
+html.dark .dark\:bg-slate-800\/80,
+html.dark .dark\:bg-slate-700 {
+  background-color: var(--dash-inset-hi) !important;
+  border-color: var(--dash-hair) !important;
+}
+
+/* ── Chrome accents go violet ───────────────────────────────
+   Emerald stays reserved for money. A green "ACTIVE" badge next to
+   a green profit figure made the two read as the same kind of fact. */
+html.dark .dark\:bg-emerald-500\/10,
+html.dark .dark\:bg-emerald-500\/15,
+html.dark .dark\:bg-emerald-500\/20,
+html.dark .bg-emerald-50 {
+  background-color: rgb(var(--dash-accent) / .12) !important;
+  border-color: rgb(var(--dash-accent) / .26) !important;
+}
+
+html.dark .dark\:text-emerald-300,
+html.dark .dark\:text-emerald-400,
+html.dark .text-emerald-600,
+html.dark .text-emerald-700 {
+  color: rgb(var(--dash-accent-hi)) !important;
+}
+
+/* …but a figure that IS money keeps its sign colour. These classes are
+   only used on profit and loss values, so they win back the green. */
+html.dark .text-emerald-400.tabular-nums,
+html.dark .text-emerald-500,
+html.dark .dark\:text-emerald-400.font-bold,
+html.dark td .text-emerald-400,
+html.dark td .text-emerald-500 {
+  color: #34d399 !important;
+}
+
+html.dark .text-red-400,
+html.dark .text-red-500,
+html.dark .text-rose-400,
+html.dark .text-rose-500 {
+  color: #f87171 !important;
+}
+
+/* ── Section headings ───────────────────────────────────────
+   Small, tracked and muted above the value, as in the reference,
+   so a card's title stops competing with its number. */
+html.dark .bg-white>div>h3,
+html.dark .bg-white h3.text-sm {
+  letter-spacing: .01em;
+}
+
+html.dark .bg-white p.text-\[10px\],
+html.dark .bg-white p.text-\[11px\] {
+  /* Was #6f7686, which measured 4.37:1 on the #060913 card — under the 4.5
+     AA floor for text this size. These are the one-line descriptions under
+     every card heading, so the dashboard was carrying ~18 of them.
+     #7f8799 keeps the caption clearly quieter than the heading above it
+     while clearing the threshold. */
+  color: #7f8799 !important;
+  letter-spacing: .04em;
+}
+
+/* ── Tables ─────────────────────────────────────────────────
+   Taller rows and a quieter header, matching the reference's
+   trading-history table. */
+html.dark table thead th {
+  color: #767e8e !important;
+  font-size: 10.5px !important;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  padding-top: 13px !important;
+  padding-bottom: 13px !important;
+  background-color: rgba(255, 255, 255, .018) !important;
+}
+
+html.dark table tbody td {
+  padding-top: 13px !important;
+  padding-bottom: 13px !important;
+}
+
+html.dark table tbody tr {
+  border-color: rgba(255, 255, 255, .045) !important;
+}
+
+html.dark table tbody tr:hover {
+  background-color: rgba(255, 255, 255, .022) !important;
+}
+
+/* ── Header and sidebar: the same black as the ground ───────
+   The reference has no visible chrome band; the nav floats on the
+   page rather than sitting on its own grey strip. */
+html.dark header.fixed {
+  background-color: rgba(4, 4, 10, .82) !important;
+  border-bottom: 1px solid var(--dash-hair) !important;
+}
+
+html.dark aside {
+  background-color: rgba(4, 4, 10, .72) !important;
+  border-right: 1px solid var(--dash-hair) !important;
+}
+
+/* ── Inputs ─────────────────────────────────────────────────── */
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: var(--dash-inset) !important;
+  border-color: var(--dash-hair) !important;
+  border-radius: 12px !important;
+  color: #e8eaf0 !important;
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: rgb(var(--dash-accent) / .55) !important;
+  box-shadow: 0 0 0 3px rgb(var(--dash-accent) / .16) !important;
+  outline: none !important;
+}
+
+/* ── Primary buttons ────────────────────────────────────────
+   Flat violet with a single inner highlight. The reference's
+   buttons are solid, not gradient washes. */
+html.dark .bg-slate-900.text-white,
+html.dark .bg-violet-600 {
+  background-color: rgb(var(--dash-accent)) !important;
+  background-image: none !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 28px -16px rgb(var(--dash-accent) / .9), inset 0 1px 0 rgba(255, 255, 255, .2) !important;
+}
+
+html.dark .bg-slate-900.text-white:hover,
+html.dark .bg-violet-600:hover {
+  background-color: rgb(var(--dash-accent-hi)) !important;
+}
+
+/* ── Charts ─────────────────────────────────────────────────
+   Recharts writes its grid and axis strokes as literal light-theme
+   hex values in the markup, so they have to be pulled back here. */
+html.dark .recharts-cartesian-grid line {
+  stroke: rgba(255, 255, 255, .05) !important;
+}
+
+html.dark .recharts-cartesian-axis-line,
+html.dark .recharts-cartesian-axis-tick-line {
+  stroke: transparent !important;
+}
+
+html.dark .recharts-cartesian-axis-tick text {
+  fill: #6f7686 !important;
+  font-size: 10.5px !important;
+}
+
+html.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #0b0b13 !important;
+  border: 1px solid var(--dash-hair-hi) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--dash-shadow) !important;
+}
+
+/* ── Empty states ──────────────────────────────────────────
+   A bare sentence in the middle of a large card read as a bug.
+   Give it the same inset surface the populated rows get. */
+html.dark .bg-white .text-slate-400:only-child {
+  /* Empty states matter more than most copy: a brand new account has no
+     trades, so on day one almost every card on the dashboard is showing one
+     of these sentences and nothing else. Dimmest text on the screen was the
+     wrong place for the first thing a client reads. */
+  color: #8a93a5 !important;
+}
+
+/* ============================================================
+   RESPONSIVE POLISH — phone and tablet
+   ============================================================ */
+
+/* The header is translucent so the page shows motion behind it. At phone
+   widths the bar is short and the card text underneath stayed legible
+   through it, which read as two overlapping layers. More opacity, more
+   blur — the effect survives, the double-vision does not. */
+@media (max-width: 767px) {
+  html.dark header.fixed {
+    background-color: rgba(4, 4, 10, .94) !important;
+    backdrop-filter: blur(24px) saturate(140%);
+  }
+
+  /* Cards lose a little radius and padding so content is not squeezed into
+     a narrow column between two thick rounded corners. */
+  html.dark .bg-white.rounded-xl,
+  html.dark .bg-white.rounded-2xl,
+  html.dark .dark\:bg-slate-900.rounded-xl,
+  html.dark .dark\:bg-slate-900.rounded-2xl {
+    border-radius: 16px !important;
+  }
+
+  /* Tables: a phone cannot show eight columns, so the wrapper scrolls
+     horizontally rather than the columns collapsing into each other. */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html.dark table thead th,
+  html.dark table tbody td {
+    padding-top: 11px !important;
+    padding-bottom: 11px !important;
+    white-space: nowrap;
+  }
+}
+
+/* The floating bottom nav sits above the home indicator on notched phones. */
+.md\:hidden.fixed.z-\[60\] {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Long numbers must never be clipped to an ellipsis — a balance or a P&L
+   figure with a cut-off digit is worse than one that wraps. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tablet: the sidebar shows labels, which leaves the content column narrow.
+   Slightly tighter card padding buys the width back. */
+@media (min-width: 768px) and (max-width: 1023px) {
+
+  html.dark .bg-white.p-6,
+  html.dark .dark\:bg-slate-900.p-6 {
+    padding: 18px !important;
+  }
+}
+/* ── Phone touch targets and legibility ─────────────────────────────────
+   Audited at 375px: action buttons were 34px tall and several icon buttons
+   were 14px square, well under the ~44px a fingertip needs. Type at 9.5px
+   is readable on a desktop monitor and not on a phone held at arm's length. */
+@media (max-width: 767px) {
+
+  /* Buttons that carry a text label get a comfortable height. Icon-only
+     buttons are left alone here — forcing a min-height on them stretches
+     toolbars — and are padded at the component instead. */
+  main button:not([class*="rounded-full"]),
+  main a[role="button"] {
+    min-height: 40px;
+  }
+
+  /* Toolbar and pagination controls sit at the low end; even them up. */
+  main button.px-3.py-2,
+  main button.px-4.py-2 {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+
+  /* Nothing below 10px on a phone. The uppercase tracked labels read at
+     9.5px on a monitor and blur on a handset. */
+  main .text-\[9\.5px\],
+  main .text-\[9px\] {
+    font-size: 10px !important;
+  }
+
+  main .text-\[10px\] {
+    font-size: 10.5px !important;
+  }
+
+  /* Select and input controls are tapped, not clicked. */
+  main select,
+  main input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 42px;
+  }
+}
+
+/* ============================================================
+   GLASS — the dashboard's hero card
+   The rest of the cards stay flat and matte on purpose: at this
+   ground darkness every panel being translucent makes the grid
+   read as one smeared surface. Exactly one card gets glass, and
+   that is what makes it the hero.
+   ============================================================ */
+
+html.dark .dx-glass {
+  background-color: rgba(17, 13, 32, .55) !important;
+  background-image:
+    linear-gradient(152deg,
+      rgb(var(--dash-accent) / .20) 0%,
+      rgb(var(--dash-accent) / .06) 38%,
+      rgba(255, 255, 255, .012) 100%) !important;
+  backdrop-filter: blur(22px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  border-color: rgb(var(--dash-accent-hi) / .22) !important;
+  box-shadow:
+    0 30px 70px -34px rgba(0, 0, 0, .95),
+    0 0 44px -20px rgb(var(--dash-accent) / .45),
+    inset 0 1px 0 rgba(255, 255, 255, .10) !important;
+}
+
+/* The lit top edge is what sells glass — light catching a pane. */
+html.dark .dx-glass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    rgb(var(--dash-accent-hi) / .60) 30%,
+    rgb(var(--dash-accent-hi) / .60) 70%,
+    transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Tiles inside: the same material, one step lighter, so they read as
+   panes set into the card rather than boxes drawn on it. */
+html.dark .dx-glass-tile {
+  background-color: rgba(255, 255, 255, .035) !important;
+  background-image: linear-gradient(158deg,
+    rgb(var(--dash-accent) / .10),
+    rgba(255, 255, 255, .008)) !important;
+  border-color: rgb(var(--dash-accent-hi) / .15) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+
+html.dark .dx-glass-tile:hover {
+  border-color: rgb(var(--dash-accent-hi) / .34) !important;
+  background-color: rgba(255, 255, 255, .05) !important;
+}
+
+html.dark .dx-glass-tile-accent {
+  background-image: linear-gradient(150deg,
+    rgb(var(--dash-accent) / .45) 0%,
+    rgb(var(--dash-accent) / .16) 55%,
+    rgba(255, 255, 255, .02) 100%) !important;
+  border-color: rgb(var(--dash-accent-hi) / .45) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 10px 34px -20px rgb(var(--dash-accent) / .95) !important;
+}
+
+html.dark .dx-glass-tile-accent:hover {
+  border-color: rgb(var(--dash-accent-hi) / .6) !important;
+}
+
+/* Reduced transparency is an accessibility setting, not a preference:
+   honour it by falling back to the flat card. */
+@media (prefers-reduced-transparency: reduce) {
+  html.dark .dx-glass,
+  html.dark .dx-glass-tile {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: var(--dash-card) !important;
+  }
+}
+
+/* ============================================================
+   SIDEBAR NAV ITEMS
+   Written here rather than as Tailwind variants because the
+   dark:bg-violet-500/15 utility was never generated, so the
+   active item silently fell back to a remapped slate fill and
+   read grey. One rule also guarantees the expanded and collapsed
+   states cannot drift apart.
+   ============================================================ */
+
+html.dark .dx-nav-idle {
+  /* Reference sidebars keep idle items close to readable white and rely on
+     the filled pill for emphasis, rather than dimming everything that is not
+     current. The old text-slate-400 resolved to #8b93a1 — a cold blue-grey
+     that made the whole list look disabled. */
+  color: #c3c8d4 !important;
+}
+
+/* Hover brightens the item, it does not draw a box behind it.
+   A faint translucent panel appearing under the cursor read as a second,
+   weaker version of the active pill, so two things looked selected at once. */
+html.dark .dx-nav-idle:hover {
+  background-color: transparent !important;
+  color: #ffffff !important;
+}
+
+html.dark .dx-nav-idle:hover svg {
+  color: rgb(var(--dash-accent-hi)) !important;
+}
+
+/* Solid pill, not a tint.
+   A 16% wash plus a hairline border reads as "slightly highlighted"; the
+   current section should be unmistakable at a glance from across the room. */
+html.dark .dx-nav-active {
+  background-color: rgb(var(--dash-accent)) !important;
+  background-image: linear-gradient(180deg,
+    rgba(255, 255, 255, .10),
+    rgba(255, 255, 255, 0) 60%) !important;
+  border: 1px solid rgb(var(--dash-accent-hi) / .45) !important;
+  color: #ffffff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    0 8px 22px -10px rgb(var(--dash-accent) / .95) !important;
+}
+
+/* :not(.dx-badge) — the count badge paints its own chip and carries its own
+   text colour. Swept up by this rule it rendered white on white and the
+   number disappeared on whichever row was selected. */
+html.dark .dx-nav-active svg,
+html.dark .dx-nav-active span:not(.dx-badge) {
+  color: #ffffff !important;
+}
+
+/* Light theme keeps its own, quieter version of the same idea. */
+html:not(.dark) .dx-nav-active {
+  background-color: #7c3aed;
+  border: 1px solid #6d28d9;
+  color: #ffffff;
+  box-shadow: 0 8px 20px -10px rgba(124, 58, 237, .8);
+}
+
+html:not(.dark) .dx-nav-active svg,
+html:not(.dark) .dx-nav-active span:not(.dx-badge) {
+  color: #ffffff;
+}
+
+html:not(.dark) .dx-nav-idle {
+  color: #64748b;
+}
+
+/* The item keeps its box while the sidebar animates, so the label does not
+   reflow mid-transition. */
+.dx-nav-idle,
+.dx-nav-active {
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease;
+}
+
+/* Collapsed rail: the row itself stays transparent and the violet square
+   behind the icon carries the active state, as in the reference. The label
+   under it still needs to read as current. */
+html.dark .dx-nav-rail-active {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+
+html:not(.dark) .dx-nav-rail-active {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #1e293b;
+}
+
+/* ── Rank badge: one accent in both themes ──────────────────────────────
+   It used to take the tier's own colour (emerald at Tier 1, blue at Tier 2,
+   amber at Tier 4…). The dark theme layer repainted it violet, so the two
+   themes disagreed — violet on dark, green on light — on the same screen.
+   The tier is already named in the heading and the sub-label. */
+.dx-rank-badge {
+  background-color: rgba(139, 92, 246, .12);
+  border-color: rgba(139, 92, 246, .28);
+  color: #6d28d9;
+}
+
+html.dark .dx-rank-badge {
+  background-color: rgb(var(--dash-accent) / .16) !important;
+  border-color: rgb(var(--dash-accent) / .32) !important;
+  color: rgb(var(--dash-accent-hi)) !important;
+}
+
+.dx-rank-badge svg {
+  color: currentColor;
+}
+
+/* ── Light theme legibility ─────────────────────────────────────────────
+   The dark theme got a careful pass and the light one inherited Tailwind
+   defaults. slate-400 on white is about 2.5:1, which is fine for a 16px
+   paragraph and not for a 9.5px uppercase label with wide tracking — the
+   metric captions and the sidebar group headings were both at that size. */
+html:not(.dark) .text-\[9\.5px\],
+html:not(.dark) .text-\[9px\] {
+  font-size: 10px;
+}
+
+/* Tile captions: one step darker so the label is readable next to its number. */
+html:not(.dark) main .text-\[9\.5px\].text-slate-400,
+html:not(.dark) main .text-\[10px\].text-slate-400 {
+  color: #64748b;
+}
+
+/* Sidebar group headings. */
+html:not(.dark) aside nav p {
+  color: #64748b;
+}
+
+/* Muted body copy: slate-400 is too faint for small print on white.
+   Measured at 2.76:1 against a white card — well under the 4.5 AA floor.
+   The tag is deliberately not part of the selector: this was scoped to
+   `p.text-xs` and so missed the empty-state messages, which are divs
+   ("No trades in this portfolio yet"). Those are the sentences a brand new
+   account is almost entirely made of, so they were the faintest text on a
+   client's first screen. #64748b measures 4.76:1 on white. */
+/* Every slate-400 in the dashboard, not a list of size pairings. The scoped
+   version kept missing cases where the size came from a parent rather than a
+   sibling class, so elements with a bare `text-slate-400` stayed at 2.63:1.
+   slate-400 on white is never bright enough for this product's type sizes. */
+html:not(.dark) main .text-slate-400 {
+  color: #64748b;
+}
+
+/* Money keeps its green, one step darker. emerald-500 and emerald-600 on a
+   white card measure 2.5-3.5:1; emerald-700 is 4.86:1 and still unmistakably
+   the profit colour. Losses already use rose-600, which passes. */
+html:not(.dark) main .text-emerald-500,
+html:not(.dark) main .text-emerald-600 {
+  color: #047857;
+}
+
+/* The guard-rule descriptions carry `/80`, and the opacity is what pushed
+   them under: emerald-700 passes on its own, emerald-700 at 80% does not. */
+html:not(.dark) main .text-emerald-700\/80 {
+  color: #047857;
+}
+
+/* Losses, same treatment as gains. rose-600 measures about 4.3:1 against the
+   slightly off-white card, so the pair moves together to stay balanced. */
+html:not(.dark) main .text-rose-600 {
+  color: #be123c;
+}
+
+/* slate-500 clears 4.5 on pure white but not on the card surfaces, which are
+   a step warmer. One notch darker puts the whole muted tier over the line
+   while staying clearly below the heading colour. */
+html:not(.dark) main .text-slate-500 {
+  color: #55606f;
+}
+
+/* ── Profile menu: keyboard visibility ───────────────────────────────────
+   The panel had hover states and nothing else, so tabbing through it moved an
+   invisible focus: a keyboard user could not tell which row Enter would hit,
+   and Log out is one of those rows. */
+.profile-menu-item:focus-visible {
+  outline: none;
+  background: rgba(139, 92, 246, .1);
+  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, .45);
+}
+
+html.dark .profile-menu-item:focus-visible {
+  background: rgba(139, 92, 246, .16);
+  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, .5);
+  color: #fff;
+}
+
+.profile-menu-item-danger:focus-visible {
+  background: rgba(244, 63, 94, .1);
+  box-shadow: inset 0 0 0 1px rgba(244, 63, 94, .45);
+}
+
+/* ============================================================
+   SECTION HEADINGS — one scale across every tab
+
+   Measured before this existed: the heading above a section's content was
+   14px/700 Inter on Dashboard, Analytics, FX News and Calendar (about two
+   dozen of them, so that is the house style), but 16px/900 and 18px/900 on
+   MT5 Sync, 16px/700 on Live Chart, 18px/700 on AI Mentor, 12px/700 on parts
+   of Calendar, and 14px/700 in Space Grotesk on Tools.
+
+   Space Grotesk is the display face, reserved for the page title and hero
+   numbers. A section heading using it competed with the page title.
+   ============================================================ */
+.dx-section-title {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
+html.dark .dx-section-title {
+  color: #e2e8f0;
+}
+
+/* ============================================================
+   PANELS AND TILES
+
+   The dark theme is built as an override layer over light Tailwind classes
+   (`.dark .bg-white` becomes #060913 with a #1e293b hairline). Components
+   written light-first inherit that and match. Components written dark-first
+   with their own hardcoded colours do not, which is why Accounts came out at
+   radius 16 on #0f1117, Live Chart at radius 12 on #09090b, Calendar on
+   slate-800/40 and AI Mentor on slate-800/50 — four different cards on four
+   tabs of the same dashboard.
+
+   These two classes are the shared definition. Applying one to a dark-first
+   card puts it back on the same surface as everything else, in both themes.
+   ============================================================ */
+.dx-panel {
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
+html.dark .dx-panel {
+  background-color: #060913 !important;
+  border-color: #1e293b !important;
+}
+
+.dx-tile {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+html.dark .dx-tile {
+  background-color: rgba(255, 255, 255, .03) !important;
+  border-color: rgba(255, 255, 255, .067) !important;
+}
+
+/* ============================================================
+   MOBILE HERO — the balance card
+
+   The phone dashboard opens with two full-width cards stacked: this one and
+   the trader-rank card. The rank card already used .dx-glass, while this one
+   was a flat violet-to-indigo gradient — indigo being a colour the product
+   does not otherwise use — so the first two things a trader saw on a phone
+   were built from different materials.
+
+   Same glass as .dx-glass, one step deeper and with an accent glow, so the
+   two read as a hierarchy (balance first, rank second) rather than as two
+   unrelated cards. Light mode stays a saturated violet: white numerals need a
+   dark ground, and a pale glass panel cannot carry them.
+   ============================================================ */
+.dx-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(139, 92, 246, .45);
+  background-color: #6d28d9;
+  background-image: linear-gradient(152deg, #7c3aed 0%, #6d28d9 46%, #5b21b6 100%);
+  box-shadow:
+    0 22px 50px -26px rgba(76, 29, 149, .75),
+    inset 0 1px 0 rgba(255, 255, 255, .20);
+}
+
+html.dark .dx-hero {
+  background-color: rgba(21, 14, 42, .62);
+  background-image:
+    linear-gradient(152deg,
+      rgb(var(--dash-accent) / .34) 0%,
+      rgb(var(--dash-accent) / .12) 42%,
+      rgba(255, 255, 255, .015) 100%);
+  backdrop-filter: blur(26px) saturate(160%);
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+  border-color: rgb(var(--dash-accent-hi) / .30);
+  box-shadow:
+    0 34px 78px -34px rgba(0, 0, 0, .95),
+    0 0 56px -22px rgb(var(--dash-accent) / .55),
+    inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+
+/* The lit top edge — light catching the near edge of a pane. Brighter than
+   .dx-glass's so this card sits above it in the hierarchy. */
+.dx-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(255, 255, 255, .55) 26%,
+    rgba(255, 255, 255, .55) 74%,
+    transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+html.dark .dx-hero::before {
+  background: linear-gradient(90deg,
+    transparent,
+    rgb(var(--dash-accent-hi) / .85) 26%,
+    rgb(var(--dash-accent-hi) / .85) 74%,
+    transparent);
+}
+
+/* Two ambient glows instead of the flat white/5 discs that were there before.
+   Tinted with the accent so they add depth rather than a grey smudge. */
+.dx-hero::after {
+  content: '';
+  position: absolute;
+  top: -40%;
+  right: -22%;
+  width: 72%;
+  height: 132%;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, .16), transparent 66%);
+  pointer-events: none;
+}
+
+html.dark .dx-hero::after {
+  background: radial-gradient(circle at center, rgb(var(--dash-accent-hi) / .20), transparent 66%);
+}
+
+/* Stat panes set into the hero. Replaces three bare columns divided by
+   border-x on the middle one, which drew two hairlines and left the outer
+   two cells looking unbounded. */
+.dx-hero-tile {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  background-color: rgba(255, 255, 255, .10);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+
+html.dark .dx-hero-tile {
+  border-color: rgb(var(--dash-accent-hi) / .18);
+  background-color: rgba(255, 255, 255, .045);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html.dark .dx-hero,
+  html.dark .dx-hero-tile {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  html.dark .dx-hero { background-color: #17102e; }
+}
+
+/* ============================================================
+   UPGRADE TO PRO — one button, everywhere
+
+   The same call to action was drawn five different ways: a
+   violet/fuchsia/indigo gradient pill in the header, a flat violet chip in
+   the profile menu, a violet/indigo two-stop in the sidebar card, a
+   white/10 chip on the mobile hero, and a plain solid violet on the feature
+   gates. A user meets several of these in one session, and inconsistency in
+   the one button the business depends on reads as carelessness.
+
+   This is the header's treatment, which is the one that looks paid-for,
+   promoted to the shared definition.
+   ============================================================ */
+.dx-upgrade {
+  background-image: linear-gradient(to right, #7c3aed, #c026d3 55%, #4f46e5);
+  border: 1px solid rgba(167, 139, 250, .40);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, .38);
+  transition: filter .18s ease, transform .12s ease;
+}
+
+.dx-upgrade:hover {
+  filter: brightness(1.1);
+}
+
+.dx-upgrade:active {
+  transform: translateY(1px);
+}
+
+/* On the mobile hero the button sits on violet glass, where the gradient's
+   own violet end would disappear into the card. The fuchsia mid-stop leads
+   there instead, so it still reads as the same button. */
+.dx-upgrade-on-accent {
+  background-image: linear-gradient(to right, #d946ef, #a855f7);
+  border-color: rgba(255, 255, 255, .35);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .25);
+}
+
+/* ============================================================
+   COUNT BADGES
+
+   These were bg-violet-500 — the same violet as the accent and as the active
+   nav item's fill, so the badge on the selected row sat on its own colour and
+   stopped reading as a separate mark.
+
+   Sky, because the palette is already spoken for: green and red mean money
+   everywhere in this app, amber means Pro, and violet is the brand and the
+   active state. Sky is the only channel left that says "count" and nothing
+   else. Dark text on a bright fill rather than white on a mid tone — at 7-10px
+   these need real contrast, not a tint.
+   ============================================================ */
+/* Achromatic, inverted against whatever it sits on.
+ *
+ * Sky was tried first and read as a foreign hue in a violet product. The
+ * badge cannot simply be violet either — that is the accent AND the active
+ * nav row's fill, so on the selected item the badge would sit on its own
+ * colour and stop reading as a separate mark, which is what it did
+ * originally.
+ *
+ * No hue at all solves both: it belongs to every palette, and a light chip on
+ * the dark rail (or a dark chip on the light one) stays distinct on the
+ * violet active row as well as on the plain background. */
+.dx-badge {
+  background-color: #1e293b;
+  color: #ffffff;
+  font-weight: 800;
+  /* The ring is what makes the chip work on ANY background rather than only
+     on the rail. Fill alone measured 2.57:1 against the violet active row —
+     under the 3:1 WCAG asks of a non-text element — so on the selected item
+     the badge started melting into the row again, which is the whole problem
+     this colour was meant to solve. A ring in the surrounding surface's own
+     colour separates it from the fill underneath whatever the hue is. */
+  box-shadow: 0 0 0 1.5px #ffffff, 0 1px 3px rgba(15, 23, 42, .3);
+}
+
+html.dark .dx-badge {
+  background-color: #f1f3f9;
+  color: #0b0d16;
+  box-shadow: 0 0 0 1.5px #0a0a11, 0 1px 4px rgba(0, 0, 0, .5);
+}
+
+/* ============================================================
+   FX NEWS SENTIMENT CHIPS
+
+   These were written with Tailwind's emerald/rose scales and came out
+   half-repainted: `.bg-emerald-50` is caught by the "chrome accents go
+   violet" rule above, while the label kept its green because the chip
+   happens to be font-bold and so matched the money exception below it.
+   The result on screen was a violet pill with green text.
+
+   Bullish and bearish are directional market facts and read as green and red
+   by every trader, so they keep those colours — but as their own classes, out
+   of reach of a remap aimed at badges and chrome.
+   ============================================================ */
+.dx-sentiment-bull {
+  background-color: #ecfdf5 !important;
+  color: #047857 !important;
+  border-color: #a7f3d0 !important;
+}
+
+html.dark .dx-sentiment-bull {
+  background-color: rgba(16, 185, 129, .12) !important;
+  color: #6ee7b7 !important;
+  border-color: rgba(16, 185, 129, .30) !important;
+}
+
+.dx-sentiment-bear {
+  background-color: #fff1f2 !important;
+  color: #be123c !important;
+  border-color: #fecdd3 !important;
+}
+
+html.dark .dx-sentiment-bear {
+  background-color: rgba(244, 63, 94, .12) !important;
+  color: #fda4af !important;
+  border-color: rgba(244, 63, 94, .30) !important;
+}
+
+.dx-sentiment-neutral {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.dark .dx-sentiment-neutral {
+  background-color: rgba(255, 255, 255, .05) !important;
+  color: #cbd5e1 !important;
+  border-color: rgba(255, 255, 255, .10) !important;
+}
+
+/* ============================================================
+   SIDEBAR SCROLLING
+
+   The rail was overflow:hidden at a fixed full height, so anything past the
+   viewport was simply cut off and unreachable — measured at 790px of content
+   in a 686px column, which clipped 104px: the whole call to action inside the
+   "Upgrade to Pro" card, and on a shorter laptop the last nav items too.
+
+   overflow-x stays hidden so the labels do not spill during the collapse
+   animation; only the vertical axis scrolls.
+   ============================================================ */
+.dx-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, .35) transparent;
+}
+
+.dx-sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dx-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dx-sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, .30);
+  border-radius: 999px;
+}
+
+.dx-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, .50);
+}
+
+html.dark .dx-sidebar-scroll {
+  scrollbar-color: rgba(255, 255, 255, .18) transparent;
+}
+
+html.dark .dx-sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, .16);
+}
+
+html.dark .dx-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, .30);
+}
+
+/* On a short window the sidebar's pitch is the first thing to go: the button
+   is what the card exists for, and losing two lines of description is better
+   than losing the button below the fold. 1366x768 laptops land here once
+   browser chrome is taken off, which is why the cut is at 760px. */
+@media (max-height: 760px) {
+  .dx-upsell-blurb {
+    display: none;
+  }
+}

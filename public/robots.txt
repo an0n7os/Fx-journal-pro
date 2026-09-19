@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /$
+Allow: /login
+
+# The app itself is behind auth and has nothing to index.
+Disallow: /dashboard
+Disallow: /journal
+Disallow: /accounts
+Disallow: /analytics
+Disallow: /calendar
+Disallow: /live-chart
+Disallow: /fx-news
+Disallow: /mt5-sync
+Disallow: /tools
+Disallow: /settings
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://fxjournalpro.com/sitemap.xml

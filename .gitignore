@@ -1,0 +1,17 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+.vercel
+db.json
+# Local snapshot of db.json — holds real user rows and a password field.
+db.json.bak
+# Old repository, kept only as a local backup.
+.git_backup/
+# Scratch diffs from local debugging.
+diff.txt
+diff_utf8.txt

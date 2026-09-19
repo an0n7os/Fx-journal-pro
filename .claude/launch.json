@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "journalpro-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "journalpro-dev-testbilling",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:testbilling"],
+      "port": 3000,
+      "autoPort": true
+    }
+  ]
+}

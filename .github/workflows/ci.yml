@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      # The suites hit a running server, so start one first. `npm run dev` is
+      # used rather than `npm start`: the built server only calls app.listen()
+      # when NODE_ENV is not production, and the dev entry is what these tests
+      # were written against. No Supabase credentials on purpose — this
+      # exercises the local fallback path, where the auth and trade logic is
+      # the same code.
+      - name: Start server
+        run: npm run dev &
+
+      - name: Wait for server
+        run: npx --yes wait-on http://localhost:3000 --timeout 60000
+
+      - name: Security regression tests
+        run: npm run test:security
+
+      - name: Functional regression tests
+        run: npm run test:functional
