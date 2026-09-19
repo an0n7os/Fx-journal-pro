@@ -1,0 +1,31 @@
+[build]
+  command = "npm run netlify-build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # server.ts reads this to pick the Supabase path and close the development
+  # back doors. Netlify does not set it for the function runtime on its own.
+  NODE_ENV = "production"
+
+[functions]
+  # Bundled rather than copied from node_modules. metaapi.cloud-sdk alone is
+  # 45MB on disk; esbuild tree-shakes the whole function to 12MB, 2.2MB zipped,
+  # well inside Netlify's 50MB limit. Measured, not assumed.
+  node_bundler = "esbuild"
+
+# The API. The splat is kept in the target so req.path still starts with /api
+# and the routes in server.ts match unchanged.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/api/:splat"
+  status = 200
+  force = true
+
+# Single-page app: every other path serves the built index.html so client-side
+# routes such as /dashboard survive a hard refresh.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

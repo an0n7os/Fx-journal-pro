@@ -26,6 +26,22 @@ import MetaApiModule from 'metaapi.cloud-sdk/dist/index';
 // styles (__esModule true => the class is the default export).
 const MetaApi: any = (MetaApiModule as any).default || MetaApiModule;
 
+/**
+ * True when this process is one invocation of a serverless function rather than
+ * a server that stays up.
+ *
+ * It governs three things that only make sense on a long-lived host: calling
+ * app.listen(), serving the built frontend from Express, and starting the MT5
+ * background interval. Vercel used to be the only case; Netlify Functions and
+ * bare Lambda behave the same way, and a missed check there shows up as a
+ * port-binding crash or a timer that silently never fires.
+ */
+const IS_SERVERLESS = !!(
+  process.env.VERCEL ||
+  process.env.NETLIFY ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME
+);
+
 // Absolute file paths for database persistence
 const DB_FILE = path.join(process.cwd(), 'db.json');
 
@@ -1530,10 +1546,11 @@ async function cloudSyncLoopTick() {
 }
 
 function startCloudWorker() {
-  // A background interval only survives on a long-running process. On Vercel
-  // every request is a fresh instance that is frozen as soon as it responds, so
-  // the timer would never fire — better to say so than to look like it works.
-  if (process.env.VERCEL) {
+  // A background interval only survives on a long-running process. On Vercel or
+  // Netlify every request is a fresh instance that is frozen as soon as it
+  // responds, so the timer would never fire — better to say so than to look
+  // like it works.
+  if (IS_SERVERLESS) {
     console.warn('[MT5 Cloud] Background worker not started: serverless runtime has no long-lived process. Run the cloud sync on a dedicated host or an external scheduler.');
     return;
   }
@@ -8650,8 +8667,8 @@ app.get('/api/economic-calendar', async (req, res) => {
 // VITE DEV SERVER OR STATIC ASSET PRODUCTION
 // ==========================================
 
-// In development environment outside of Vercel, load Vite dev server
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+// In development on a long-lived host, load the Vite dev server
+if (process.env.NODE_ENV !== 'production' && !IS_SERVERLESS) {
   import('vite').then(({ createServer }) => {
     createServer({
       server: { middlewareMode: true },
@@ -8666,8 +8683,9 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   }).catch(err => {
     console.error('Vite Dev Server creation failed:', err);
   });
-} else if (!process.env.VERCEL) {
-  // Static hosting inside Express is only needed for standard non-Vercel production deployments
+} else if (!IS_SERVERLESS) {
+  // Static hosting inside Express is only needed on a self-hosted production
+  // box. Vercel and Netlify serve dist/ from their own CDN.
   const distPath = path.join(process.cwd(), 'dist');
   app.use(express.static(distPath));
   app.get('*', (req, res) => {
