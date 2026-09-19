@@ -7,11 +7,16 @@
 -- the user's own dashboard reads, filtered by this table on the server.
 -- ===========================================================================
 
+-- users.id is TEXT, not uuid — the server mints ids like "user_dev_1789..."
+-- and "user_admin", which are not valid uuids. Declaring these columns as uuid
+-- made the foreign key unbuildable:
+--   ERROR: 42804: foreign key constraint ... cannot be implemented
+--   DETAIL: Key columns "sub_admin_id" and "id" are of incompatible types.
 create table if not exists public.sub_admin_assignments (
   id            text primary key,
-  sub_admin_id  uuid not null references public.users(id) on delete cascade,
-  user_id       uuid not null references public.users(id) on delete cascade,
-  assigned_by   uuid references public.users(id) on delete set null,
+  sub_admin_id  text not null references public.users(id) on delete cascade,
+  user_id       text not null references public.users(id) on delete cascade,
+  assigned_by   text references public.users(id) on delete set null,
   created_at    timestamptz not null default now()
 );
 

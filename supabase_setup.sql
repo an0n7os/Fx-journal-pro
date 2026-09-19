@@ -11,7 +11,8 @@
 -- that already holds real accounts and trades, running this file deletes them.
 -- Take a backup first, or run only the individual migration you need.
 --
--- Generated from the files listed below; edit those, not this one.
+-- Generated from the files listed below; edit those, not this one, and run
+-- `npm run check:migrations` afterwards.
 -- ============================================================================
 
 
@@ -704,11 +705,16 @@ END $$;
 -- the user's own dashboard reads, filtered by this table on the server.
 -- ===========================================================================
 
+-- users.id is TEXT, not uuid — the server mints ids like "user_dev_1789..."
+-- and "user_admin", which are not valid uuids. Declaring these columns as uuid
+-- made the foreign key unbuildable:
+--   ERROR: 42804: foreign key constraint ... cannot be implemented
+--   DETAIL: Key columns "sub_admin_id" and "id" are of incompatible types.
 create table if not exists public.sub_admin_assignments (
   id            text primary key,
-  sub_admin_id  uuid not null references public.users(id) on delete cascade,
-  user_id       uuid not null references public.users(id) on delete cascade,
-  assigned_by   uuid references public.users(id) on delete set null,
+  sub_admin_id  text not null references public.users(id) on delete cascade,
+  user_id       text not null references public.users(id) on delete cascade,
+  assigned_by   text references public.users(id) on delete set null,
   created_at    timestamptz not null default now()
 );
 
@@ -773,11 +779,13 @@ alter table public.users add constraint users_role_check
   check (role in ('USER', 'SUPPORT', 'SUB_ADMIN', 'PARTNER', 'ADMIN', 'SUPER_ADMIN'));
 
 -- ── 2. Partner profiles ────────────────────────────────────────────────────
+-- users.id is TEXT, not uuid. See the note in sub_admin_console_migration.sql:
+-- a uuid column here cannot be made a foreign key to it.
 create table if not exists public.partner_profiles (
-  user_id        uuid primary key references public.users(id) on delete cascade,
+  user_id        text primary key references public.users(id) on delete cascade,
   referral_code  text not null,
   created_at     timestamptz not null default now(),
-  created_by     uuid references public.users(id) on delete set null
+  created_by     text references public.users(id) on delete set null
 );
 
 -- Codes are compared case-insensitively — a partner who prints "AXYFX10" on a
@@ -786,7 +794,7 @@ create unique index if not exists partner_profiles_code_unique
   on public.partner_profiles (lower(referral_code));
 
 -- ── 3. Referral link on the user row ───────────────────────────────────────
-alter table public.users add column if not exists referred_by uuid
+alter table public.users add column if not exists referred_by text
   references public.users(id) on delete set null;
 alter table public.users add column if not exists referred_at timestamptz;
 

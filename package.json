@@ -14,6 +14,7 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.cjs",
     "lint": "tsc --noEmit",
+    "check:migrations": "node scripts/check-migrations.mjs",
     "test:security": "node tests/security.test.mjs",
     "test:functional": "node tests/functional.test.mjs",
     "test": "npm run test:security && npm run test:functional && npm run test:app && npm run test:billing && npm run test:subadmin && npm run test:partner && npm run test:plan && npm run test:journey",

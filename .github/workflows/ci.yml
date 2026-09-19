@@ -22,6 +22,13 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
+      # Migration bugs only surface when someone runs the SQL against a real
+      # project, and one bad statement aborts the whole run. This replays the
+      # files in order and checks the references and indexes against the shape
+      # they actually produce.
+      - name: Check SQL migrations
+        run: npm run check:migrations
+
       - name: Build
         run: npm run build
 
