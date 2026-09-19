@@ -91,6 +91,24 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- admin_schema.sql already created this table, with different column names
+-- (admin_id, target_entity_id, previous_state, new_state, ip_address) that no
+-- code ever wrote to. CREATE TABLE IF NOT EXISTS therefore does nothing on a
+-- database that ran that file, and the index below then failed with
+--   ERROR: 42703: column "actor_id" does not exist
+-- Add the columns the server actually writes, so both a fresh database and one
+-- created from the old schema end up with the same shape. The stale columns are
+-- all nullable, so they are left alone rather than dropped — nothing reads them
+-- and dropping them would discard any rows an older deployment wrote.
+ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS actor_id TEXT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS actor_email TEXT;
+ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS actor_role TEXT;
+ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS target_type TEXT;
+ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS target_id TEXT;
+ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS detail JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS ip TEXT;
+ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+
 CREATE INDEX IF NOT EXISTS admin_audit_logs_created_idx ON admin_audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS admin_audit_logs_actor_idx ON admin_audit_logs(actor_id);
 
