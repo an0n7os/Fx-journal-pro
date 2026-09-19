@@ -58,7 +58,7 @@ try {
     process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
     process.env.SUPABASE_KEY?.trim() ||
     process.env.VITE_SUPABASE_KEY?.trim();
-  const usingAnonKeyOnServer =
+  let usingAnonKeyOnServer =
     !process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() &&
     (!!process.env.VITE_SUPABASE_KEY?.trim() || !!process.env.SUPABASE_KEY?.trim());
 
@@ -77,6 +77,43 @@ try {
   }
   if (supabaseKey?.startsWith("'") && supabaseKey?.endsWith("'")) {
     supabaseKey = supabaseKey.slice(1, -1);
+  }
+
+  // The check above only asks WHICH variable held the key, so pasting a public
+  // key into SUPABASE_SERVICE_ROLE_KEY passed silently — the most likely way to
+  // get this wrong, since the two keys sit next to each other in the Supabase
+  // dashboard. Read the key itself instead.
+  //
+  // New format: sb_publishable_... is public, sb_secret_... is not.
+  // Legacy format: a JWT whose payload carries "role":"anon" or
+  // "role":"service_role".
+  if (supabaseKey) {
+    let keyIsPublic = supabaseKey.startsWith('sb_publishable_');
+    if (!keyIsPublic && supabaseKey.split('.').length === 3) {
+      try {
+        const payload = JSON.parse(
+          Buffer.from(supabaseKey.split('.')[1], 'base64url').toString('utf8')
+        );
+        keyIsPublic = payload?.role === 'anon';
+      } catch {
+        // Not a readable JWT; leave the variable-based check to speak.
+      }
+    }
+    if (keyIsPublic) {
+      usingAnonKeyOnServer = true;
+      const message =
+        '[AxyFx Journal Server] The Supabase key given to the server is a PUBLIC key ' +
+        '(sb_publishable_... or a JWT with role "anon"). It is the key shipped to every ' +
+        'browser, so running the server on it grants the server no more access than an ' +
+        'anonymous visitor already has, and every admin route silently reads nothing. ' +
+        'Use the secret key: Supabase dashboard, Settings, API keys, "sb_secret_..." ' +
+        '(formerly service_role).';
+      if (process.env.NODE_ENV === 'production') {
+        console.error(message);
+        throw new Error('A public Supabase key cannot be used as the server key');
+      }
+      console.warn(message);
+    }
   }
 
   if (supabaseUrl && !supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
@@ -120,9 +157,14 @@ try {
     console.log('[AxyFx Journal Server] Supabase integration DISABLED. Falling back to local db.json');
   }
 } catch (err) {
-  // A missing-credentials abort must not be swallowed by this catch, or the
-  // guard above becomes a no-op and the server boots on db.json anyway.
-  if (err instanceof Error && err.message === 'Supabase credentials are required in production') throw err;
+  // A deliberate startup abort must not be swallowed by this catch, or the
+  // guard that raised it becomes a no-op and the server boots anyway — on
+  // db.json, or on a key that can read nothing.
+  if (
+    err instanceof Error &&
+    (err.message === 'Supabase credentials are required in production' ||
+      err.message === 'A public Supabase key cannot be used as the server key')
+  ) throw err;
   console.error('[AxyFx Journal Server] Failed to initialize Supabase client:', err);
   useSupabase = false;
   supabase = null;
