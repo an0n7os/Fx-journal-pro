@@ -284,8 +284,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.replace(/^\//, '').toLowerCase();
-      const DASHBOARD_TABS = ['dashboard', 'journal', 'accounts', 'analytics', 'calendar', 'chart', 'fxnews', 'mt5', 'tools', 'insights', 'settings', 'admin'];
-      const TAB_ALIASES: Record<string, string> = { news: 'fxnews', mentor: 'insights', 'ai-mentor': 'insights', 'mt5-sync': 'mt5' };
+      const DASHBOARD_TABS = ['dashboard', 'journal', 'accounts', 'analytics', 'calendar', 'chart', 'fxnews', 'tools', 'insights', 'settings', 'admin'];
+      const TAB_ALIASES: Record<string, string> = { news: 'fxnews', mentor: 'insights', 'ai-mentor': 'insights', mt5: 'dashboard', 'mt5-sync': 'dashboard' };
       const mapped = TAB_ALIASES[path] || path;
       if (DASHBOARD_TABS.includes(mapped)) return mapped;
     }
@@ -398,6 +398,10 @@ export default function App() {
 
   const [accountCreationMethod, setAccountCreationMethod] = useState<'select' | 'manual' | 'mt5'>('select');
   const [newAccBalanceMode, setNewAccBalanceMode] = useState<'auto' | 'manual'>('auto');
+  const [newAccMt5Login, setNewAccMt5Login] = useState('');
+  const [newAccMt5Server, setNewAccMt5Server] = useState('');
+  const [newAccMt5InvestorPassword, setNewAccMt5InvestorPassword] = useState('');
+  const [showInvestorPassword, setShowInvestorPassword] = useState(false);
 
   // Edit Account form fields
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
@@ -503,6 +507,10 @@ export default function App() {
       setShowPasteModal(false);
       setShowTicketModal(false);
       setShowEditAccountModal(false);
+      setShowTradeModal(false);
+      setShowAccountModal(false);
+      setViewingScreenshot(null);
+      setSelectedNote(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -700,14 +708,15 @@ export default function App() {
 
   const DASHBOARD_TABS = [
     'dashboard', 'journal', 'accounts', 'analytics', 'calendar',
-    'chart', 'fxnews', 'mt5', 'tools', 'insights', 'settings', 'admin'
+    'chart', 'fxnews', 'tools', 'insights', 'settings', 'admin'
   ];
 
   const TAB_ALIASES: Record<string, string> = {
     news: 'fxnews',
     mentor: 'insights',
     'ai-mentor': 'insights',
-    'mt5-sync': 'mt5'
+    mt5: 'dashboard',
+    'mt5-sync': 'dashboard'
   };
 
   // Auth-based route redirection & section/tab synchronization
@@ -766,7 +775,6 @@ export default function App() {
       calendar: 'Trading Calendar | FX Journal Pro',
       chart: 'Live Chart | FX Journal Pro',
       fxnews: 'FX News & Economic Calendar | FX Journal Pro',
-      mt5: 'MT5 Auto Sync | FX Journal Pro',
       tools: 'Trading Tools & Calculators | FX Journal Pro',
       insights: 'AI Trade Mentor | FX Journal Pro',
       settings: 'Account Settings | FX Journal Pro',
@@ -1497,16 +1505,26 @@ export default function App() {
     const storedId = sessionStorage.getItem('auth_user_id') || user?.id || '';
     const storedEmail = sessionStorage.getItem('auth_email') || user?.email || '';
     console.log('[handleCreateAccount] auth check — id:', storedId, 'email:', storedEmail);
-    if (!newAccName || !newAccBroker) {
-      alert('Please fill in Account Name and Broker/Prop Firm Name.');
+    if (!newAccName.trim() || !newAccBroker.trim()) {
+      alert('Please fill in Account Name and Broker Name.');
       return;
     }
-    if (accountCreationMethod !== 'mt5' && !newAccBalance) {
+    if (accountCreationMethod === 'mt5') {
+      if (!newAccMt5Login.trim()) {
+        alert('Please enter your MT5 Login ID (account number).');
+        return;
+      }
+      if (!newAccMt5Server.trim()) {
+        alert('Please enter your MT5 Server name.');
+        return;
+      }
+      if (!newAccMt5InvestorPassword.trim()) {
+        alert('Please enter your MT5 Investor (read-only) Password.');
+        return;
+      }
+    }
+    if (accountCreationMethod === 'manual' && !newAccBalance) {
       alert('Please fill in Starting Balance.');
-      return;
-    }
-    if (accountCreationMethod === 'mt5' && newAccBalanceMode === 'manual' && !newAccBalance) {
-      alert('Please fill in Starting Balance or switch to Auto Calculate.');
       return;
     }
     setActionLoading(true);
@@ -1515,16 +1533,21 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newAccName,
-          broker: newAccBroker,
-          platform: accountCreationMethod === 'mt5' ? 'MT5' : newAccPlatform,
+          name: newAccName.trim(),
+          broker: newAccBroker.trim(),
+          platform: 'MT5',
           accountType: newAccType,
           currency: newAccCurrency,
-          startingBalance: accountCreationMethod === 'mt5'
-            ? (newAccBalanceMode === 'manual' ? newAccBalance : undefined)
-            : newAccBalance,
+          startingBalance: newAccBalance || '10000',
           isMt5Sync: accountCreationMethod === 'mt5',
-          ...(accountCreationMethod === 'mt5' ? { institutionType: newAccInstitutionType } : {})
+          ...(accountCreationMethod === 'mt5' ? {
+            institutionType: newAccInstitutionType,
+            login: newAccMt5Login.trim(),
+            server: newAccMt5Server.trim(),
+            investorPassword: newAccMt5InvestorPassword.trim()
+          } : {
+            platform: newAccPlatform
+          })
         })
       });
       console.log('[handleCreateAccount] response status:', res.status);
@@ -1534,14 +1557,15 @@ export default function App() {
         setShowAccountModal(false);
         setNewAccName('');
         setNewAccBroker('');
+        setNewAccMt5Login('');
+        setNewAccMt5Server('');
+        setNewAccMt5InvestorPassword('');
+        setShowInvestorPassword(false);
         setNewAccInstitutionType('Broker');
         if (data.account?.id) {
           setSelectedAccountId(data.account.id);
           persistSelectedAccount(data.account.id);
           await fetchAccountData(data.account.id);
-          if (accountCreationMethod === 'mt5') {
-            setActiveTab('mt5');
-          }
         } else {
           await fetchAccountData();
         }
@@ -2799,6 +2823,115 @@ export default function App() {
     profit: parseFloat(monthlyMap[my].toFixed(2))
   })).sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
 
+  // Pro Feature 1: Equity Growth & Underwater Drawdown Curve Data
+  const equityDrawdownData = React.useMemo(() => {
+    const startBal = activeAccount?.startingBalance || 10000;
+    let runningBal = startBal;
+    let peakBal = runningBal;
+    const sortedTrades = [...tradingTrades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const points = [{
+      name: 'Start',
+      equity: startBal,
+      drawdown: 0,
+      pnl: 0
+    }];
+
+    sortedTrades.forEach((t, i) => {
+      const net = t.profit + (t.commission || 0) + (t.swap || 0);
+      runningBal += net;
+      if (runningBal > peakBal) peakBal = runningBal;
+      const ddPercent = peakBal > 0 ? -parseFloat((((peakBal - runningBal) / peakBal) * 100).toFixed(2)) : 0;
+
+      const label = t.date ? new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : `#${i + 1}`;
+      points.push({
+        name: label,
+        equity: parseFloat(runningBal.toFixed(2)),
+        drawdown: ddPercent,
+        pnl: parseFloat(net.toFixed(2))
+      });
+    });
+
+    return points;
+  }, [tradingTrades, activeAccount]);
+
+  // Pro Feature 2: Day-of-Week Win Rate & Edge Performance
+  const dayOfWeekPerformance = React.useMemo(() => {
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const dayMap: { [key: string]: { name: string; trades: number; wins: number; losses: number; profit: number; winRate: number } } = {
+      Monday: { name: 'Mon', trades: 0, wins: 0, losses: 0, profit: 0, winRate: 0 },
+      Tuesday: { name: 'Tue', trades: 0, wins: 0, losses: 0, profit: 0, winRate: 0 },
+      Wednesday: { name: 'Wed', trades: 0, wins: 0, losses: 0, profit: 0, winRate: 0 },
+      Thursday: { name: 'Thu', trades: 0, wins: 0, losses: 0, profit: 0, winRate: 0 },
+      Friday: { name: 'Fri', trades: 0, wins: 0, losses: 0, profit: 0, winRate: 0 }
+    };
+
+    tradingTrades.forEach(t => {
+      if (!t.date) return;
+      const d = new Date(t.date);
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+      if (dayMap[dayName]) {
+        dayMap[dayName].trades += 1;
+        const net = t.profit + (t.commission || 0) + (t.swap || 0);
+        dayMap[dayName].profit += net;
+        if (t.profit > 0) dayMap[dayName].wins += 1;
+        else if (t.profit < 0) dayMap[dayName].losses += 1;
+      }
+    });
+
+    return days.map(d => {
+      const item = dayMap[d];
+      const wr = item.trades > 0 ? parseFloat(((item.wins / item.trades) * 100).toFixed(1)) : 0;
+      return {
+        ...item,
+        winRate: wr,
+        profit: parseFloat(item.profit.toFixed(2))
+      };
+    });
+  }, [tradingTrades]);
+
+  // Pro Feature 3: Advanced Performance Metrics (Profit Factor, Expectancy, Streaks)
+  const proMetrics = React.useMemo(() => {
+    let grossProfit = 0;
+    let grossLoss = 0;
+    let maxConsecutiveWins = 0;
+    let maxConsecutiveLosses = 0;
+    let curWins = 0;
+    let curLosses = 0;
+
+    const sorted = [...tradingTrades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    sorted.forEach(t => {
+      if (t.profit > 0) {
+        grossProfit += t.profit;
+        curWins += 1;
+        curLosses = 0;
+        if (curWins > maxConsecutiveWins) maxConsecutiveWins = curWins;
+      } else if (t.profit < 0) {
+        grossLoss += Math.abs(t.profit);
+        curLosses += 1;
+        curWins = 0;
+        if (curLosses > maxConsecutiveLosses) maxConsecutiveLosses = curLosses;
+      }
+    });
+
+    const profitFactor = grossLoss > 0 ? parseFloat((grossProfit / grossLoss).toFixed(2)) : (grossProfit > 0 ? 99.9 : 0);
+    const totalTrd = tradingTrades.length;
+    const wr = totalTrd > 0 ? (wins.length / totalTrd) : 0;
+    const lr = totalTrd > 0 ? (losses.length / totalTrd) : 0;
+    const avgWin = wins.length > 0 ? (grossProfit / wins.length) : 0;
+    const avgLoss = losses.length > 0 ? (grossLoss / losses.length) : 0;
+    const expectancy = parseFloat(((wr * avgWin) - (lr * avgLoss)).toFixed(2));
+
+    return {
+      profitFactor,
+      expectancy,
+      maxConsecutiveWins,
+      maxConsecutiveLosses,
+      grossProfit: parseFloat(grossProfit.toFixed(2)),
+      grossLoss: parseFloat(grossLoss.toFixed(2))
+    };
+  }, [tradingTrades, wins, losses]);
+
   // Reset journal page when filters change
   useEffect(() => {
     setJournalPage(1);
@@ -3737,7 +3870,6 @@ export default function App() {
     {
       label: 'Tools & AI',
       items: [
-        { id: 'mt5', label: 'MT5 Sync', icon: Cpu, pro: true },
         { id: 'insights', label: 'AI Mentor', icon: Brain, pro: true },
         { id: 'tools', label: 'Tools', icon: Wrench },
       ]
@@ -3987,7 +4119,7 @@ export default function App() {
                           onClick={() => { setActiveTab('admin'); setShowMobileNavProfile(false); }}
                           className="profile-menu-item w-full text-left px-3 py-2.5 text-sm text-rose-600 dark:text-rose-300 font-semibold rounded-xl flex items-center gap-2.5"
                         >
-                          <Shield className="h-4 w-4" /> Admin Panel
+                          <Shield className="h-4 w-4" /> {adminRole === 'SUB_ADMIN' ? 'Partner Portal' : 'Admin Panel'}
                         </button>
                       )}
                     </>
@@ -4077,17 +4209,19 @@ export default function App() {
                 <button
                   onClick={() => { setActiveTab('admin'); setMobileMenuOpen(false); }}
                   aria-current={activeTab === 'admin' ? 'page' : undefined}
-                  title={!desktopSidebarOpen ? 'Admin' : undefined}
+                  title={!desktopSidebarOpen ? (adminRole === 'SUB_ADMIN' ? 'Partner Portal' : 'Admin') : undefined}
                   className={`flex ${desktopSidebarOpen ? 'flex-row items-center justify-start gap-3 px-3 h-11' : 'flex-col items-center justify-center gap-0.5 h-11'} w-full rounded-xl mb-1 ${
                     desktopSidebarOpen
-                      ? (activeTab === 'admin' ? 'dx-nav-active' : 'dx-nav-idle text-red-500')
-                      : (activeTab === 'admin' ? 'dx-nav-rail-active' : 'dx-nav-idle text-red-500')
+                      ? (activeTab === 'admin' ? 'dx-nav-active' : (adminRole === 'SUB_ADMIN' ? 'dx-nav-idle text-violet-400' : 'dx-nav-idle text-red-500'))
+                      : (activeTab === 'admin' ? 'dx-nav-rail-active' : (adminRole === 'SUB_ADMIN' ? 'dx-nav-idle text-violet-400' : 'dx-nav-idle text-red-500'))
                   }`}
                 >
                   <span className={desktopSidebarOpen ? '' : `flex h-6 w-6 items-center justify-center rounded-lg ${activeTab === 'admin' ? 'dx-nav-active' : ''}`}>
                     <Shield className={desktopSidebarOpen ? 'h-5 w-5' : 'h-[18px] w-[18px]'} />
                   </span>
-                  <span className={`${desktopSidebarOpen ? 'text-sm' : 'text-[10px]'} font-bold whitespace-nowrap`}>Admin</span>
+                  <span className={`${desktopSidebarOpen ? 'text-sm' : 'text-[10px]'} font-bold whitespace-nowrap`}>
+                    {adminRole === 'SUB_ADMIN' ? 'Partner Portal' : 'Admin'}
+                  </span>
                 </button>
               )}
 
@@ -4248,10 +4382,9 @@ export default function App() {
                             activeTab === 'chart' ? 'Live Chart' :
                               activeTab === 'fxnews' ? 'FX News' :
                                 activeTab === 'settings' ? 'Settings' :
-                                  activeTab === 'mt5' ? 'MT5 Sync' :
-                                    activeTab === 'tools' ? 'Tools' :
-                                      activeTab === 'insights' ? 'AI Mentor' :
-                                        activeTab === 'partner' ? 'Partner Portal' : 'Admin Panel'}
+                                  activeTab === 'tools' ? 'Tools' :
+                                    activeTab === 'insights' ? 'AI Mentor' :
+                                      activeTab === 'partner' ? 'Partner Portal' : (adminRole === 'SUB_ADMIN' ? 'PARTNER PORTAL' : 'Admin Panel')}
                 </h1>
                 <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 sm:line-clamp-1">
                   {activeTab === 'dashboard' ? 'Welcome back! Here\'s an overview of your trading performance.' :
@@ -4261,11 +4394,10 @@ export default function App() {
                           activeTab === 'calendar' ? 'Visualize daily profit allocations and execution frequencies.' :
                             activeTab === 'chart' ? 'View and analyze your trades directly on a live interactive chart.' :
                               activeTab === 'settings' ? 'Configure portfolio guard, import tools, and co-pilot preferences.' :
-                                activeTab === 'mt5' ? 'Connect a unique Expert Advisor to your portfolio account for automatic, real-time trade sync.' :
-                                  activeTab === 'tools' ? 'Precision calculators to plan your trades with confidence.' :
-                                    activeTab === 'fxnews' ? 'Stay updated with the latest market-moving forex news and economic events.' :
-                                      activeTab === 'insights' ? 'Analyze your psychology and get actionable coaching.' :
-                                        activeTab === 'partner' ? 'Your referral network, and the users who joined through it.' : 'Administrative system configs.'}
+                                activeTab === 'tools' ? 'Precision calculators to plan your trades with confidence.' :
+                                  activeTab === 'fxnews' ? 'Stay updated with the latest market-moving forex news and economic events.' :
+                                    activeTab === 'insights' ? 'Analyze your psychology and get actionable coaching.' :
+                                      activeTab === 'partner' ? 'Your referral network, and the users who joined through it.' : (adminRole === 'SUB_ADMIN' ? 'Mentor & partner operations portal, assigned traders inspection and performance analytics.' : 'Administrative system configs.')}
                 </p>
               </div>
             </div>
@@ -5242,7 +5374,7 @@ export default function App() {
 
           {/* 3b. FX NEWS & ECONOMIC CALENDAR VIEW */}
           {activeTab === 'fxnews' && (
-            <FXNews initialTab={fxNewsInitialTab} />
+            <FXNews initialTab={fxNewsInitialTab} isPro={isProActive} />
           )}
 
           {/* 4. PORTFOLIO ACCOUNTS VIEW */}
@@ -5677,18 +5809,18 @@ export default function App() {
               <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 {/* Monthly P&L Bar Chart */}
-                <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs">
-                  <h3 className="font-bold text-slate-900 text-sm mb-1">Monthly P&L Distribution</h3>
-                  <p className="text-[10px] text-slate-400 mb-4 font-semibold">Net profit or loss grouped chronologically by month</p>
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-6 shadow-xs">
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-1">Monthly P&L Distribution</h3>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-4 font-semibold">Net profit or loss grouped chronologically by month</p>
                   <div className="h-64">
                     {monthlyPnlChartData.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={monthlyPnlChartData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.15} />
                           <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
                           <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
                           <Tooltip formatter={(value) => [formatValue(Number(value)), 'Net Profit']} />
-                          <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
+                          <Bar dataKey="profit" maxBarSize={36} radius={[4, 4, 0, 0]}>
                             {monthlyPnlChartData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.profit >= 0 ? '#10b981' : '#f43f5e'} />
                             ))}
@@ -5704,17 +5836,17 @@ export default function App() {
                 </div>
 
                 {/* Profit by Instrument */}
-                <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs">
-                  <h3 className="font-bold text-slate-900 text-sm mb-4">Cumulative Profit by Instrument</h3>
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-6 shadow-xs">
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-4">Cumulative Profit by Instrument</h3>
                   <div className="h-64">
                     {symbolChartData.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={symbolChartData} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#334155" opacity={0.15} />
                           <XAxis type="number" stroke="#94a3b8" fontSize={10} tickLine={false} />
                           <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} tickLine={false} />
                           <Tooltip formatter={(value) => [formatValue(Number(value)), 'Cumulative Net']} />
-                          <Bar dataKey="profit" fill="#3b82f6" radius={[0, 4, 4, 0]}>
+                          <Bar dataKey="profit" maxBarSize={28} fill="#3b82f6" radius={[0, 4, 4, 0]}>
                             {symbolChartData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.profit >= 0 ? '#10b981' : '#f43f5e'} />
                             ))}
@@ -5959,6 +6091,172 @@ export default function App() {
                         No losing trading days recorded.
                       </div>
                     )}
+                  </div>
+                </div>
+              </section>
+
+              {/* 5b. PRO ANALYTICS & STATISTICAL EDGE SUITE */}
+              <section className="mt-8 space-y-6">
+                {/* Section Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2 rounded-xl bg-violet-100 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 border border-violet-200/50 dark:border-violet-800/50">
+                      <Sparkles className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-slate-900 dark:text-white text-base">Advanced Pro Analytics</h3>
+                        <span className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-xs">
+                          PRO
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        Deep-dive equity drawdown curve, day-of-week win rates, and expectancy edge
+                      </p>
+                    </div>
+                  </div>
+                  {!isProActive && (
+                    <button
+                      onClick={() => setShowProModal(true)}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-md transition shrink-0"
+                    >
+                      <Lock className="h-3.5 w-3.5" /> Unlock Pro Analytics Suite
+                    </button>
+                  )}
+                </div>
+
+                {/* Pro Stat Cards Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 shadow-xs">
+                    <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Profit Factor</div>
+                    <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                      {isProActive ? (proMetrics.profitFactor > 0 ? proMetrics.profitFactor.toFixed(2) : '—') : '2.45'}
+                    </div>
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium">Gross Wins ÷ Gross Losses</div>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 shadow-xs">
+                    <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Trade Expectancy</div>
+                    <div className={`text-2xl font-black font-mono ${isProActive ? (proMetrics.expectancy >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400') : 'text-emerald-500'}`}>
+                      {isProActive ? (tradingTrades.length > 0 ? formatValue(proMetrics.expectancy) : '—') : '+$142.50'}
+                    </div>
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium">Expected net per trade</div>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 shadow-xs">
+                    <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Max Win Streak</div>
+                    <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                      {isProActive ? (proMetrics.maxConsecutiveWins || 0) : '6'} <span className="text-xs font-semibold text-slate-400">Wins</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium">Consecutive profitable trades</div>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 shadow-xs">
+                    <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Max Loss Streak</div>
+                    <div className="text-2xl font-black text-rose-500 dark:text-rose-400 font-mono">
+                      {isProActive ? (proMetrics.maxConsecutiveLosses || 0) : '2'} <span className="text-xs font-semibold text-slate-400">Losses</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium">Consecutive losing trades</div>
+                  </div>
+                </div>
+
+                {/* 2 Pro Charts with Pro Lock Gate for Free Users */}
+                <div className="relative">
+                  {!isProActive && (
+                    <div className="absolute inset-0 z-20 backdrop-blur-xs bg-slate-900/60 dark:bg-slate-950/70 rounded-2xl flex flex-col items-center justify-center p-6 text-center border border-white/10">
+                      <div className="p-3.5 rounded-full bg-violet-600/30 border border-violet-500/40 text-violet-300 mb-3 shadow-xl">
+                        <Lock className="h-6 w-6" />
+                      </div>
+                      <h4 className="text-lg font-bold text-white mb-1.5">Pro Analytics Suite</h4>
+                      <p className="text-xs text-slate-300 max-w-md mb-4 leading-relaxed">
+                        Upgrade to <strong>FX Journal Pro</strong> to unlock your real-time <strong>Equity & Underwater Drawdown Curve</strong>, <strong>Day-of-Week Win Rate Edge</strong>, and statistical trade expectancy.
+                      </p>
+                      <button
+                        onClick={() => setShowProModal(true)}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg transition flex items-center gap-2"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" /> Upgrade to PRO — ₹399/mo
+                      </button>
+                    </div>
+                  )}
+
+                  <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6 ${!isProActive ? 'filter blur-[3px] opacity-60 pointer-events-none' : ''}`}>
+                    {/* Pro Chart 1: Equity & Drawdown Underwater Curve */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-6 shadow-xs">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">Equity & Underwater Drawdown</h4>
+                          <p className="text-[10px] text-slate-400">Account balance progression with peak-to-trough drawdown %</p>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-violet-800/40">
+                          Underwater Curve
+                        </span>
+                      </div>
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={isProActive ? equityDrawdownData : [
+                            { name: 'Start', equity: 10000, drawdown: 0, pnl: 0 },
+                            { name: 'W1', equity: 10450, drawdown: 0, pnl: 450 },
+                            { name: 'W2', equity: 10200, drawdown: -2.39, pnl: -250 },
+                            { name: 'W3', equity: 10800, drawdown: 0, pnl: 600 },
+                            { name: 'W4', equity: 11250, drawdown: 0, pnl: 450 },
+                            { name: 'W5', equity: 10900, drawdown: -3.11, pnl: -350 },
+                            { name: 'W6', equity: 11600, drawdown: 0, pnl: 700 }
+                          ]}>
+                            <defs>
+                              <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4}/>
+                                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.0}/>
+                              </linearGradient>
+                              <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.05}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.15} />
+                            <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                            <YAxis yAxisId="left" stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                            <YAxis yAxisId="right" orientation="right" stroke="#f43f5e" fontSize={10} tickLine={false} tickFormatter={(v) => `${v}%`} domain={[-20, 0]} />
+                            <Tooltip formatter={(value: any, name: any) => [name === 'drawdown' ? `${value}%` : formatValue(Number(value)), name === 'drawdown' ? 'Drawdown' : 'Equity']} />
+                            <Area yAxisId="left" type="monotone" dataKey="equity" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#equityGrad)" />
+                            <Area yAxisId="right" type="monotone" dataKey="drawdown" stroke="#f43f5e" strokeWidth={1.5} fillOpacity={1} fill="url(#ddGrad)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Pro Chart 2: Day-of-Week Win Rate & Edge Performance */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-6 shadow-xs">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">Performance by Day of the Week</h4>
+                          <p className="text-[10px] text-slate-400">P&L distribution and win rate across active market days</p>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/40">
+                          Session Edge
+                        </span>
+                      </div>
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={isProActive ? dayOfWeekPerformance : [
+                            { name: 'Mon', profit: 320, winRate: 66.7, trades: 3, wins: 2, losses: 1 },
+                            { name: 'Tue', profit: 540, winRate: 75.0, trades: 4, wins: 3, losses: 1 },
+                            { name: 'Wed', profit: -120, winRate: 40.0, trades: 5, wins: 2, losses: 3 },
+                            { name: 'Thu', profit: 680, winRate: 80.0, trades: 5, wins: 4, losses: 1 },
+                            { name: 'Fri', profit: 210, winRate: 60.0, trades: 5, wins: 3, losses: 2 }
+                          ]}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.15} />
+                            <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                            <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
+                            <Tooltip formatter={(val: any, name: any) => [name === 'profit' ? formatValue(Number(val)) : `${val}%`, name === 'profit' ? 'Net P&L' : 'Win Rate']} />
+                            <Bar dataKey="profit" maxBarSize={32} radius={[4, 4, 0, 0]}>
+                              {(isProActive ? dayOfWeekPerformance : [
+                                { profit: 320 }, { profit: 540 }, { profit: -120 }, { profit: 680 }, { profit: 210 }
+                              ]).map((entry, index) => (
+                                <Cell key={`dow-${index}`} fill={entry.profit >= 0 ? '#10b981' : '#f43f5e'} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -7041,23 +7339,7 @@ export default function App() {
 
           {/* 5. MT5 AUTOMATION VIEW */}
           {/* MT5 sync is a Pro feature and the server refuses to create a synced
-            account on Free. Showing the full EA setup guide to a free user sent
-            them through the whole download-and-attach flow to reach a 403. */}
-          {activeTab === 'mt5' && user && !isProActive && (
-            <ProFeaturePanel
-              title="Automatic MT5 Sync"
-              blurb="Attach the Expert Advisor once and every trade flows from your MetaTrader 5 terminal into your journal, with balances kept in step. On the free plan you can add trades manually."
-              onUpgrade={goToSubscriptionSettings}
-            />
-          )}
 
-          {activeTab === 'mt5' && user && isProActive && (
-            <MT5Automation
-              account={activeAccount || null}
-              authFetch={authFetch}
-              onRefresh={fetchAccountData}
-            />
-          )}
 
           {/* 6. AI CO-PILOT INSIGHTS VIEW */}
           {activeTab === 'insights' && activeAccount && user && (
@@ -7071,6 +7353,7 @@ export default function App() {
           {/* 7. ADMIN PANEL VIEW */}
           {activeTab === 'admin' && (
             <AdminPanel
+              role={adminRole}
               onPublishAnnouncement={fetchAccountData}
               onInspectUser={handleInspectUser}
             />
@@ -7110,7 +7393,6 @@ export default function App() {
           { id: 'accounts', icon: Layers, label: 'Accounts', badge: accounts.length > 0 ? accounts.length : undefined },
           { id: 'calendar', icon: Calendar, label: 'Calendar' },
           { id: 'chart', icon: LineChart, label: 'Live Chart' },
-          { id: 'mt5', icon: RefreshCw, label: 'MT5 Sync' },
           { id: 'tools', icon: Wrench, label: 'Tools' },
           { id: 'insights', icon: Brain, label: 'AI Mentor' },
           { id: 'settings', icon: Shield, label: 'Settings' },
@@ -7397,7 +7679,13 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
           <div className="bg-white rounded-xl shadow-2xl border border-slate-100 max-w-md w-full p-6 relative max-h-[90vh] overflow-y-auto">
             <button
-              onClick={() => setShowAccountModal(false)}
+              onClick={() => {
+                setShowAccountModal(false);
+                setNewAccMt5Login('');
+                setNewAccMt5Server('');
+                setNewAccMt5InvestorPassword('');
+                setShowInvestorPassword(false);
+              }}
               className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 z-10"
             >
               ✖
@@ -7421,25 +7709,21 @@ export default function App() {
                     <div className="bg-violet-100 dark:bg-violet-500/15 p-2 rounded-lg text-violet-600 dark:text-violet-300"><Terminal className="w-5 h-5" /></div>
                     <div>
                       <div className="font-bold text-slate-800 text-sm">MT5 Sync Account</div>
-                      <div className="text-[11px] text-slate-500">Connect a unique MT5 Expert Advisor to sync your trades automatically in real time.</div>
+                      <div className="text-[11px] text-slate-500">Connect directly using MT5 Login, Server, and Investor (read-only) Password.</div>
                     </div>
                   </button>
                 </div>
               </div>
             )}
 
-            {(accountCreationMethod === 'manual' || accountCreationMethod === 'mt5') && (
+            {accountCreationMethod === 'manual' && (
               <form onSubmit={handleCreateAccount} className="space-y-4">
                 <div className="flex items-center gap-2 mb-2">
                   <button type="button" onClick={() => setAccountCreationMethod('select')} className="text-slate-400 hover:text-slate-700 text-xs font-semibold">← Back</button>
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">{accountCreationMethod === 'mt5' ? 'Create MT5 Sync Account' : 'Register Manual Portfolio'}</h3>
-                  <p className="text-[11px] text-slate-400">
-                    {accountCreationMethod === 'mt5'
-                      ? "We'll generate a unique MT5 Expert Advisor for this account and walk you through connecting it after creation."
-                      : 'Configure parameters for manual logs or automated Expert integrations.'}
-                  </p>
+                  <h3 className="font-bold text-slate-900 text-base">Register Manual Portfolio</h3>
+                  <p className="text-[11px] text-slate-400">Configure parameters to manually log your trades.</p>
                 </div>
 
                 <div>
@@ -7454,75 +7738,34 @@ export default function App() {
                   />
                 </div>
 
-                {accountCreationMethod === 'mt5' ? (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1">Account Type</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setNewAccInstitutionType('Broker')}
-                          className={`text-left rounded-lg border-2 p-3 transition text-xs ${newAccInstitutionType === 'Broker' ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-slate-100 hover:border-slate-300 bg-slate-50 text-slate-600'}`}
-                        >
-                          <div className="font-bold">Broker Account</div>
-                          <div className="text-[10px] mt-0.5 opacity-80">Retail or broker-funded account</div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNewAccInstitutionType('Prop Firm')}
-                          className={`text-left rounded-lg border-2 p-3 transition text-xs ${newAccInstitutionType === 'Prop Firm' ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-slate-100 hover:border-slate-300 bg-slate-50 text-slate-600'}`}
-                        >
-                          <div className="font-bold">Prop Firm Account</div>
-                          <div className="text-[10px] mt-0.5 opacity-80">Proprietary trading firm account</div>
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1">
-                        {newAccInstitutionType === 'Broker' ? 'Broker Name' : 'Prop Firm Name'}
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={newAccBroker}
-                        onChange={(e) => setNewAccBroker(e.target.value)}
-                        placeholder={newAccInstitutionType === 'Broker' ? 'IC Markets' : 'FTMO'}
-                        className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Broker Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={newAccBroker}
-                      onChange={(e) => setNewAccBroker(e.target.value)}
-                      placeholder="IC Markets"
-                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Broker Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={newAccBroker}
+                    onChange={(e) => setNewAccBroker(e.target.value)}
+                    placeholder="IC Markets"
+                    className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  {accountCreationMethod !== 'mt5' && (
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1">Trading Platform</label>
-                      <select
-                        value={newAccPlatform}
-                        onChange={(e: any) => setNewAccPlatform(e.target.value)}
-                        className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
-                      >
-                        <option value="MT5">MetaTrader 5 (MT5)</option>
-                        <option value="MT4">MetaTrader 4 (MT4)</option>
-                        <option value="cTrader">cTrader</option>
-                        <option value="DXtrade">DXtrade</option>
-                      </select>
-                    </div>
-                  )}
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">{accountCreationMethod === 'mt5' ? 'Portfolio Mode' : 'Account Type'}</label>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Trading Platform</label>
+                    <select
+                      value={newAccPlatform}
+                      onChange={(e: any) => setNewAccPlatform(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
+                    >
+                      <option value="MT5">MetaTrader 5 (MT5)</option>
+                      <option value="MT4">MetaTrader 4 (MT4)</option>
+                      <option value="cTrader">cTrader</option>
+                      <option value="DXtrade">DXtrade</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Account Type</label>
                     <select
                       value={newAccType}
                       onChange={(e: any) => setNewAccType(e.target.value)}
@@ -7533,42 +7776,6 @@ export default function App() {
                     </select>
                   </div>
                 </div>
-
-                {accountCreationMethod === 'mt5' && (
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Initial Balance</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setNewAccBalanceMode('auto')}
-                        className={`text-left rounded-lg border-2 p-3 transition text-xs ${newAccBalanceMode === 'auto' ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-slate-100 hover:border-slate-300 bg-slate-50 text-slate-600'}`}
-                      >
-                        <div className="font-bold">Auto Calculate</div>
-                        <div className="text-[10px] mt-0.5 opacity-80">Initial Balance = your first deposit in MT5 history</div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setNewAccBalanceMode('manual')}
-                        className={`text-left rounded-lg border-2 p-3 transition text-xs ${newAccBalanceMode === 'manual' ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-slate-100 hover:border-slate-300 bg-slate-50 text-slate-600'}`}
-                      >
-                        <div className="font-bold">Enter Manually</div>
-                        <div className="text-[10px] mt-0.5 opacity-80">Provide your own starting balance</div>
-                      </button>
-                    </div>
-                    {newAccBalanceMode === 'manual' && (
-                      <div className="mt-3">
-                        <label className="text-xs font-semibold text-slate-700 block mb-1">Starting Balance</label>
-                        <input
-                          type="number"
-                          required
-                          value={newAccBalance}
-                          onChange={(e) => setNewAccBalance(e.target.value)}
-                          className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -7587,18 +7794,16 @@ export default function App() {
                       <option value="CAD">CAD ($)</option>
                     </select>
                   </div>
-                  {accountCreationMethod !== 'mt5' && (
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1">Starting Balance</label>
-                      <input
-                        type="number"
-                        required
-                        value={newAccBalance}
-                        onChange={(e) => setNewAccBalance(e.target.value)}
-                        className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
-                      />
-                    </div>
-                  )}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Starting Balance</label>
+                    <input
+                      type="number"
+                      required
+                      value={newAccBalance}
+                      onChange={(e) => setNewAccBalance(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
+                    />
+                  </div>
                 </div>
 
                 <button
@@ -7606,7 +7811,151 @@ export default function App() {
                   disabled={actionLoading}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg py-2.5 px-4 transition disabled:opacity-50"
                 >
-                  {actionLoading ? 'Provisioning Account...' : (accountCreationMethod === 'mt5' ? 'Create MT5 Sync Account' : 'Create Portfolio Account')}
+                  {actionLoading ? 'Provisioning Account...' : 'Create Portfolio Account'}
+                </button>
+              </form>
+            )}
+
+            {accountCreationMethod === 'mt5' && (
+              <form onSubmit={handleCreateAccount} className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <button type="button" onClick={() => setAccountCreationMethod('select')} className="text-slate-400 hover:text-slate-700 text-xs font-semibold">← Back</button>
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Connect MT5 Account (Investor Password)</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Enter your MT5 login, server, and Investor (read-only) password to sync your trades directly.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Account Alias / Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={newAccName}
+                    onChange={(e) => setNewAccName(e.target.value)}
+                    placeholder="e.g. Primary Live Scalper"
+                    className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Broker Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={newAccBroker}
+                      onChange={(e) => setNewAccBroker(e.target.value)}
+                      placeholder="e.g. IC Markets, Exness"
+                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">MT5 Server</label>
+                    <input
+                      type="text"
+                      required
+                      value={newAccMt5Server}
+                      onChange={(e) => setNewAccMt5Server(e.target.value)}
+                      placeholder="e.g. ICMarketsSC-Live01"
+                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">MT5 Login ID (Account Number)</label>
+                  <input
+                    type="text"
+                    required
+                    inputMode="numeric"
+                    value={newAccMt5Login}
+                    onChange={(e) => setNewAccMt5Login(e.target.value)}
+                    placeholder="e.g. 51012345"
+                    className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700 block">Investor Password (Read-Only)</label>
+                    <span className="text-[10px] text-emerald-600 font-medium">Read-Only Safe</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showInvestorPassword ? "text" : "password"}
+                      required
+                      value={newAccMt5InvestorPassword}
+                      onChange={(e) => setNewAccMt5InvestorPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 pr-10 w-full focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowInvestorPassword(!showInvestorPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                      title={showInvestorPassword ? "Hide password" : "Show password"}
+                    >
+                      {showInvestorPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <div className="mt-1.5 p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200/70 text-[11px] text-emerald-800 flex items-start gap-2">
+                    <Shield className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+                    <span>
+                      Always use your <strong>Investor (read-only) Password</strong>, never your master trading password. Credentials are encrypted before storage.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Portfolio Mode</label>
+                    <select
+                      value={newAccType}
+                      onChange={(e: any) => setNewAccType(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
+                    >
+                      <option value="Live">Live Portfolio</option>
+                      <option value="Demo">Demo Practice</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Base Currency</label>
+                    <select
+                      value={newAccCurrency}
+                      onChange={(e) => setNewAccCurrency(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="INR">INR (₹)</option>
+                      <option value="GBP">GBP (£)</option>
+                      <option value="JPY">JPY (¥)</option>
+                      <option value="AUD">AUD ($)</option>
+                      <option value="CAD">CAD ($)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Starting Balance</label>
+                  <input
+                    type="number"
+                    value={newAccBalance}
+                    onChange={(e) => setNewAccBalance(e.target.value)}
+                    placeholder="10000"
+                    className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs rounded-lg py-2.5 px-4 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {actionLoading ? 'Connecting MT5 Account...' : 'Connect MT5 Account'}
                 </button>
               </form>
             )}
@@ -7722,27 +8071,38 @@ export default function App() {
 
       {/* B. Add / Edit Trade Modal */}
       {showTradeModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[70] overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-md w-full relative overflow-hidden">
+        <div
+          className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-[70] overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowTradeModal(false);
+          }}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 max-w-md w-full relative flex flex-col my-auto max-h-[min(92vh,780px)] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
 
-            {/* Modal Header */}
-            <div className="bg-slate-50/50 border-b border-slate-100 p-5 pr-12">
-              <h3 className="font-bold text-slate-900 text-lg">
+            {/* Modal Header - Sticky at top so Close button is always visible */}
+            <div className="shrink-0 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 p-4 sm:p-5 pr-14 sticky top-0 z-20">
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base sm:text-lg">
                 {isMentorReadOnlyMode ? 'Inspect Trade Execution (Read-Only)' : editingTradeId ? 'Modify Trade Record' : 'Record Executed Trade'}
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {isMentorReadOnlyMode ? 'Trader trade details and performance metrics in mentor read-only mode.' : 'Enter the essential details for your journal.'}
               </p>
 
               <button
+                type="button"
                 onClick={() => setShowTradeModal(false)}
-                className="absolute right-4 top-5 text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-100 transition duration-150"
+                className="absolute right-3.5 top-3.5 sm:right-4 sm:top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition duration-150 flex items-center justify-center cursor-pointer"
+                title="Close modal (Esc)"
+                aria-label="Close modal"
               >
-                ✖
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveTrade} className="p-5 space-y-5">
+            <form onSubmit={handleSaveTrade} className="p-4 sm:p-5 space-y-5 overflow-y-auto flex-1 overscroll-contain">
 
               {/* Date & Time */}
               <div className="grid grid-cols-2 gap-4">
@@ -8569,18 +8929,7 @@ export default function App() {
         />
       )}
 
-      {/* One-time MT5 Sync tour */}
-      {showMT5Tour && user && (
-        <GuidedTour
-          variant="mt5"
-          step={mt5TourStep}
-          accountCreated={accounts.length > 0}
-          onNext={nextMT5TourStep}
-          onBack={backMT5TourStep}
-          onSkip={completeMT5Tour}
-          onFinish={completeMT5Tour}
-        />
-      )}
+
 
       {/* Sign-out confirmation modal */}
       {showSignOutModal && (

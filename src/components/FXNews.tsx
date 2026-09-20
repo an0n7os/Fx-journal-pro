@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Newspaper, CalendarRange, RefreshCw, ExternalLink, TrendingUp, TrendingDown,
-  Minus, Clock, Globe, AlertTriangle, ChevronDown, Radio, MapPin, CalendarDays, Search
+  Minus, Clock, Globe, AlertTriangle, ChevronDown, Radio, MapPin, CalendarDays, Search,
+  Bell, BellOff, X, CheckCircle2, Lock, MessageCircle, Loader2
 } from 'lucide-react';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD', 'CNY'];
@@ -261,7 +262,175 @@ function CellValue({ value }: { value: string | null }) {
   return <span className={`font-mono font-semibold ${numColor(value)}`}>{value}</span>;
 }
 
-export default function FXNews({ initialTab = 'news' }: { initialTab?: 'news' | 'calendar' }) {
+// =====================================================
+// WhatsApp Reminder Modal
+// =====================================================
+const REMIND_OPTIONS = [
+  { label: '5 min before', value: 5 },
+  { label: '10 min before', value: 10 },
+  { label: '15 min before', value: 15 },
+  { label: '30 min before', value: 30 },
+  { label: '1 hour before', value: 60 },
+  { label: '2 hours before', value: 120 },
+];
+
+function WhatsAppReminderModal({
+  event,
+  existingPhone,
+  isPro,
+  onClose,
+  onSaved,
+}: {
+  event: EconEvent;
+  existingPhone?: string;
+  isPro: boolean;
+  onClose: () => void;
+  onSaved: (phone: string, mins: number, eventId: string) => void;
+}) {
+  const [phone, setPhone] = useState(existingPhone || '');
+  const [mins, setMins] = useState(15);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  async function handleSave() {
+    if (!phone.trim()) { setErr('Please enter your WhatsApp number.'); return; }
+    setSaving(true); setErr('');
+    try {
+      const res = await fetch('/api/reminders/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: event.id,
+          eventName: event.event,
+          eventDate: event.date,
+          currency: event.currency,
+          impact: event.impact,
+          phone: phone.trim(),
+          minutesBefore: mins,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'Failed to save reminder.'); return; }
+      setSuccess(true);
+      setTimeout(() => { onSaved(phone.trim(), mins, event.id); onClose(); }, 1500);
+    } catch {
+      setErr('Network error. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-md relative overflow-hidden">
+        {/* Decorative gradient */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-400 via-emerald-400 to-teal-500" />
+        <div className="p-6">
+          <div className="flex items-start justify-between mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-500/15 flex items-center justify-center">
+                <MessageCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-slate-900 dark:text-white">WhatsApp Reminder</h2>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Get notified before this event fires</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition p-1">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Event summary */}
+          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 rounded-xl p-3.5 mb-5">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[10px] font-extrabold text-red-600 dark:text-red-300 bg-red-100 dark:bg-red-500/15 border border-red-200 dark:border-red-500/30 px-1.5 py-0.5 rounded-full">{event.impact.toUpperCase()} IMPACT</span>
+              <span className="text-[10px] font-bold text-blue-700 dark:text-blue-400">{event.currency}</span>
+            </div>
+            <p className="text-sm font-bold text-slate-900 dark:text-white leading-snug">{event.event}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+              <Clock className="h-3 w-3" /> {fmtTime(event.date)} · {fmtDate(event.date)}
+            </p>
+          </div>
+
+          {!isPro ? (
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center mb-3">
+                <Lock className="h-7 w-7 text-amber-600 dark:text-amber-400" />
+              </div>
+              <h3 className="font-black text-slate-900 dark:text-white text-base mb-1">Pro Feature</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 max-w-[260px] leading-relaxed">
+                WhatsApp reminders are available for <span className="text-amber-600 dark:text-amber-400 font-bold">Pro subscribers</span>. Upgrade to get notified before high-impact events.
+              </p>
+              <button onClick={onClose} className="mt-5 px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold shadow hover:opacity-90 transition">
+                Upgrade to Pro
+              </button>
+            </div>
+          ) : success ? (
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <CheckCircle2 className="h-12 w-12 text-green-500 mb-3" />
+              <p className="font-black text-slate-900 dark:text-white text-base">Reminder Set!</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">We'll message you {mins} minutes before the event.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
+                  WhatsApp Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  value={phone}
+                  onChange={e => { setPhone(e.target.value); setErr(''); }}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-400 transition"
+                />
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Include country code, e.g. +91 for India</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Remind me</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {REMIND_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setMins(opt.value)}
+                      className={`text-[11px] font-bold py-2 rounded-xl border transition ${
+                        mins === opt.value
+                          ? 'bg-green-500 text-white border-green-500 shadow-sm'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-green-400'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {err && (
+                <div className="flex items-center gap-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 rounded-xl px-3 py-2.5">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />{err}
+                </div>
+              )}
+
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-bold shadow-lg hover:opacity-90 transition disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+                {saving ? 'Saving…' : 'Set Reminder'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function FXNews({ initialTab = 'news', isPro = false }: { initialTab?: 'news' | 'calendar'; isPro?: boolean }) {
   const [tab, setTab] = useState<'news' | 'calendar'>(initialTab);
 
   useEffect(() => {
@@ -282,6 +451,10 @@ export default function FXNews({ initialTab = 'news' }: { initialTab?: 'news' | 
   const [calError, setCalError] = useState('');
   const [calIsSample, setCalIsSample] = useState(false);
   const [calProvider, setCalProvider] = useState('');
+
+  // WhatsApp reminder state
+  const [reminderEvent, setReminderEvent] = useState<EconEvent | null>(null);
+  const [savedReminders, setSavedReminders] = useState<Record<string, { phone: string; mins: number }>>({});
 
   const [newsCurrency, setNewsCurrency] = useState('All');
   const [newsCategory, setNewsCategory] = useState('All');
@@ -802,11 +975,14 @@ export default function FXNews({ initialTab = 'news' }: { initialTab?: 'news' | 
                           <th className="py-3 px-3 font-bold text-right">Actual</th>
                           <th className="py-3 px-3 font-bold text-right">Forecast</th>
                           <th className="py-3 pr-5 pl-3 font-bold text-right">Previous</th>
+                          <th className="py-3 pr-5 pl-3 font-bold text-right">Remind</th>
                         </tr>
                       </thead>
                       <tbody>
                         {group.items.map(ev => {
                           const imp = impactConfig(ev.impact);
+                          const hasReminder = !!savedReminders[ev.id];
+                          const isFuture = new Date(ev.date).getTime() > Date.now();
                           return (
                             <tr key={ev.id} className="border-b border-slate-50 dark:border-slate-800/50 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition">
                               <td className="py-3 pl-5 pr-3 whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{fmtTime(ev.date)}</td>
@@ -824,6 +1000,22 @@ export default function FXNews({ initialTab = 'news' }: { initialTab?: 'news' | 
                               <td className="py-3 px-3 text-right whitespace-nowrap"><CellValue value={ev.actual} /></td>
                               <td className="py-3 px-3 text-right whitespace-nowrap"><CellValue value={ev.forecast} /></td>
                               <td className="py-3 pr-5 pl-3 text-right whitespace-nowrap"><CellValue value={ev.previous} /></td>
+                              <td className="py-3 pr-5 pl-3 text-right whitespace-nowrap">
+                                {isFuture && (
+                                  <button
+                                    onClick={() => setReminderEvent(ev)}
+                                    title={hasReminder ? 'Reminder set – click to change' : 'Set WhatsApp reminder'}
+                                    className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border transition ${
+                                      hasReminder
+                                        ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300 border-green-300 dark:border-green-500/40'
+                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-green-400 hover:text-green-600'
+                                    }`}
+                                  >
+                                    {hasReminder ? <Bell className="h-3 w-3" /> : <Bell className="h-3 w-3" />}
+                                    {hasReminder ? 'Set' : 'Remind'}
+                                  </button>
+                                )}
+                              </td>
                             </tr>
                           );
                         })}
@@ -835,6 +1027,8 @@ export default function FXNews({ initialTab = 'news' }: { initialTab?: 'news' | 
                   <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
                     {group.items.map(ev => {
                       const imp = impactConfig(ev.impact);
+                      const hasReminder = !!savedReminders[ev.id];
+                      const isFuture = new Date(ev.date).getTime() > Date.now();
                       return (
                         <div key={ev.id} className="p-4 space-y-2">
                           <div className="flex items-center justify-between gap-2">
@@ -847,6 +1041,19 @@ export default function FXNews({ initialTab = 'news' }: { initialTab?: 'news' | 
                                 <span className={`h-1 w-1 rounded-full ${imp.dot}`} />
                                 {imp.label}
                               </span>
+                              {isFuture && (
+                                <button
+                                  onClick={() => setReminderEvent(ev)}
+                                  className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-lg border transition ${
+                                    hasReminder
+                                      ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300 border-green-300 dark:border-green-500/40'
+                                      : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:border-green-400 hover:text-green-600'
+                                  }`}
+                                >
+                                  <Bell className="h-2.5 w-2.5" />
+                                  {hasReminder ? 'Set' : 'Remind'}
+                                </button>
+                              )}
                             </div>
                           </div>
                           <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-snug">{ev.event}</p>
@@ -867,6 +1074,20 @@ export default function FXNews({ initialTab = 'news' }: { initialTab?: 'news' | 
             </div>
           )}
         </div>
+      )}
+
+      {/* WhatsApp Reminder Modal */}
+      {reminderEvent && (
+        <WhatsAppReminderModal
+          event={reminderEvent}
+          existingPhone={savedReminders[reminderEvent.id]?.phone}
+          isPro={isPro}
+          onClose={() => setReminderEvent(null)}
+          onSaved={(phone, mins, eventId) => {
+            setSavedReminders(prev => ({ ...prev, [eventId]: { phone, mins } }));
+            setReminderEvent(null);
+          }}
+        />
       )}
     </div>
   );

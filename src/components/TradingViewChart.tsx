@@ -186,6 +186,7 @@ const TradingViewChart = memo(function TradingViewChart({
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const initDoneRef = useRef(false);
   const lastCandleRef = useRef<{time: Time, close: number} | null>(null);
+  const candlesRef = useRef<OhlcCandle[]>([]);
 
   const [symbol, setSymbol] = useState(initialSymbol);
   const [symbolInput, setSymbolInput] = useState(initialSymbol);
@@ -270,6 +271,125 @@ const TradingViewChart = memo(function TradingViewChart({
     initDoneRef.current = true;
   }, [theme, destroyChart]);
 
+  // ─── Apply trade markers & primitives ─────────────────────────────────────
+
+  const applyMarkers = useCallback(() => {
+    if (!seriesRef.current || !chartRef.current) return;
+
+    // Filter trades based on symbol and selected filter
+    const filteredTrades = trades.filter(t => {
+      if (t.type === 'Deposit' || t.type === 'Withdrawal') return false;
+      if (t.symbol?.toUpperCase() !== symbol.toUpperCase()) return false;
+
+      if (filterMode === 'wins' && t.profit < 0) return false;
+      if (filterMode === 'losses' && t.profit >= 0) return false;
+      if (filterMode === 'buy' && t.type !== 'Buy') return false;
+      if (filterMode === 'sell' && t.type !== 'Sell') return false;
+
+      return true;
+    });
+
+    // Remove default TradingView native markers
+    if (!markersPluginRef.current) {
+      try {
+        markersPluginRef.current = createSeriesMarkers(seriesRef.current, []);
+      } catch (_) {}
+    } else {
+      try { markersPluginRef.current.setMarkers([]); } catch (_) {}
+    }
+
+    // Detach existing primitives
+    for (const p of primitivesRef.current) {
+      try { seriesRef.current.detachPrimitive(p); } catch (e) {}
+    }
+    primitivesRef.current = [];
+
+    const currentCandles = candlesRef.current || [];
+    const candleTimes = currentCandles.map(c => c.time as number);
+
+    // Map timestamp to nearest loaded candle timestamp
+    const getNearestCandle = (targetSec: number) => {
+      if (!candleTimes.length) return { time: targetSec as Time, index: 0 };
+      let bestIdx = 0;
+      let bestDiff = Math.abs(candleTimes[0] - targetSec);
+      for (let i = 1; i < candleTimes.length; i++) {
+        const diff = Math.abs(candleTimes[i] - targetSec);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestIdx = i;
+        }
+      }
+      return { time: candleTimes[bestIdx] as Time, index: bestIdx };
+    };
+
+    // Track how many trades share the same entry candle for stacking
+    const entryTimeCounts = new Map<number, number>();
+
+    for (const trade of filteredTrades) {
+      if (!trade.date) continue;
+      const rawEntrySec = Math.floor(new Date(trade.date).getTime() / 1000);
+      const entryCandle = getNearestCandle(rawEntrySec);
+      const entryTime = entryCandle.time;
+      const isWin = trade.profit >= 0;
+
+      let exitTime: Time;
+      let exitPrice: number;
+      let isOpen = false;
+
+      if (trade.exitPrice && trade.exitPrice !== trade.entryPrice) {
+        exitPrice = trade.exitPrice;
+        if (trade.exitTime) {
+          const rawExitSec = Math.floor(new Date(trade.exitTime).getTime() / 1000);
+          const exitCandle = getNearestCandle(rawExitSec);
+          if (candleTimes.length > 0 && exitCandle.index > entryCandle.index) {
+            exitTime = exitCandle.time;
+          } else {
+            const nextIdx = Math.min(candleTimes.length - 1, entryCandle.index + 2);
+            exitTime = candleTimes.length > 0 ? (candleTimes[nextIdx] as Time) : ((rawEntrySec + 120) as Time);
+          }
+        } else {
+          const nextIdx = Math.min(candleTimes.length - 1, entryCandle.index + 2);
+          exitTime = candleTimes.length > 0 ? (candleTimes[nextIdx] as Time) : ((rawEntrySec + 120) as Time);
+        }
+      } else {
+        isOpen = true;
+        if (lastCandleRef.current) {
+          exitTime = lastCandleRef.current.time;
+          exitPrice = lastCandleRef.current.close;
+        } else {
+          exitTime = ((rawEntrySec + 120) as Time);
+          exitPrice = trade.entryPrice;
+        }
+      }
+
+      const tsNum = entryTime as number;
+      const stackOffset = entryTimeCounts.get(tsNum) || 0;
+      entryTimeCounts.set(tsNum, stackOffset + 1);
+
+      const primitive = new TradeLinePrimitive({
+        id: trade.id,
+        entryTime,
+        entryPrice: trade.entryPrice,
+        exitTime,
+        exitPrice,
+        isWin,
+        isOpen,
+        profit: trade.profit,
+        lotSize: trade.lotSize || 1,
+        type: trade.type as 'Buy' | 'Sell',
+        note: (trade as any).notes || (trade as any).note || undefined,
+        stackOffset,
+      });
+
+      try {
+        seriesRef.current.attachPrimitive(primitive);
+        primitivesRef.current.push(primitive);
+      } catch (e) {
+        console.warn('Could not attach primitive', e);
+      }
+    }
+  }, [trades, symbol, filterMode]);
+
   // ─── Fetch OHLC data ──────────────────────────────────────────────────────
 
   const fetchData = useCallback(async (sym: string, tf: string) => {
@@ -304,12 +424,15 @@ const TradingViewChart = memo(function TradingViewChart({
         close: c.close,
       }));
 
+      candlesRef.current = json.candles;
+
       if (data.length > 0) {
         lastCandleRef.current = { time: data[data.length - 1].time, close: data[data.length - 1].close };
       }
 
       if (seriesRef.current) {
         seriesRef.current.setData(data);
+        applyMarkers();
         setTimeout(() => {
           if (chartRef.current) {
             chartRef.current.timeScale().scrollToPosition(0, true);
@@ -323,7 +446,7 @@ const TradingViewChart = memo(function TradingViewChart({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyMarkers]);
 
   // Use overrideData if provided, else fetch normally
   useEffect(() => {
@@ -331,101 +454,15 @@ const TradingViewChart = memo(function TradingViewChart({
     if (overrideData) {
       if (seriesRef.current && overrideData.length > 0) {
         const mapped = overrideData.map(c => ({ ...c, time: c.time as Time }));
+        candlesRef.current = overrideData;
         lastCandleRef.current = { time: mapped[mapped.length - 1].time, close: mapped[mapped.length - 1].close };
         seriesRef.current.setData(mapped);
-        // Optional: Do not force scroll to realtime if we are replaying
+        applyMarkers();
       }
     } else {
       fetchData(symbol, timeframe);
     }
-  }, [symbol, timeframe, fetchData, overrideData]);
-
-  // ─── Apply trade markers & primitives ─────────────────────────────────────
-
-  const applyMarkers = useCallback(() => {
-    if (!seriesRef.current || !chartRef.current) return;
-
-    // Filter trades based on symbol and selected filter
-    const filteredTrades = trades.filter(t => {
-      if (t.type === 'Deposit' || t.type === 'Withdrawal') return false;
-      if (t.symbol?.toUpperCase() !== symbol.toUpperCase()) return false;
-      
-      if (filterMode === 'wins' && t.profit < 0) return false;
-      if (filterMode === 'losses' && t.profit >= 0) return false;
-      if (filterMode === 'buy' && t.type !== 'Buy') return false;
-      if (filterMode === 'sell' && t.type !== 'Sell') return false;
-      
-      return true;
-    });
-
-    // Remove default TradingView native markers (up/down arrows) 
-    // since we use our custom TradeLinePrimitive instead.
-    if (!markersPluginRef.current) {
-      try {
-        markersPluginRef.current = createSeriesMarkers(seriesRef.current, []);
-      } catch (_) {}
-    } else {
-      try { markersPluginRef.current.setMarkers([]); } catch (_) {}
-    }
-
-    // Detach existing primitives
-    for (const p of primitivesRef.current) {
-      try { seriesRef.current.detachPrimitive(p); } catch (e) {}
-    }
-    primitivesRef.current = [];
-
-    // Track how many trades share the same entry candle for stacking
-    const entryTimeCounts = new Map<number, number>();
-
-    for (const trade of filteredTrades) {
-      if (!trade.date) continue;
-      const entryTime = Math.floor(new Date(trade.date).getTime() / 1000) as Time;
-      const isWin = trade.profit >= 0;
-
-      let exitTime: Time;
-      let exitPrice: number;
-      let isOpen = false;
-
-      if (trade.exitPrice && trade.exitPrice !== trade.entryPrice) {
-        exitTime = ((entryTime as number) + 3600) as Time;
-        exitPrice = trade.exitPrice;
-      } else {
-        isOpen = true;
-        if (lastCandleRef.current) {
-          exitTime = lastCandleRef.current.time;
-          exitPrice = lastCandleRef.current.close;
-        } else {
-          continue;
-        }
-      }
-
-      const tsNum = entryTime as number;
-      const stackOffset = entryTimeCounts.get(tsNum) || 0;
-      entryTimeCounts.set(tsNum, stackOffset + 1);
-
-      const primitive = new TradeLinePrimitive({
-        id: trade.id,
-        entryTime,
-        entryPrice: trade.entryPrice,
-        exitTime,
-        exitPrice,
-        isWin,
-        isOpen,
-        profit: trade.profit,
-        lotSize: trade.lotSize || 1,
-        type: trade.type as 'Buy' | 'Sell',
-        note: (trade as any).notes || (trade as any).note || undefined,
-        stackOffset,
-      });
-
-      try {
-        seriesRef.current.attachPrimitive(primitive);
-        primitivesRef.current.push(primitive);
-      } catch (e) {
-        console.warn('Could not attach primitive', e);
-      }
-    }
-  }, [trades, symbol, filterMode]);
+  }, [symbol, timeframe, fetchData, overrideData, applyMarkers]);
 
   // ─── Apply SL/TP price lines for the selected trade ───────────────────────
 
@@ -479,6 +516,7 @@ const TradingViewChart = memo(function TradingViewChart({
       } catch (_) {}
     }, 200);
   }, [selectedTradeId, trades]);
+
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -743,6 +781,7 @@ const TradingViewChart = memo(function TradingViewChart({
       {/* ── Chart area ──────────────────────────────────────────────────── */}
       <div className="relative flex-1 min-h-0">
         <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+
 
         {/* Note popup */}
         {activeNotePopup && (

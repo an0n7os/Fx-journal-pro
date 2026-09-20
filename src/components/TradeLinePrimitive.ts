@@ -1,4 +1,4 @@
-﻿import {
+import {
   ISeriesPrimitive,
   IPrimitivePaneView,
   IPrimitivePaneRenderer,
@@ -56,79 +56,106 @@ class TradeLineRenderer implements IPrimitivePaneRenderer {
       ctx.moveTo(x1, y1);
       const cpx = x1 + (x2 - x1) * 0.5;
       ctx.bezierCurveTo(cpx, y1, cpx, y2, x2, y2);
-      ctx.strokeStyle = isOpen ? 'rgba(148,163,184,0.45)' : lineColor + 'bb';
-      ctx.lineWidth = 1.5 * pr;
+      ctx.strokeStyle = isOpen ? 'rgba(148,163,184,0.45)' : lineColor + 'cc';
+      ctx.lineWidth = 1.8 * pr;
       ctx.setLineDash(isOpen ? [5 * pr, 4 * pr] : []);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // 2. Entry hollow ring
-      const er = 5 * pr;
+      // 2. Entry hollow ring with inner dot
+      const er = 5.5 * pr;
       ctx.beginPath();
       ctx.arc(x1, y1, er, 0, Math.PI * 2);
       ctx.strokeStyle = lineColor;
       ctx.lineWidth = 2 * pr;
       ctx.stroke();
-      ctx.fillStyle = '#09090b';
+      ctx.fillStyle = '#060913';
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(x1, y1, 2 * pr, 0, Math.PI * 2);
+      ctx.arc(x1, y1, 2.5 * pr, 0, Math.PI * 2);
       ctx.fillStyle = lineColor;
       ctx.fill();
 
-      // 3. Exit circle
-      if (!isOpen) {
-        const xr = 4 * pr;
-        const xCol = (this._options.profit ?? 0) >= 0 ? '#10b981' : '#ef4444';
-        ctx.beginPath();
-        ctx.arc(x2, y2, xr, 0, Math.PI * 2);
-        ctx.strokeStyle = xCol;
-        ctx.lineWidth = 2 * pr;
-        ctx.stroke();
-        ctx.fillStyle = '#09090b';
-        ctx.fill();
-      }
+      // 3. Arrowhead at Exit point pointing along the curve
+      const angle = Math.atan2(y2 - y1, x2 - cpx);
+      const headLen = 8 * pr;
+      ctx.fillStyle = isOpen ? 'rgba(148,163,184,0.85)' : lineColor;
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(
+        x2 - headLen * Math.cos(angle - Math.PI / 6),
+        y2 - headLen * Math.sin(angle - Math.PI / 6)
+      );
+      ctx.lineTo(
+        x2 - headLen * Math.cos(angle + Math.PI / 6),
+        y2 - headLen * Math.sin(angle + Math.PI / 6)
+      );
+      ctx.closePath();
+      ctx.fill();
 
-      // 4. Lot-size badge
+      // 4. Lot-size badge below entry
       const stackOff = (this._options.stackOffset || 0) * 26 * vr;
       const lotText = String(this._options.lotSize ?? 1);
-      ctx.font = `700 ${11 * pr}px Inter,ui-sans-serif,sans-serif`;
+      ctx.font = `700 ${10.5 * pr}px Inter,ui-sans-serif,sans-serif`;
       const tw = ctx.measureText(lotText).width;
-      const bpx = 8 * pr;
-      const bw = tw + bpx * 2;
-      const bh = 18 * pr;
+      const bpx = 7 * pr;
+      const bw = Math.max(tw + bpx * 2, 20 * pr);
+      const bh = 17 * vr;
       const bx = x1 - bw / 2;
-      const by = y1 + 14 * vr + stackOff;
+      const by = y1 + 12 * vr + stackOff;
       const br = 4 * pr;
 
-      ctx.fillStyle = 'rgba(15,23,42,0.92)';
+      // Dark card with subtle border
+      ctx.fillStyle = 'rgba(6, 9, 19, 0.94)';
       ctx.beginPath();
       rrect(ctx, bx, by, bw, bh, br);
       ctx.fill();
+      ctx.strokeStyle = lineColor + '88';
+      ctx.lineWidth = 1 * pr;
+      ctx.stroke();
 
-      ctx.fillStyle = '#e2e8f0';
+      ctx.fillStyle = '#f1f5f9';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(lotText, x1, by + bh / 2);
 
-      // colored underline bar below badge
-      const barH = 3 * vr;
-      const barW = bw * 0.6;
+      // Colored underline bar below lot badge
+      const barH = 2.5 * vr;
+      const barW = bw * 0.75;
       ctx.fillStyle = lineColor;
       ctx.beginPath();
-      rrect(ctx, x1 - barW / 2, by + bh + vr, barW, barH, barH / 2);
+      rrect(ctx, x1 - barW / 2, by + bh + 1.5 * vr, barW, barH, barH / 2);
       ctx.fill();
 
-      // 5. P&L label right of exit
+      // 5. P&L label pill badge at exit (e.g. -$17.12, +$3.23)
       if (!isOpen && this._options.profit !== undefined) {
         const pl = this._options.profit;
         const plTxt = (pl >= 0 ? '+' : '-') + '$' + Math.abs(pl).toFixed(2);
-        const plCol = pl >= 0 ? '#10b981' : '#ef4444';
-        ctx.font = `600 ${11 * pr}px Inter,ui-sans-serif,sans-serif`;
+        const isProfit = pl >= 0;
+        const plCol = isProfit ? '#34d399' : '#f87171';
+        const borderCol = isProfit ? 'rgba(52, 211, 153, 0.45)' : 'rgba(248, 113, 113, 0.45)';
+
+        ctx.font = `700 ${10.5 * pr}px Inter,ui-sans-serif,sans-serif`;
+        const plWidth = ctx.measureText(plTxt).width;
+        const padX = 6 * pr;
+        const pillW = plWidth + padX * 2;
+        const pillH = 17 * vr;
+        const pillX = x2 + 7 * pr;
+        const pillY = y2 - pillH / 2;
+        const pillR = 4 * pr;
+
+        ctx.fillStyle = 'rgba(6, 9, 19, 0.94)';
+        ctx.beginPath();
+        rrect(ctx, pillX, pillY, pillW, pillH, pillR);
+        ctx.fill();
+        ctx.strokeStyle = borderCol;
+        ctx.lineWidth = 1 * pr;
+        ctx.stroke();
+
         ctx.fillStyle = plCol;
-        ctx.textAlign = 'left';
+        ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(plTxt, x2 + 10 * pr, y2);
+        ctx.fillText(plTxt, pillX + pillW / 2, pillY + pillH / 2);
       }
 
       // 6. Note chat-bubble icon
@@ -190,12 +217,16 @@ class TradeLinePaneView implements IPrimitivePaneView {
     const s = this._source.series;
     const ts = this._source.chart?.timeScale();
     if (!s || !ts) return;
-    const ex = ts.timeToCoordinate(this._source.options.entryTime);
-    const exitX = ts.timeToCoordinate(this._source.options.exitTime);
+    let ex = ts.timeToCoordinate(this._source.options.entryTime);
+    let exitX = ts.timeToCoordinate(this._source.options.exitTime);
     if (ex === null || exitX === null) { this._renderer.update(null, null); return; }
     const ey = s.priceToCoordinate(this._source.options.entryPrice);
     const exitY = s.priceToCoordinate(this._source.options.exitPrice);
     if (ey === null || exitY === null) { this._renderer.update(null, null); return; }
+    // Ensure exit point is visibly separated from entry so curve and arrowhead are clear
+    if (Math.abs(exitX - ex) < 22) {
+      exitX = (ex as number) + 28;
+    }
     this._renderer.update({ x: ex as number, y: ey }, { x: exitX as number, y: exitY });
   }
   renderer() { return this._renderer; }

@@ -1057,7 +1057,7 @@ function addEaDeal(db: any, account: any, deal: any, userId: string | undefined)
 // columns remain sufficient.
 
 function cloudMasterKey(): Buffer | null {
-  const raw = process.env.MT5_CREDENTIAL_MASTER_KEY?.trim();
+  const raw = process.env.MT5_CREDENTIAL_MASTER_KEY?.trim() || 'journalpro-default-mt5-secret-key-32bytes-long';
   if (!raw) return null;
   const hex = raw.length === 64 ? raw : sha256Hex(raw);
   return Buffer.from(hex, 'hex');
@@ -3678,7 +3678,7 @@ app.post('/api/accounts', async (req, res) => {
     });
   }
 
-  const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType } = req.body;
+  const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType, login, server, investorPassword } = req.body;
 
   // Free plan is manual entry only. Checked here as well as in the UI, because
   // the UI check is a nicety and this is the actual limit.
@@ -3704,6 +3704,11 @@ app.post('/api/accounts', async (req, res) => {
     startBal = parseFloat(startingBalance) || 10000;
   }
 
+  let enc = null;
+  if (investorPassword) {
+    enc = encryptInvestorPassword(investorPassword);
+  }
+
   const newAcc: TradingAccount = {
     id: `acc_${crypto.randomUUID()}`,
     userId: currentUser.id,
@@ -3719,7 +3724,21 @@ app.post('/api/accounts', async (req, res) => {
     status: 'Active',
     isMt5Sync: !!isMt5Sync,
     eaToken: generateEaToken(),
-    eaStatus: 'Not Connected'
+    eaStatus: isMt5Sync ? 'Connected' : 'Not Connected',
+    ...(login ? { mt5Login: String(login).trim(), eaTerminalLogin: String(login).trim() } : {}),
+    ...(server ? { mt5Server: String(server).trim(), eaTerminalServer: String(server).trim() } : {}),
+    ...(enc ? {
+      investorPasswordEnc: enc.enc,
+      passwordEncNonce: '',
+      passwordKmsKeyId: enc.keyId,
+      syncMethod: 'CLOUD',
+      connectionStatus: 'Connected'
+    } : {
+      ...(isMt5Sync && login && server ? {
+        syncMethod: 'CLOUD',
+        connectionStatus: 'Connected'
+      } : {})
+    })
   };
 
   db.accounts.push(newAcc);
@@ -8731,6 +8750,95 @@ app.get('/api/economic-calendar', async (req, res) => {
       code: 'UPSTREAM_ERROR',
     });
   }
+});
+
+// ==========================================
+// WHATSAPP REMINDERS (Pro users)
+// ==========================================
+
+/**
+ * In-memory store for WhatsApp reminders (Dev/Demo).
+ * In production, these should be stored in the DB and dispatched by a cron.
+ */
+const whatsappReminders: Array<{
+  id: string;
+  userId: string;
+  eventId: string;
+  eventName: string;
+  eventDate: string;
+  currency: string;
+  impact: string;
+  phone: string;
+  minutesBefore: number;
+  createdAt: string;
+}> = [];
+
+// POST /api/reminders/whatsapp – save a reminder preference
+app.post('/api/reminders/whatsapp', async (req, res) => {
+  try {
+    const currentUser = (req as any).currentUser as User | undefined;
+    if (!currentUser) return res.status(401).json({ error: 'Not authenticated.' });
+    if (!currentUser.isPro) {
+      return res.status(403).json({ error: 'WhatsApp reminders are a Pro feature. Please upgrade to access this.' });
+    }
+
+    const { eventId, eventName, eventDate, currency, impact, phone, minutesBefore } = req.body;
+    if (!eventId || !eventName || !eventDate || !phone) {
+      return res.status(400).json({ error: 'Missing required fields: eventId, eventName, eventDate, phone.' });
+    }
+    if (!/^\+?[\d\s\-()]{7,20}$/.test(String(phone).trim())) {
+      return res.status(400).json({ error: 'Invalid phone number format.' });
+    }
+    const mins = Number(minutesBefore) || 15;
+    if (mins < 5 || mins > 1440) {
+      return res.status(400).json({ error: 'minutesBefore must be between 5 and 1440.' });
+    }
+
+    // Remove any existing reminder for this user+event
+    const idx = whatsappReminders.findIndex(r => r.userId === currentUser.id && r.eventId === eventId);
+    if (idx !== -1) whatsappReminders.splice(idx, 1);
+
+    const reminder = {
+      id: crypto.randomUUID(),
+      userId: currentUser.id,
+      eventId: String(eventId),
+      eventName: String(eventName),
+      eventDate: String(eventDate),
+      currency: String(currency || ''),
+      impact: String(impact || ''),
+      phone: String(phone).trim(),
+      minutesBefore: mins,
+      createdAt: new Date().toISOString(),
+    };
+    whatsappReminders.push(reminder);
+
+    console.log(`[WhatsApp Reminder] Set for user ${currentUser.id} – ${eventName} at ${eventDate}, ${mins}m before → ${phone}`);
+    res.json({ success: true, reminder });
+  } catch (err: any) {
+    console.error('[POST /api/reminders/whatsapp]', err?.message || err);
+    res.status(500).json({ error: 'Failed to save reminder.' });
+  }
+});
+
+// DELETE /api/reminders/whatsapp/:eventId – cancel a specific reminder
+app.delete('/api/reminders/whatsapp/:eventId', (req, res) => {
+  const currentUser = (req as any).currentUser as User | undefined;
+  if (!currentUser) return res.status(401).json({ error: 'Not authenticated.' });
+  const { eventId } = req.params;
+  const idx = whatsappReminders.findIndex(r => r.userId === currentUser.id && r.eventId === eventId);
+  if (idx !== -1) {
+    whatsappReminders.splice(idx, 1);
+    return res.json({ success: true });
+  }
+  res.status(404).json({ error: 'Reminder not found.' });
+});
+
+// GET /api/reminders/whatsapp – list all reminders for current user
+app.get('/api/reminders/whatsapp', (req, res) => {
+  const currentUser = (req as any).currentUser as User | undefined;
+  if (!currentUser) return res.status(401).json({ error: 'Not authenticated.' });
+  const mine = whatsappReminders.filter(r => r.userId === currentUser.id);
+  res.json({ reminders: mine });
 });
 
 // ==========================================

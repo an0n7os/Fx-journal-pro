@@ -41,6 +41,10 @@ export interface TradingAccount {
   eaConnectedAt?: string;
   eaTerminalLogin?: string;
   eaTerminalServer?: string;
+  mt5Login?: string;
+  mt5Server?: string;
+  syncMethod?: 'EA' | 'CLOUD';
+  connectionStatus?: string;
 }
 
 export interface Trade {

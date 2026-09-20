@@ -26,14 +26,17 @@ function formatDateTime(iso?: string | null): string {
 interface AdminPanelProps {
   onPublishAnnouncement: () => void;
   onInspectUser?: (user: any) => void;
+  role?: string;
 }
 
-export default function AdminPanel({ onPublishAnnouncement, onInspectUser }: AdminPanelProps) {
+export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'assigned' | 'team' | 'billing' | 'tickets' | 'bugs' | 'features' | 'announcements' | 'audit'>('dashboard');
 
   // What this operator may actually do. The server enforces it either way;
   // this is so the console does not offer buttons that would come back 403.
-  const [myRole, setMyRole] = useState<string>('USER');
+  const [myRole, setMyRole] = useState<string>(role || 'USER');
+  const isSubAdmin = myRole === 'SUB_ADMIN';
+  const isAdmin = myRole === 'SUPER_ADMIN' || myRole === 'ADMIN';
   const [myPermissions, setMyPermissions] = useState<string[]>([]);
   const [partnerBusy, setPartnerBusy] = useState<string | null>(null);
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({});
@@ -459,14 +462,16 @@ Their referral link stops working and ` +
               <span className="p-2 rounded-xl bg-gradient-to-br from-violet-600/20 to-purple-600/20 border border-violet-500/30 text-violet-400">
                 <Shield className="h-5 w-5" />
               </span>
-              FX Journal Pro Operations Console
+              {isSubAdmin ? 'FX Journal Pro Partner Portal' : 'FX Journal Pro Operations Console'}
             </h2>
-            <span className="text-[11px] bg-red-500/10 text-red-400 font-bold px-2.5 py-1 rounded-full border border-red-500/20 tracking-wide uppercase">
-              Admin & Mentor Access
+            <span className={`text-[11px] ${isSubAdmin ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'} font-bold px-2.5 py-1 rounded-full border tracking-wide uppercase`}>
+              {isSubAdmin ? 'Partner Portal' : 'Admin & Mentor Access'}
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Global SaaS metrics, user registry, mentor read-only inspection, sub-admin console & payment telemetry
+            {isSubAdmin 
+              ? 'Mentor & partner operations portal, assigned traders inspection and performance telemetry'
+              : 'Global SaaS metrics, user registry, mentor read-only inspection, sub-admin console & payment telemetry'}
           </p>
         </div>
         
@@ -484,7 +489,7 @@ Their referral link stops working and ` +
       <div className="flex border-b border-slate-800/80 overflow-x-auto mb-6 gap-1.5 pb-1 scrollbar-hide">
         {[
           { id: 'dashboard', label: 'Dashboard', icon: BarChart3, need: 'dashboard.read' },
-          { id: 'assigned', label: 'Sub-Admin Console', icon: UserCheck, need: 'assigned.read', highlight: true },
+          { id: 'assigned', label: isSubAdmin ? 'Partner Console' : 'Sub-Admin Console', icon: UserCheck, need: 'assigned.read', highlight: true },
           { id: 'users', label: 'User Registry', icon: Users, need: 'users.read', badge: users.length ? String(users.length) : undefined },
           { id: 'team', label: 'Team & Roles', icon: Shield, need: 'users.roles' },
           { id: 'billing', label: 'Billing & Payments', icon: CreditCard, need: 'billing.read' },
@@ -495,7 +500,12 @@ Their referral link stops working and ` +
           { id: 'audit', label: 'Audit Trail', icon: ShieldAlert, need: 'audit.read' }
         // Hide what this role cannot use. The routes behind each tab check the
         // same permission, so hiding is cosmetic, not the control.
-        ].filter(tab => myPermissions.length === 0 || myPermissions.includes(tab.need)).map(tab => (
+        ].filter(tab => {
+          if (isSubAdmin && ['tickets', 'bugs', 'features'].includes(tab.id)) {
+            return false;
+          }
+          return myPermissions.length === 0 || myPermissions.includes(tab.need);
+        }).map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
@@ -522,7 +532,7 @@ Their referral link stops working and ` +
       {activeTab === 'dashboard' && (
         <div className="space-y-6">
           {/* Metrics Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-2 ${isSubAdmin ? 'md:grid-cols-3 lg:grid-cols-3' : 'md:grid-cols-4 lg:grid-cols-4'} gap-4`}>
             {/* Total Users */}
             <div className="p-5 bg-slate-900/60 rounded-2xl border border-slate-800/90 hover:border-slate-700/80 transition shadow-sm">
               <div className="flex items-center justify-between mb-2">
@@ -603,31 +613,35 @@ Their referral link stops working and ` +
               <div className="text-[11px] text-slate-500 mt-1">Platform gross subscriptions</div>
             </div>
 
-            {/* Pending Tickets */}
-            <div className="p-5 bg-slate-900/60 rounded-2xl border border-slate-800/90 hover:border-slate-700/80 transition shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Pending Tickets</span>
-                <span className="p-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20">
-                  <AlertCircle className="h-4 w-4" />
-                </span>
+            {/* Pending Tickets - Admin Only */}
+            {!isSubAdmin && (
+              <div className="p-5 bg-slate-900/60 rounded-2xl border border-slate-800/90 hover:border-slate-700/80 transition shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Pending Tickets</span>
+                  <span className="p-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20">
+                    <AlertCircle className="h-4 w-4" />
+                  </span>
+                </div>
+                <div className="text-3xl font-black text-red-400 font-mono">{dashboardStats?.pendingTickets || 0}</div>
+                <div className="text-[11px] text-slate-500 mt-1">Awaiting mentor/support review</div>
               </div>
-              <div className="text-3xl font-black text-red-400 font-mono">{dashboardStats?.pendingTickets || 0}</div>
-              <div className="text-[11px] text-slate-500 mt-1">Awaiting mentor/support review</div>
-            </div>
+            )}
 
-            {/* Active Sub-Admins */}
-            <div className="p-5 bg-slate-900/60 rounded-2xl border border-slate-800/90 hover:border-slate-700/80 transition shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Staff & Mentors</span>
-                <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                  <Shield className="h-4 w-4" />
-                </span>
+            {/* Staff & Mentors - Admin Only */}
+            {!isSubAdmin && (
+              <div className="p-5 bg-slate-900/60 rounded-2xl border border-slate-800/90 hover:border-slate-700/80 transition shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Staff & Mentors</span>
+                  <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                    <Shield className="h-4 w-4" />
+                  </span>
+                </div>
+                <div className="text-3xl font-black text-purple-300 font-mono">
+                  {team.length > 0 ? team.length : 3}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">Admins, sub-admins & support</div>
               </div>
-              <div className="text-3xl font-black text-purple-300 font-mono">
-                {team.length > 0 ? team.length : 3}
-              </div>
-              <div className="text-[11px] text-slate-500 mt-1">Admins, sub-admins & support</div>
-            </div>
+            )}
           </div>
 
           {/* User Growth Chart */}
@@ -897,21 +911,23 @@ Their referral link stops working and ` +
                             )
                           )}
 
-                          {/* Suspend / Reactivate */}
-                          {(!u.status || u.status === 'ACTIVE') ? (
-                            <button
-                              onClick={() => handleUpdateUserStatus(u.id, 'SUSPENDED')}
-                              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition"
-                            >
-                              Suspend
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleUpdateUserStatus(u.id, 'ACTIVE')}
-                              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition"
-                            >
-                              Reactivate
-                            </button>
+                          {/* Suspend / Reactivate - Admins only, never Sub-Admin / Mentors */}
+                          {!isSubAdmin && myPermissions.includes('users.manage') && (
+                            (!u.status || u.status === 'ACTIVE') ? (
+                              <button
+                                onClick={() => handleUpdateUserStatus(u.id, 'SUSPENDED')}
+                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition"
+                              >
+                                Suspend
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleUpdateUserStatus(u.id, 'ACTIVE')}
+                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition"
+                              >
+                                Reactivate
+                              </button>
+                            )
                           )}
                         </div>
                       </td>
@@ -934,7 +950,7 @@ Their referral link stops working and ` +
                 <span className="p-2 rounded-xl bg-violet-600/20 text-violet-400 border border-violet-500/30">
                   <UserCheck className="h-5 w-5" />
                 </span>
-                <h3 className="text-base font-extrabold text-white">Sub-Admin Console</h3>
+                <h3 className="text-base font-extrabold text-white">{isSubAdmin ? 'Partner Console' : 'Sub-Admin Console'}</h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 uppercase flex items-center gap-1">
                   <Lock className="h-3 w-3" /> Read only
                 </span>
