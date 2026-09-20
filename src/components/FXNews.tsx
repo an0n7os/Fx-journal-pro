@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Newspaper, CalendarRange, RefreshCw, ExternalLink, TrendingUp, TrendingDown,
-  Minus, Clock, Globe, AlertTriangle, ChevronDown, Radio, MapPin, CalendarDays, Search,
-  Bell, BellOff, X, CheckCircle2, Lock, MessageCircle, Loader2
+  Minus, Clock, Globe, AlertTriangle, Radio, MapPin, CalendarDays, Search,
+  Bell, X, CheckCircle2, Lock, MessageCircle, Loader2
 } from 'lucide-react';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD', 'CNY'];

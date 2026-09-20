@@ -15,3 +15,10 @@ db.json.bak
 # Scratch diffs from local debugging.
 diff.txt
 diff_utf8.txt
+# Ad-hoc dev/test HTML page not part of the application.
+run-cheyu/
+# Puppeteer screenshots generated during ad-hoc tests.
+screenshot.png
+# AI Studio project metadata (not part of the codebase).
+metadata.json
+assets/.aistudio/
