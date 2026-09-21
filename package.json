@@ -36,7 +36,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
-    "express": "^4.21.2",
+    "express": "^4.22.3",
     "express-rate-limit": "^8.6.0",
     "fflate": "^0.8.3",
     "jspdf": "^3.0.3",
