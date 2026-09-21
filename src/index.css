@@ -3130,3 +3130,280 @@ html.dark .dx-sentiment-neutral {
 .cyber-input::placeholder {
   color: #64748b;
 }
+/* ==========================================================================
+   Light theme for the dark-first surfaces
+   ==========================================================================
+   The theme works by remapping light Tailwind classes for dark mode
+   (.dark .bg-white -> #060913). Five screens were written dark-first instead,
+   with #0b0f19 backgrounds and text-slate-300 type, so nothing remapped them
+   and they stayed dark navy inside a white page: Notebook, Admin Panel,
+   Partner Portal, Sub-Admin Console and AI Mentor.
+
+   Rather than rewrite 470 class attributes, each of those roots carries
+   .dx-dark-surface and the rules below invert them for light mode only. The
+   scoping matters: text-slate-300 is legitimately light when it sits on a
+   violet gradient elsewhere in the app, so these remaps must not escape
+   these subtrees.
+
+   Every class listed here was counted in the source, not guessed. */
+
+/* Attribute selectors, not escaped class names, because Tailwind emits the
+   opacity variant as a separate class: bg-[#070a12] and bg-[#070a12]/95 are
+   different selectors, and matching only the first left the Notebook sidebar
+   and its header bar dark. Every arbitrary colour in these files begins with
+   #0 except the one raised tone below, so [class*=] catches the variants too. */
+:root:not(.dark) .dx-dark-surface,
+:root:not(.dark) .dx-dark-surface .bg-slate-900,
+:root:not(.dark) .dx-dark-surface .bg-slate-950,
+:root:not(.dark) .dx-dark-surface [class*="bg-[#060913]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#070a12]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#070b14]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#07080c]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#07070d]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#080C16]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#0a0d14]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#0a0e1b]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#0b0b13]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#0b0f19]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#0b101d]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#0b101e]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#0c0e15]"] {
+  background-color: #ffffff;
+}
+
+/* One step up from the page: inputs, table headers, raised rows. */
+:root:not(.dark) .dx-dark-surface .bg-slate-800,
+:root:not(.dark) .dx-dark-surface .bg-slate-700,
+:root:not(.dark) .dx-dark-surface [class*="bg-[#0f172a]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#0d1322]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#15233e]"] {
+  background-color: #f1f5f9;
+}
+
+/* Alpha variants keep their transparency but tint light instead of dark.
+   bg-slate-950/80 is its own class, so the plain .bg-slate-950 rule above
+   never touched it and two Admin Panel cards stayed dark. */
+:root:not(.dark) .dx-dark-surface [class*="bg-slate-700/"],
+:root:not(.dark) .dx-dark-surface [class*="bg-slate-800/"],
+:root:not(.dark) .dx-dark-surface [class*="bg-slate-900/"],
+:root:not(.dark) .dx-dark-surface [class*="bg-slate-950/"] {
+  background-color: rgba(100, 116, 139, 0.08);
+}
+
+:root:not(.dark) .dx-dark-surface,
+:root:not(.dark) .dx-dark-surface .border-slate-800,
+:root:not(.dark) .dx-dark-surface .border-slate-700,
+:root:not(.dark) .dx-dark-surface .border-slate-600,
+:root:not(.dark) .dx-dark-surface [class*="border-slate-600/"],
+:root:not(.dark) .dx-dark-surface [class*="border-slate-700/"],
+:root:not(.dark) .dx-dark-surface [class*="border-slate-800/"],
+:root:not(.dark) .dx-dark-surface [class*="border-slate-900/"],
+:root:not(.dark) .dx-dark-surface [class*="border-[#1f2937]"] {
+  border-color: #e2e8f0;
+}
+
+/* Type. The dark palette runs 200 (brightest) to 500 (dimmest); light mode
+   needs the same four steps running the other way, and each one has to clear
+   4.5:1 on white — #94a3b8 (slate-400) is 2.6:1 and was unreadable. */
+:root:not(.dark) .dx-dark-surface .text-slate-100,
+:root:not(.dark) .dx-dark-surface .text-slate-200 {
+  color: #0f172a;
+}
+
+:root:not(.dark) .dx-dark-surface .text-slate-300 {
+  color: #1e293b;
+}
+
+:root:not(.dark) .dx-dark-surface .text-slate-400 {
+  color: #475569;
+}
+
+:root:not(.dark) .dx-dark-surface .text-slate-500 {
+  color: #55606f;
+}
+
+:root:not(.dark) .dx-dark-surface .placeholder-slate-500::placeholder,
+:root:not(.dark) .dx-dark-surface .placeholder-slate-600::placeholder,
+:root:not(.dark) .dx-dark-surface .placeholder\:text-slate-600::placeholder {
+  color: #64748b;
+}
+
+/* The dark shells lean on heavy shadows to separate from a black page; on
+   white that reads as a smudge. */
+:root:not(.dark) .dx-dark-surface.shadow-2xl,
+:root:not(.dark) .dx-dark-surface .shadow-2xl {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+/* AI Mentor styles its shell inline, which no class selector can reach, so
+   its colours come from these variables instead. Dark is the default and the
+   light values are the override, matching how the component was written. */
+#ai-mentor-card {
+  --dx-chat-shell: linear-gradient(160deg, #07091a 0%, #0d1128 60%, #0a0f20 100%);
+  --dx-chat-border: rgba(99, 102, 241, 0.18);
+  --dx-chat-bar: rgba(7, 9, 26, 0.8);
+  --dx-chat-bar-solid: rgba(7, 9, 26, 0.95);
+  --dx-chat-divider: rgba(255, 255, 255, 0.06);
+  --dx-chat-bubble: rgba(255, 255, 255, 0.04);
+  --dx-chat-bubble-border: rgba(255, 255, 255, 0.08);
+  --dx-chat-bubble-text: #cbd5e1;
+  --dx-chat-input: rgba(255, 255, 255, 0.05);
+  --dx-chat-input-text: #e2e8f0;
+  --dx-chat-strong: #a5b4fc;
+  --dx-chat-shadow: 0 0 60px rgba(99, 102, 241, 0.08), 0 24px 48px rgba(0, 0, 0, 0.4);
+}
+
+:root:not(.dark) #ai-mentor-card {
+  --dx-chat-shell: linear-gradient(160deg, #ffffff 0%, #f8fafc 60%, #f1f5f9 100%);
+  --dx-chat-border: rgba(99, 102, 241, 0.22);
+  --dx-chat-bar: rgba(241, 245, 249, 0.85);
+  --dx-chat-bar-solid: #ffffff;
+  --dx-chat-divider: rgba(15, 23, 42, 0.08);
+  --dx-chat-bubble: #f1f5f9;
+  --dx-chat-bubble-border: rgba(15, 23, 42, 0.08);
+  --dx-chat-bubble-text: #1e293b;
+  --dx-chat-input: #ffffff;
+  --dx-chat-input-text: #0f172a;
+  --dx-chat-strong: #4338ca;
+  --dx-chat-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px rgba(15, 23, 42, 0.07);
+}
+
+/* Accent type on the light surfaces.
+   ------------------------------------------------------------------------
+   The 200-400 tints are chosen to glow on near-black. Once the surface above
+   them turns white they measure 1.2-1.6:1 — present but unreadable. Each maps
+   to the 700 step of its own hue, which clears 4.5:1 on white while keeping
+   the semantic colour (emerald still means profit, rose still means loss).
+
+   Measured on the Admin Panel: 14 strings failed WCAG AA before this. */
+:root:not(.dark) .dx-dark-surface .text-emerald-200,
+:root:not(.dark) .dx-dark-surface .text-emerald-300,
+:root:not(.dark) .dx-dark-surface .text-emerald-400,
+:root:not(.dark) .dx-dark-surface .text-green-300,
+:root:not(.dark) .dx-dark-surface .text-green-400 { color: #047857; }
+
+:root:not(.dark) .dx-dark-surface .text-violet-200,
+:root:not(.dark) .dx-dark-surface .text-violet-300,
+:root:not(.dark) .dx-dark-surface .text-violet-400,
+:root:not(.dark) .dx-dark-surface .text-purple-200,
+:root:not(.dark) .dx-dark-surface .text-purple-300,
+:root:not(.dark) .dx-dark-surface .text-purple-400,
+:root:not(.dark) .dx-dark-surface .text-fuchsia-300,
+:root:not(.dark) .dx-dark-surface .text-fuchsia-400 { color: #5b21b6; } /* 700 measured 4.18:1 on the violet-tinted cards; 800 clears AA */
+
+:root:not(.dark) .dx-dark-surface .text-indigo-200,
+:root:not(.dark) .dx-dark-surface .text-indigo-300,
+:root:not(.dark) .dx-dark-surface .text-indigo-400,
+:root:not(.dark) .dx-dark-surface .text-blue-300,
+:root:not(.dark) .dx-dark-surface .text-blue-400,
+:root:not(.dark) .dx-dark-surface .text-sky-300,
+:root:not(.dark) .dx-dark-surface .text-sky-400,
+:root:not(.dark) .dx-dark-surface .text-cyan-300,
+:root:not(.dark) .dx-dark-surface .text-cyan-400,
+:root:not(.dark) .dx-dark-surface .text-teal-300,
+:root:not(.dark) .dx-dark-surface .text-teal-400 { color: #1d4ed8; }
+
+:root:not(.dark) .dx-dark-surface .text-rose-200,
+:root:not(.dark) .dx-dark-surface .text-rose-300,
+:root:not(.dark) .dx-dark-surface .text-rose-400,
+:root:not(.dark) .dx-dark-surface .text-red-300,
+:root:not(.dark) .dx-dark-surface .text-red-400,
+:root:not(.dark) .dx-dark-surface .text-pink-300,
+:root:not(.dark) .dx-dark-surface .text-pink-400 { color: #be123c; }
+
+:root:not(.dark) .dx-dark-surface .text-amber-200,
+:root:not(.dark) .dx-dark-surface .text-amber-300,
+:root:not(.dark) .dx-dark-surface .text-amber-400,
+:root:not(.dark) .dx-dark-surface .text-yellow-300,
+:root:not(.dark) .dx-dark-surface .text-yellow-400 { color: #854d0e; } /* 700 measured 4.39:1 on the role badges; 800 clears AA */
+
+/* text-white appears 93 times in these files, in two different jobs: on a
+   filled accent button, where it must stay white, and as a heading inside a
+   card that this layer has just turned light, where it disappears. Default to
+   dark, then hand white back to anything sitting on a filled accent. */
+:root:not(.dark) .dx-dark-surface .text-white { color: #0f172a; }
+
+:root:not(.dark) .dx-dark-surface [class*="bg-violet-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-violet-6"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-violet-7"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-purple-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-purple-6"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-indigo-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-indigo-6"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-emerald-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-emerald-6"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-rose-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-rose-6"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-red-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-red-6"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-amber-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-blue-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-blue-6"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-violet-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-violet-6"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-indigo-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-indigo-6"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-purple-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-purple-6"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-emerald-5"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-emerald-6"] .text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-violet-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-violet-6"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-violet-7"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-purple-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-purple-6"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-indigo-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-indigo-6"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-emerald-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-emerald-6"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-rose-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-rose-6"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-red-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-red-6"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-amber-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-blue-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="bg-blue-6"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-violet-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-violet-6"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-indigo-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-indigo-6"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-purple-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-purple-6"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-emerald-5"].text-white,
+:root:not(.dark) .dx-dark-surface [class*="from-emerald-6"].text-white {
+  color: #ffffff;
+}
+
+
+/* Dark gradients.
+   ------------------------------------------------------------------------
+   Gradients paint through background-image, which none of the rules above
+   touch and which a background-colour audit cannot see either — the Admin
+   Panel's referral card is
+     bg-gradient-to-r from-purple-950/40 via-violet-950/30 to-slate-900/90
+   so it stayed a dark slab in light mode while measuring as "transparent".
+
+   Selecting on the stop classes is the only handle CSS has. The 800-950 stops
+   are the dark ones; accent gradients (400-700) are left alone because they
+   are meant to be saturated in both themes. */
+:root:not(.dark) .dx-dark-surface [class*="from-slate-8"],
+:root:not(.dark) .dx-dark-surface [class*="from-slate-9"],
+:root:not(.dark) .dx-dark-surface [class*="from-purple-9"],
+:root:not(.dark) .dx-dark-surface [class*="from-violet-9"],
+:root:not(.dark) .dx-dark-surface [class*="from-indigo-9"],
+:root:not(.dark) .dx-dark-surface [class*="from-emerald-9"],
+:root:not(.dark) .dx-dark-surface [class*="from-blue-9"],
+:root:not(.dark) .dx-dark-surface [class*="from-rose-9"],
+:root:not(.dark) .dx-dark-surface [class*="from-amber-9"],
+:root:not(.dark) .dx-dark-surface [class*="to-slate-8"],
+:root:not(.dark) .dx-dark-surface [class*="to-slate-9"] {
+  /* Keep the hue as a wash rather than dropping to flat white, so the card
+     still reads as a highlighted panel the way it does in dark mode. */
+  background-image: linear-gradient(to right, rgba(124, 58, 237, 0.06), rgba(99, 102, 241, 0.04));
+  background-color: #ffffff;
+}
+
+/* Emerald-tinted panels carry meaning (earnings, profit), so they wash green. */
+:root:not(.dark) .dx-dark-surface [class*="from-emerald-9"] {
+  background-image: linear-gradient(to right, rgba(5, 150, 105, 0.07), rgba(16, 185, 129, 0.04));
+}

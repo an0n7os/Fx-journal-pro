@@ -563,7 +563,7 @@ export default function NotebookTab({ user }: NotebookTabProps) {
   return (
     <div className="w-full text-slate-100 antialiased pb-8">
       {/* Main Glass Workspace Container */}
-      <div className="relative rounded-2xl bg-[#080C16] border border-slate-800/90 shadow-2xl overflow-hidden min-h-[680px] h-[calc(100vh-215px)] flex flex-col md:flex-row backdrop-blur-xl">
+      <div className="dx-dark-surface relative rounded-2xl bg-[#080C16] border border-slate-800/90 shadow-2xl overflow-hidden min-h-[680px] h-[calc(100vh-215px)] flex flex-col md:flex-row backdrop-blur-xl">
         
         {/* ========================================================
             LEFT SIDEBAR (Search, New button, Navigation, Folders, Tags)

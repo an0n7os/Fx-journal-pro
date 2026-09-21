@@ -716,7 +716,7 @@ Their referral link stops working and ` +
   const totalReferralEarnings = users.reduce((acc, u) => acc + (u.referralIncome || 0), 0);
 
   return (
-    <div id="admin-management-panel" className="bg-[#0b0f19] text-slate-200 border border-slate-800/80 rounded-2xl p-6 shadow-2xl backdrop-blur-xl">
+    <div id="admin-management-panel" className="dx-dark-surface bg-[#0b0f19] text-slate-200 border border-slate-800/80 rounded-2xl p-6 shadow-2xl backdrop-blur-xl">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800/80 pb-5 mb-6 gap-4">
         <div>

@@ -444,7 +444,7 @@ export default function SubAdminConsole({
 
   // ── Overview ─────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="dx-dark-surface space-y-6">
       {error && (
         <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/25 text-red-300 rounded-2xl px-4 py-3 text-xs">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" /> <span>{error}</span>

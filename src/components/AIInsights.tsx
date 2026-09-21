@@ -25,7 +25,7 @@ function HeyzaAvatar({ size = 'md', pulse = false }: { size?: 'sm' | 'md'; pulse
   return (
     <div className={`${dim} rounded-full flex items-center justify-center shrink-0 relative`}
       style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5, #0ea5e9)' }}>
-      <span className={`font-black text-white ${font} tracking-tight select-none`}>Hz</span>
+      <span className={`font-black ${font} tracking-tight select-none`} style={{ color: '#fff' }}>Hz</span>
       {pulse && (
         <span className="absolute inset-0 rounded-full animate-ping opacity-30"
           style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }} />
@@ -119,15 +119,15 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
   return (
     <div
       id="ai-mentor-card"
-      className="flex flex-col overflow-hidden"
+      className="dx-dark-surface flex flex-col overflow-hidden"
       style={{
         height: '75vh',
         maxHeight: '780px',
         minHeight: '520px',
-        background: 'linear-gradient(160deg, #07091a 0%, #0d1128 60%, #0a0f20 100%)',
-        border: '1px solid rgba(99,102,241,0.18)',
+        background: 'var(--dx-chat-shell)',
+        border: '1px solid var(--dx-chat-border)',
         borderRadius: '20px',
-        boxShadow: '0 0 60px rgba(99,102,241,0.08), 0 24px 48px rgba(0,0,0,0.4)',
+        boxShadow: 'var(--dx-chat-shadow)',
       }}
     >
       {/* HEADER */}
@@ -144,14 +144,14 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
             <div className="flex items-center gap-2">
               <span className="text-white font-bold text-base tracking-tight">Heyza</span>
               <span
-                className="text-[9px] font-extrabold uppercase tracking-widest text-white px-1.5 py-0.5 rounded-full"
-                style={{ background: 'linear-gradient(90deg,#7c3aed,#4f46e5)' }}
+                className="text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-full"
+                style={{ background: 'linear-gradient(90deg,#7c3aed,#4f46e5)', color: '#fff' }}
               >
                 AI
               </span>
               <span
                 className="text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-full"
-                style={{ background: 'linear-gradient(90deg,#f59e0b,#ef4444)', color: '#fff' }}
+                style={{ background: 'linear-gradient(90deg,#f59e0b,#ef4444)', color: '#1c1206' }}
               >
                 PRO
               </span>
@@ -193,16 +193,16 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
                   borderRadius: '18px 18px 4px 18px',
                   boxShadow: '0 4px 20px rgba(99,102,241,0.25)',
                 } : {
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  color: '#cbd5e1',
+                  background: 'var(--dx-chat-bubble)',
+                  border: '1px solid var(--dx-chat-bubble-border)',
+                  color: 'var(--dx-chat-bubble-text)',
                   borderRadius: '4px 18px 18px 18px',
                   backdropFilter: 'blur(8px)',
                 }}
                 dangerouslySetInnerHTML={{
                   __html: msg.content
                     .replace(/\n/g, '<br/>')
-                    .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#a5b4fc">$1</strong>')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--dx-chat-strong)">$1</strong>')
                 }}
               />
               <span className="text-[10px] text-slate-600 px-1">{msg.time}</span>
@@ -223,8 +223,8 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
             <div
               className="px-4 py-3 flex items-center gap-1.5"
               style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'var(--dx-chat-bubble)',
+                border: '1px solid var(--dx-chat-bubble-border)',
                 borderRadius: '4px 18px 18px 18px',
               }}
             >
@@ -244,7 +244,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
       {/* QUICK PROMPTS */}
       <div
         className="shrink-0 px-4 py-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(7,9,26,0.8)' }}
+        style={{ borderTop: '1px solid var(--dx-chat-divider)', background: 'var(--dx-chat-bar)' }}
       >
         <Zap className="h-3.5 w-3.5 text-violet-400 shrink-0" />
         {quickPrompts.map((p, i) => (
@@ -257,7 +257,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
             style={{
               background: 'rgba(99,102,241,0.08)',
               border: '1px solid rgba(99,102,241,0.2)',
-              color: '#a5b4fc',
+              color: 'var(--dx-chat-strong)',
             }}
             onMouseEnter={e => {
               (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.2)';
@@ -276,7 +276,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
       {/* INPUT */}
       <div
         className="shrink-0 px-4 pb-4 pt-3"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(7,9,26,0.95)' }}
+        style={{ borderTop: '1px solid var(--dx-chat-divider)', background: 'var(--dx-chat-bar-solid)' }}
       >
         <form onSubmit={handleSend} className="flex items-center gap-3">
           <div className="flex-1">
@@ -289,9 +289,9 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
               disabled={loading}
               className="w-full py-3 pl-4 pr-4 text-sm rounded-2xl focus:outline-none transition-all"
               style={{
-                background: 'rgba(255,255,255,0.05)',
+                background: 'var(--dx-chat-input)',
                 border: '1px solid rgba(99,102,241,0.25)',
-                color: '#e2e8f0',
+                color: 'var(--dx-chat-input-text)',
                 caretColor: '#818cf8',
               }}
               onFocus={e => {
@@ -311,7 +311,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
             style={{ background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', boxShadow: '0 4px 16px rgba(99,102,241,0.35)' }}
             aria-label="Send message"
           >
-            <Send className="h-4 w-4 text-white ml-0.5" />
+            <Send className="h-4 w-4 ml-0.5" style={{ color: '#fff' }} />
           </button>
         </form>
         <p className="text-center text-[10px] text-slate-600 mt-2.5 flex items-center justify-center gap-1">

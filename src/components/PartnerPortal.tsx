@@ -80,7 +80,7 @@ export default function PartnerPortal() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="dx-dark-surface space-y-6">
       {/* No heading here — the page header above the tab already says
           "Partner Portal", and repeating it stacked two titles on the screen. */}
       {error && (
