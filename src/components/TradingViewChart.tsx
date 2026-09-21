@@ -83,6 +83,10 @@ const TIMEFRAMES = [
 
 const DEFAULT_TIMEFRAME = '15m';
 
+/** Survives a tab change; scoped to the browser, not to the account. */
+const SYMBOL_STORAGE_KEY = 'liveChartSymbol';
+const TIMEFRAME_STORAGE_KEY = 'liveChartTimeframe';
+
 // Popular symbols for autocomplete
 const POPULAR_SYMBOLS = [
   'XAUUSD','XAGUSD','EURUSD','GBPUSD','USDJPY','USDCHF','USDCAD',
@@ -188,9 +192,29 @@ const TradingViewChart = memo(function TradingViewChart({
   const lastCandleRef = useRef<{time: Time, close: number} | null>(null);
   const candlesRef = useRef<OhlcCandle[]>([]);
 
-  const [symbol, setSymbol] = useState(initialSymbol);
-  const [symbolInput, setSymbolInput] = useState(initialSymbol);
-  const [timeframe, setTimeframe] = useState(DEFAULT_TIMEFRAME);
+  // The Live Chart unmounts when the tab changes and remounts with
+  // initialSymbol, so picking BTCUSD and coming back landed on XAUUSD again.
+  // The choice is remembered instead. `symbolLocked` marks the case where the
+  // caller is pointing at a specific trade: that symbol must win over whatever
+  // was last browsed, and must not overwrite it either.
+  const symbolLocked = !!selectedTradeId;
+  const [symbol, setSymbol] = useState(() => {
+    if (symbolLocked) return initialSymbol;
+    try {
+      return localStorage.getItem(SYMBOL_STORAGE_KEY) || initialSymbol;
+    } catch {
+      return initialSymbol;
+    }
+  });
+  const [symbolInput, setSymbolInput] = useState(symbol);
+  const [timeframe, setTimeframe] = useState(() => {
+    try {
+      const saved = localStorage.getItem(TIMEFRAME_STORAGE_KEY);
+      return saved && TIMEFRAMES.some((t) => t.value === saved) ? saved : DEFAULT_TIMEFRAME;
+    } catch {
+      return DEFAULT_TIMEFRAME;
+    }
+  });
   const [filterMode, setFilterMode] = useState<'all'|'wins'|'losses'|'buy'|'sell'>('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -532,6 +556,35 @@ const TradingViewChart = memo(function TradingViewChart({
     initChart();
     return destroyChart;
   }, [theme]); // intentionally only [theme] to avoid unnecessary re-init
+
+  // Remember what the trader was looking at. Skipped while a specific trade is
+  // being inspected, so opening one trade does not overwrite the symbol they
+  // were browsing before.
+  useEffect(() => {
+    if (symbolLocked) return;
+    try {
+      localStorage.setItem(SYMBOL_STORAGE_KEY, symbol);
+    } catch {
+      // Private windows and blocked site data throw here; the chart still works.
+    }
+  }, [symbol, symbolLocked]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TIMEFRAME_STORAGE_KEY, timeframe);
+    } catch {
+      // As above.
+    }
+  }, [timeframe]);
+
+  // Follow the caller when it points at a trade. initialSymbol was only read
+  // by the useState initialiser, so clicking a trade to view it on an
+  // already-mounted chart left the previous symbol on screen.
+  useEffect(() => {
+    if (!symbolLocked || !initialSymbol) return;
+    setSymbol(initialSymbol);
+    setSymbolInput(initialSymbol);
+  }, [symbolLocked, initialSymbol]);
 
   // Fetch data whenever symbol or timeframe changes (and after chart is ready)
   useEffect(() => {
