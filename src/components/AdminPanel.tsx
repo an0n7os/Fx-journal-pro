@@ -5,6 +5,7 @@ import {
 import { SupportTicket, Announcement } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import SubAdminConsole from './SubAdminConsole';
+import ReferralIncomeHub from './ReferralIncomeHub';
 
 function formatDateTime(iso?: string | null): string {
   if (!iso) return 'Never';
@@ -573,6 +574,13 @@ Their referral link stops working and ` +
       {/* 1. DASHBOARD TAB */}
       {activeTab === 'dashboard' && (
         <div className="space-y-6">
+          {/* The same component the Partner Portal renders. It reads and writes
+              /api/partner/me, so here it manages the signed-in administrator's
+              own referral profile — not any partner's. Shown because the roster
+              below only reports on partners; this is where an admin who also
+              refers sets their own price, coupon and campaign links. */}
+          {!isSubAdmin && <ReferralIncomeHub />}
+
           {/* Metrics Grid */}
           <div className={`grid grid-cols-2 ${isSubAdmin ? 'md:grid-cols-3 lg:grid-cols-3' : 'md:grid-cols-4 lg:grid-cols-4'} gap-4`}>
             {/* Total Users */}
