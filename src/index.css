@@ -2501,23 +2501,6 @@ html:not(.dark) .dx-nav-idle {
   transition: background-color .18s ease, color .18s ease, border-color .18s ease;
 }
 
-/* Collapsed rail: the row itself stays transparent and the violet square
-   behind the icon carries the active state, as in the reference. The label
-   under it still needs to read as current. */
-html.dark .dx-nav-rail-active {
-  background-color: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-  color: #ffffff !important;
-}
-
-html:not(.dark) .dx-nav-rail-active {
-  background-color: transparent;
-  border-color: transparent;
-  box-shadow: none;
-  color: #1e293b;
-}
-
 /* ── Settings Sidebar Navigation Cards & Active State ────────────────── */
 .settings-nav-card {
   background-color: #ffffff;
@@ -3107,17 +3090,6 @@ html.dark .dx-sentiment-neutral {
   font-size: 14px;
   transition: all 0.2s ease;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
-}
-
-.cyber-input:focus {
-  outline: none;
-  background-color: #131724;
-  border-color: rgba(139, 92, 246, 0.65);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22), inset 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.cyber-input::placeholder {
-  color: #64748b;
 }
 
 .cyber-input:focus {
