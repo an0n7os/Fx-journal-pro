@@ -6544,7 +6544,137 @@ const tradeVisibleUserIds = async (role: string, adminUserId: string | null): Pr
 const canSeeTrades = (visible: string[] | null, userId: string) =>
   visible === null || visible.includes(userId);
 
+/**
+ * The access map for every user in a scoped viewer's network, in one query.
+ *
+ * tradeVisibleUserIds above answers a yes/no per user, which is all the old
+ * single switch could express. The overview now needs to know which sections
+ * each student shares, and a per-user read would be one round trip per card.
+ *
+ * Returns null for an unscoped role (an admin sees everything), so callers
+ * treat null the same way they already treat it for the id list.
+ */
+const mentorAccessByUser = async (
+  role: string,
+  adminUserId: string | null,
+): Promise<Map<string, MentorAccess> | null> => {
+  if (role !== 'PARTNER') return null;
+  const scope = await scopeUserIds(role, adminUserId);
+  const ids = scope || [];
+  const out = new Map<string, MentorAccess>();
+  if (ids.length === 0) return out;
+
+  if (!useSupabase) {
+    for (const u of localAllUsers()) {
+      if (!ids.includes(u.id)) continue;
+      const demo = u.id === 'user_demo_pro' || String(u.id).startsWith('user_demo_');
+      out.set(u.id, demo
+        ? normaliseMentorAccess({ notebook: true }, true)
+        : normaliseMentorAccess(u.mentorAccess, u.allowPartnerTradeView === true));
+    }
+    return out;
+  }
+  const { data, error } = await supabase
+    .from('users').select('id, mentor_access, allow_partner_trade_view').in('id', ids);
+  if (error) {
+    // Fail closed: a lookup we could not complete is not a yes.
+    console.error('[mentorAccessByUser] lookup failed:', error.message);
+    return out;
+  }
+  for (const r of data || []) {
+    const demo = (r as any).id === 'user_demo_pro' || String((r as any).id).startsWith('user_demo_');
+    out.set((r as any).id, demo
+      ? normaliseMentorAccess({ notebook: true }, true)
+      : normaliseMentorAccess((r as any).mentor_access, (r as any).allow_partner_trade_view === true));
+  }
+  return out;
+};
+
+/** The map for one user, defaulting to full access for an unscoped viewer. */
+const accessOf = (
+  byUser: Map<string, MentorAccess> | null,
+  userId: string,
+): MentorAccess => byUser === null
+  ? normaliseMentorAccess(null, true)
+  : (byUser.get(userId) || normaliseMentorAccess(null, false));
+
 /** Reads one user's consent flag from either storage path. */
+/**
+ * Per-section mentor permissions.
+ *
+ * allow_partner_trade_view was one switch for everything a mentor could see.
+ * A student who wants help with their analysis had to hand over their journal
+ * as well. These are the sections they can now decide separately.
+ *
+ * `accounts` is not a boolean: null means every account, [] means none, and a
+ * list means only those ids. Anything else here is a boolean.
+ */
+type MentorAccess = {
+  dashboard: boolean;
+  analysis: boolean;
+  accounts: string[] | null;
+  calendar: boolean;
+  liveCharts: boolean;
+  journal: boolean;
+  notebook: boolean;
+};
+
+const MENTOR_ACCESS_BOOLEAN_SECTIONS = [
+  'dashboard', 'analysis', 'calendar', 'liveCharts', 'journal', 'notebook',
+] as const;
+
+/**
+ * Turns whatever is stored into a complete map, and is the single place that
+ * decides what an unset value means.
+ *
+ * A row whose mentor_access is null has never seen this screen, so its
+ * permissions come from the old boolean — otherwise running the migration
+ * would silently change what every existing mentor can read. Notebook is the
+ * exception: the spec has it off by default, and it was never covered by the
+ * old switch, so it stays off until the student turns it on.
+ */
+const normaliseMentorAccess = (raw: any, legacyAllow: boolean): MentorAccess => {
+  const base: MentorAccess = {
+    dashboard: legacyAllow,
+    analysis: legacyAllow,
+    accounts: legacyAllow ? null : [],
+    calendar: legacyAllow,
+    liveCharts: legacyAllow,
+    journal: legacyAllow,
+    notebook: false,
+  };
+  if (!raw || typeof raw !== 'object') return base;
+  const out = { ...base };
+  for (const key of MENTOR_ACCESS_BOOLEAN_SECTIONS) {
+    if (typeof raw[key] === 'boolean') out[key] = raw[key];
+  }
+  if (raw.accounts === null) out.accounts = null;
+  else if (Array.isArray(raw.accounts)) {
+    out.accounts = raw.accounts.filter((x: any) => typeof x === 'string');
+  }
+  return out;
+};
+
+/** True when the mentor may read this section at all. */
+const mentorCanSee = (access: MentorAccess, section: keyof MentorAccess): boolean => {
+  if (section === 'accounts') return access.accounts === null || access.accounts.length > 0;
+  return access[section] === true;
+};
+
+/** Reads one user's map, applying the same fallback everywhere. */
+const readMentorAccess = async (userId: string): Promise<MentorAccess> => {
+  if (userId === 'user_demo_pro' || userId.startsWith('user_demo_')) {
+    return normaliseMentorAccess({ notebook: true }, true);
+  }
+  if (!useSupabase) {
+    const row = localFindUser((u: any) => u.id === userId);
+    return normaliseMentorAccess(row?.mentorAccess, row?.allowPartnerTradeView === true);
+  }
+  const { data } = await supabase
+    .from('users').select('mentor_access, allow_partner_trade_view').eq('id', userId).maybeSingle();
+  return normaliseMentorAccess(data?.mentor_access, data?.allow_partner_trade_view === true);
+};
+
 const readTradeConsent = async (userId: string): Promise<boolean> => {
   if (userId === 'user_demo_pro' || userId.startsWith('user_demo_')) return true;
   if (!useSupabase) return localFindUser((u: any) => u.id === userId)?.allowPartnerTradeView === true;
@@ -6730,6 +6860,68 @@ const summariseTrades = (trades: any[]) => {
     })
     .filter((r): r is number => r !== null);
 
+  // Longest run of wins and of losses, in date order. Streaks are the one
+  // figure here that depends on sequence, so the sort matters.
+  const byDate = [...closed].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+  let maxConsecutiveWins = 0;
+  let maxConsecutiveLosses = 0;
+  let runWins = 0;
+  let runLosses = 0;
+  for (const t of byDate) {
+    const pnl = netProfit(t);
+    if (pnl > 0) {
+      runWins += 1;
+      runLosses = 0;
+      if (runWins > maxConsecutiveWins) maxConsecutiveWins = runWins;
+    } else if (pnl < 0) {
+      runLosses += 1;
+      runWins = 0;
+      if (runLosses > maxConsecutiveLosses) maxConsecutiveLosses = runLosses;
+    }
+    // A scratch trade breaks neither run: it is not a win or a loss.
+  }
+
+  // Split by side so each panel can be built from its own numbers rather than
+  // the caller subtracting one set from another.
+  const winTrades = closed.filter((t) => netProfit(t) > 0);
+  const lossTrades = closed.filter((t) => netProfit(t) < 0);
+  const sumLots = (rows: any[]) => rows.reduce((a, t) => a + (Number(t.lotSize) || 0), 0);
+  const sumCommission = (rows: any[]) =>
+    rows.reduce((a, t) => a + Math.abs(Number(t.commission) || 0) + Math.abs(Number(t.swap) || 0), 0);
+  const activeDays = (rows: any[]) =>
+    new Set(rows.map((t) => dayKey(t.date)).filter((d): d is string => !!d)).size;
+  const curve = (rows: any[]) => {
+    // Cumulative P&L by day, which is what the performance charts plot.
+    const byDay = new Map<string, number>();
+    for (const t of rows) {
+      const key = dayKey(t.date);
+      if (!key) continue;
+      byDay.set(key, (byDay.get(key) || 0) + netProfit(t));
+    }
+    let running = 0;
+    return [...byDay.keys()].sort().map((day) => {
+      running += byDay.get(day) || 0;
+      return { date: day, cumulative: Math.round(running * 100) / 100 };
+    });
+  };
+  const sideSummary = (rows: any[]) => {
+    const total = rows.reduce((a, t) => a + netProfit(t), 0);
+    const days = activeDays(rows);
+    const lots = sumLots(rows);
+    return {
+      totalPnl: Math.round(total * 100) / 100,
+      trades: rows.length,
+      activeDays: days,
+      avgTrade: rows.length ? Math.round((total / rows.length) * 100) / 100 : 0,
+      totalVolume: Math.round(lots * 100) / 100,
+      avgDailyVolume: days ? Math.round((lots / days) * 100) / 100 : 0,
+      totalCommissions: Math.round(sumCommission(rows) * 100) / 100,
+      curve: curve(rows),
+    };
+  };
+
   return {
     totalTrades: trades.length,
     closedTrades: closed.length,
@@ -6745,6 +6937,9 @@ const summariseTrades = (trades: any[]) => {
     avgR: rMultiples.length ? rMultiples.reduce((a, b) => a + b, 0) / rMultiples.length : null,
     bestTrade: pnls.length ? Math.max(...pnls) : 0,
     worstTrade: pnls.length ? Math.min(...pnls) : 0,
+    // Everything the Win and Loss Performance panels need, per side.
+    winPerformance: { ...sideSummary(winTrades), maxConsecutive: maxConsecutiveWins },
+    lossPerformance: { ...sideSummary(lossTrades), maxConsecutive: maxConsecutiveLosses },
   };
 };
 
@@ -6775,6 +6970,8 @@ app.get('/api/subadmin/overview', async (req, res) => {
   // Which of those users let their partner read trading data. Null means the
   // viewer is not a partner (staff console), so nothing is withheld.
   const visible = await tradeVisibleUserIds(scopeRole, targetSubAdminId);
+  // Per-section permissions for the same set, read once rather than per card.
+  const accessByUser = await mentorAccessByUser(scopeRole, targetSubAdminId);
   const todayKey = new Date().toISOString().slice(0, 10);
 
   let users: any[] = [];
@@ -6818,7 +7015,19 @@ app.get('/api/subadmin/overview', async (req, res) => {
     // needs to run their network, so they show either way. Everything derived
     // from trades is withheld until the user opts in; the numbers are left out
     // of the payload entirely rather than sent and hidden in the UI.
-    const tradesVisible = canSeeTrades(visible, u.id);
+    const access = accessOf(accessByUser, u.id);
+    // Hidden accounts drop out before anything is counted, so a student who
+    // shares one of three accounts does not have the other two reflected in
+    // their totals.
+    const shown = access.accounts === null
+      ? own
+      : own.filter((t) => t.accountId && access.accounts!.includes(t.accountId));
+    // Every number on this card is a dashboard figure, so that is the section
+    // that governs them. tradeAccess stays for the existing console, and is
+    // true when anything at all is shared.
+    const tradesVisible = canSeeTrades(visible, u.id) && access.dashboard;
+    const sharesAnything = MENTOR_ACCESS_BOOLEAN_SECTIONS.some((k) => access[k] === true)
+      || mentorCanSee(access, 'accounts');
     return {
       id: u.id,
       name: u.name || (u.email || '').split('@')[0],
@@ -6827,11 +7036,12 @@ app.get('/api/subadmin/overview', async (req, res) => {
       status: u.status || 'ACTIVE',
       joinedAt: u.createdAt || u.created_at || null,
       lastLogin: u.lastLogin || u.last_login || null,
-      tradeAccess: tradesVisible,
-      tradesToday: tradesVisible ? own.filter((t) => dayKey(t.date) === todayKey).length : null,
-      tradesTotal: tradesVisible ? own.length : null,
-      netPnl: tradesVisible ? own.reduce((sum, t) => sum + netProfit(t), 0) : null,
-      activity: tradesVisible ? buildActivitySeries(own.map((t) => t.date), 30) : [],
+      tradeAccess: sharesAnything,
+      access,
+      tradesToday: tradesVisible ? shown.filter((t) => dayKey(t.date) === todayKey).length : null,
+      tradesTotal: tradesVisible ? shown.length : null,
+      netPnl: tradesVisible ? shown.reduce((sum, t) => sum + netProfit(t), 0) : null,
+      activity: tradesVisible ? buildActivitySeries(shown.map((t) => t.date), 30) : [],
     };
   }).sort((a, b) => (b.lastLogin || '').localeCompare(a.lastLogin || ''));
 
@@ -6884,11 +7094,24 @@ app.get('/api/subadmin/user/:id', async (req, res) => {
   // Consent is re-read here, not inherited from the list call. A partner who
   // bookmarks this URL, or keeps the tab open after the user switches sharing
   // off, gets refused on the next request rather than serving stale access.
-  if (ctx.role === 'PARTNER' && !(await readTradeConsent(id))) {
+  //
+  // Sharing is per section now, so a blanket 403 is only right when the
+  // student has turned everything off. Otherwise each section is filtered out
+  // of the response below, which is what makes the toggles real rather than a
+  // frontend that hides tabs while the data is still one fetch away.
+  const access = ctx.role === 'PARTNER'
+    ? await readMentorAccess(id)
+    : normaliseMentorAccess(null, true);
+
+  const sharesAnything = ctx.role !== 'PARTNER' || MENTOR_ACCESS_BOOLEAN_SECTIONS
+    .some((k) => access[k] === true) || mentorCanSee(access, 'accounts');
+
+  if (!sharesAnything) {
     return res.status(403).json({
       error: 'This user has not shared their trading data with you.',
       code: 'TRADE_ACCESS_DENIED',
       tradeAccess: false,
+      access,
     });
   }
 
@@ -6931,22 +7154,43 @@ app.get('/api/subadmin/user/:id', async (req, res) => {
 
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const journal = trades
-    .filter((t) => (t.notes && String(t.notes).trim()) || t.emotion || t.strategy)
-    .map((t) => ({
-      id: t.id, date: t.date, symbol: t.symbol, type: t.type,
-      profit: netProfit(t), notes: t.notes || '', emotion: t.emotion || null,
-      strategy: t.strategy || null, tags: t.tags || [],
-    }));
+  // Accounts the student chose to hide take their trades with them: leaving
+  // the trades in while dropping the account row would hand over the same
+  // history under a different key.
+  const permittedAccounts = access.accounts === null
+    ? accounts
+    : accounts.filter((a: any) => access.accounts!.includes(a.id));
+  const permittedIds = new Set(permittedAccounts.map((a: any) => a.id));
+  const permittedTrades = access.accounts === null
+    ? trades
+    : trades.filter((t: any) => permittedIds.has(t.accountId));
 
   res.json({
     readOnly: true,
     user: sanitizeUser(user),
-    accounts,
-    trades,
-    analysis: summariseTrades(trades),
-    activity: buildActivitySeries(trades.map((t) => t.date), 365),
-    journal,
+    // What the viewer is allowed to see, so the console can render the same
+    // shape without guessing why a section came back empty.
+    access,
+    accounts: permittedAccounts,
+    // Trades underpin the dashboard, the calendar and the chart markers, so
+    // they travel when any of those is shared.
+    trades: (access.dashboard || access.calendar || access.liveCharts) ? permittedTrades : [],
+    analysis: access.analysis ? summariseTrades(permittedTrades) : null,
+    activity: access.dashboard ? buildActivitySeries(permittedTrades.map((t) => t.date), 365) : [],
+    calendar: access.calendar ? permittedTrades.map((t) => ({ date: t.date, profit: netProfit(t) })) : [],
+    // Built from the permitted trades, not all of them — a journal entry
+    // carries the same symbol, direction and profit as its trade, so deriving
+    // it before the account filter would hand back a hidden account's history
+    // in a different shape.
+    journal: access.journal
+      ? permittedTrades
+          .filter((t: any) => (t.notes && String(t.notes).trim()) || t.emotion || t.strategy)
+          .map((t: any) => ({
+            id: t.id, date: t.date, symbol: t.symbol, type: t.type,
+            profit: netProfit(t), notes: t.notes || '', emotion: t.emotion || null,
+            strategy: t.strategy || null, tags: t.tags || [],
+          }))
+      : [],
   });
 });
 
@@ -7683,6 +7927,78 @@ app.patch('/api/user/partner-visibility', async (req, res) => {
     }
   }
   res.json({ allowPartnerTradeView: allow });
+});
+
+// ── User: per-section mentor permissions ──────────────────────────────────
+// Acts only on the caller's own row, like partner-visibility above. A mentor
+// or an admin cannot set these for someone else; that would defeat consent.
+app.get('/api/user/mentor-access', async (req, res) => {
+  const currentUser = (req as any).currentUser;
+  if (!currentUser?.id) return res.status(401).json({ error: 'Not signed in' });
+  const access = await readMentorAccess(currentUser.id);
+
+  // The student picks accounts by name, so send the list they are choosing
+  // from rather than making the frontend guess which ids exist.
+  let accounts: { id: string; name: string }[] = [];
+  if (!useSupabase) {
+    accounts = ((req as any).userDb?.accounts || [])
+      .filter((a: any) => a.userId === currentUser.id)
+      .map((a: any) => ({ id: a.id, name: a.name }));
+  } else {
+    const { data } = await supabase
+      .from('trading_accounts').select('id, name').eq('user_id', currentUser.id);
+    accounts = (data || []).map((a: any) => ({ id: a.id, name: a.name }));
+  }
+
+  res.json({ access, accounts });
+});
+
+app.patch('/api/user/mentor-access', async (req, res) => {
+  const currentUser = (req as any).currentUser;
+  if (!currentUser?.id) return res.status(401).json({ error: 'Not signed in' });
+
+  const current = await readMentorAccess(currentUser.id);
+  const patch = req.body || {};
+
+  // Merged rather than replaced, so a client that knows about six sections
+  // cannot silently reset a seventh it has never heard of.
+  const next: MentorAccess = { ...current };
+  for (const key of MENTOR_ACCESS_BOOLEAN_SECTIONS) {
+    if (typeof patch[key] === 'boolean') next[key] = patch[key];
+  }
+  if ('accounts' in patch) {
+    if (patch.accounts === null) next.accounts = null;
+    else if (Array.isArray(patch.accounts)) {
+      // Only ids the caller actually owns. Without this the column would
+      // accept any string, and a future reader could be pointed at another
+      // user's account id.
+      let owned: string[] = [];
+      if (!useSupabase) {
+        owned = ((req as any).userDb?.accounts || [])
+          .filter((a: any) => a.userId === currentUser.id).map((a: any) => a.id);
+      } else {
+        const { data } = await supabase
+          .from('trading_accounts').select('id').eq('user_id', currentUser.id);
+        owned = (data || []).map((a: any) => a.id);
+      }
+      next.accounts = patch.accounts.filter((id: any) => typeof id === 'string' && owned.includes(id));
+    } else {
+      return res.status(400).json({ error: 'accounts must be null or a list of account ids.' });
+    }
+  }
+
+  if (!useSupabase) {
+    const patched = localPatchUser(currentUser.id, (row) => { row.mentorAccess = next; });
+    if (!patched) return res.status(404).json({ error: 'User not found' });
+  } else {
+    const { error } = await supabase
+      .from('users').update({ mentor_access: next }).eq('id', currentUser.id);
+    if (error) {
+      console.error('[PATCH /api/user/mentor-access] error:', error);
+      return res.status(500).json({ error: 'Failed to update your sharing settings.' });
+    }
+  }
+  res.json({ access: next });
 });
 
 // ── User: who referred me, and am I sharing with them ─────────────────────

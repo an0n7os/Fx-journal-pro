@@ -50,7 +50,8 @@ Run the SQL files in a Supabase SQL editor, in this order:
 8. `mt5_investor_sync_migration.sql`
 9. `sub_admin_console_migration.sql`
 10. `partner_portal_migration.sql`
-11. `fix_rls_policies.sql`
+11. `mentor_access_migration.sql`
+12. `fix_rls_policies.sql`
 
 ## 4. Turnstile
 

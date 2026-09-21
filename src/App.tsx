@@ -87,6 +87,27 @@ interface SymbolSpec {
   pipValuePerLot: number; // USD value of 1 pip movement for 1 standard lot
 }
 
+/**
+ * The sections a student can share with their mentor.
+ *
+ * Accounts is deliberately absent: it is a selection of portfolios rather than
+ * a switch, so it is rendered on its own below these rows.
+ */
+const MENTOR_ACCESS_ROWS: { key: string; label: string; icon: any; blurb: string }[] = [
+  { key: 'dashboard', label: 'Dashboard', icon: BarChart3,
+    blurb: 'Your balance, win rate, trade counts and activity heatmap.' },
+  { key: 'analysis', label: 'Analysis', icon: LineChart,
+    blurb: 'Win and loss performance, strategy and emotion breakdowns.' },
+  { key: 'calendar', label: 'Calendar', icon: Calendar,
+    blurb: 'Which days you traded, and the profit or loss on each.' },
+  { key: 'liveCharts', label: 'Live charts', icon: Activity,
+    blurb: 'Your trade entries and exits drawn on the price chart.' },
+  { key: 'journal', label: 'Journal', icon: BookOpen,
+    blurb: 'Your trade notes, emotions and tags.' },
+  { key: 'notebook', label: 'Notebook', icon: Edit3,
+    blurb: 'Your written notes and daily reviews. Off by default.' },
+];
+
 const SYMBOL_SPECS: Record<string, SymbolSpec> = {
   // Forex Majors
   EURUSD: { contractSize: 100000, pipSize: 0.0001, pipValuePerLot: 10 },
@@ -372,6 +393,10 @@ export default function App() {
   // read their trading data. Both come from the server; the toggle below is a
   // view of the stored value, never the value itself.
   const [partnerLink, setPartnerLink] = useState<{ hasPartner: boolean; partnerName?: string; allowPartnerTradeView: boolean } | null>(null);
+  /** Per-section mentor permissions, and the accounts the student picks from. */
+  const [mentorAccess, setMentorAccess] = useState<Record<string, any> | null>(null);
+  const [mentorAccounts, setMentorAccounts] = useState<{ id: string; name: string }[]>([]);
+  const [savingMentorAccess, setSavingMentorAccess] = useState<string | null>(null);
   const [savingPartnerVisibility, setSavingPartnerVisibility] = useState(false);
 
   // Mentor inspection read-only mode states
@@ -2543,14 +2568,62 @@ export default function App() {
     }
   };
 
+  const loadMentorAccess = useCallback(async () => {
+    try {
+      const res = await fetch('/api/user/mentor-access', { credentials: 'include' });
+      if (!res.ok) return;
+      const body = await res.json();
+      setMentorAccess(body.access || null);
+      setMentorAccounts(body.accounts || []);
+    } catch {
+      // Leaves the section unrendered rather than showing permissions that
+      // might not match what the server holds.
+    }
+  }, []);
+
   const loadPartnerLink = useCallback(async () => {
     try {
       const res = await fetch('/api/user/partner-link', { credentials: 'include' });
-      if (res.ok) setPartnerLink(await res.json());
+      if (res.ok) {
+        const body = await res.json();
+        setPartnerLink(body);
+        // Only worth loading for someone who has a mentor; there is nobody the
+        // permissions could apply to otherwise.
+        if (body?.hasPartner) loadMentorAccess();
+      }
     } catch {
       // A failure here just leaves the section hidden; nothing else depends on it.
     }
-  }, []);
+  }, [loadMentorAccess]);
+
+  /**
+   * Saves one section. The request carries only the key that changed, because
+   * the endpoint merges — sending the whole map from a client that predates a
+   * new section would reset it.
+   */
+  const handleMentorAccessChange = async (key: string, value: boolean | string[] | null) => {
+    const previous = mentorAccess;
+    setSavingMentorAccess(key);
+    setMentorAccess((prev) => (prev ? { ...prev, [key]: value } : prev));
+    try {
+      const res = await fetch('/api/user/mentor-access', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ [key]: value }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Could not save that setting.');
+      // Reconciled with what was actually stored: the server drops account ids
+      // the user does not own, so an optimistic value can be wrong.
+      setMentorAccess(body.access || null);
+    } catch (err: any) {
+      setMentorAccess(previous);
+      alert(err.message || 'Could not save that setting.');
+    } finally {
+      setSavingMentorAccess(null);
+    }
+  };
 
   const handlePartnerVisibility = async (allow: boolean) => {
     setSavingPartnerVisibility(true);
@@ -6560,6 +6633,126 @@ export default function App() {
                               {partnerLink.allowPartnerTradeView
                                 ? 'Your partner can currently see your trading data.'
                                 : 'Your partner can see your name and plan only — not your trades.'}
+                            </p>
+                          </div>
+                        )}
+
+                        {/*
+                          Mentor Access. Sharing used to be one switch, so a
+                          student who wanted help reading their analysis had to
+                          hand over their journal too. Each row is enforced on
+                          the server: a section that is off is left out of the
+                          response, rather than sent and hidden in the console.
+                        */}
+                        {partnerLink?.hasPartner && mentorAccess && (
+                          <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs space-y-4">
+                            <div>
+                              <h3 className="font-extrabold text-slate-900 text-base">Mentor access</h3>
+                              <p className="text-xs text-slate-400">
+                                Choose what {partnerLink.partnerName || 'your mentor'} can open. Change it
+                                whenever you like — your data, your choice.
+                              </p>
+                            </div>
+
+                            <div className="border-t border-slate-50 pt-4 space-y-2.5">
+                              {MENTOR_ACCESS_ROWS.map((row) => (
+                                <div
+                                  key={row.key}
+                                  className="flex items-start justify-between gap-4 p-3 bg-slate-50/70 rounded-xl border border-slate-100"
+                                >
+                                  <div className="space-y-0.5 text-xs">
+                                    <strong className="text-slate-800 flex items-center gap-1.5">
+                                      <row.icon className="h-3.5 w-3.5 text-slate-400" />
+                                      {row.label}
+                                    </strong>
+                                    <span className="text-[11px] text-slate-500 block leading-relaxed">
+                                      {row.blurb}
+                                    </span>
+                                  </div>
+                                  <input
+                                    type="checkbox"
+                                    role="switch"
+                                    aria-label={row.label}
+                                    disabled={savingMentorAccess === row.key}
+                                    checked={mentorAccess[row.key] === true}
+                                    onChange={(e) => handleMentorAccessChange(row.key, e.target.checked)}
+                                    className="mt-0.5 h-4.5 w-4.5 shrink-0 rounded border-slate-300 text-violet-600 focus:ring-violet-500 cursor-pointer disabled:opacity-40"
+                                  />
+                                </div>
+                              ))}
+
+                              {/* Accounts is a selection, not a switch: the student
+                                  picks which portfolios are visible. null means every
+                                  account, including any they add later. */}
+                              <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100 space-y-2.5">
+                                <div className="flex items-start justify-between gap-4 text-xs">
+                                  <div className="space-y-0.5">
+                                    <strong className="text-slate-800 flex items-center gap-1.5">
+                                      <Layers className="h-3.5 w-3.5 text-slate-400" />
+                                      Accounts
+                                    </strong>
+                                    <span className="text-[11px] text-slate-500 block leading-relaxed">
+                                      Pick the portfolios to share. Hiding one hides its trades, analysis and
+                                      journal entries everywhere.
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={savingMentorAccess === 'accounts'}
+                                    onClick={() => handleMentorAccessChange(
+                                      'accounts',
+                                      mentorAccess.accounts === null ? [] : null,
+                                    )}
+                                    className="shrink-0 text-[11px] font-bold text-violet-600 hover:text-violet-700 disabled:opacity-40"
+                                  >
+                                    {mentorAccess.accounts === null ? 'Choose accounts' : 'Share all'}
+                                  </button>
+                                </div>
+
+                                {mentorAccess.accounts === null ? (
+                                  <p className="text-[11px] text-slate-400">
+                                    Sharing every account, including any you add later.
+                                  </p>
+                                ) : mentorAccounts.length === 0 ? (
+                                  <p className="text-[11px] text-slate-400">You have no trading accounts yet.</p>
+                                ) : (
+                                  <div className="space-y-1.5 border-t border-slate-100 pt-2.5">
+                                    {mentorAccounts.map((acc) => {
+                                      const on = (mentorAccess.accounts || []).includes(acc.id);
+                                      return (
+                                        <label
+                                          key={acc.id}
+                                          className="flex items-center gap-2.5 text-[11.5px] text-slate-700 cursor-pointer"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={on}
+                                            disabled={savingMentorAccess === 'accounts'}
+                                            onChange={() => {
+                                              const current: string[] = mentorAccess.accounts || [];
+                                              handleMentorAccessChange(
+                                                'accounts',
+                                                on ? current.filter((x) => x !== acc.id) : [...current, acc.id],
+                                              );
+                                            }}
+                                            className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 disabled:opacity-40"
+                                          />
+                                          <span className="font-semibold">{acc.name}</span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Said rather than left to be discovered: the notebook
+                                never leaves this browser, so there is nothing for the
+                                server to withhold. */}
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                              Your notebook is stored only on this device and is never uploaded, so a mentor
+                              cannot open it whatever this setting says. Live charts show market data; only the
+                              trade markers drawn on them come from your account.
                             </p>
                           </div>
                         )}

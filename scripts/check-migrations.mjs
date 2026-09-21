@@ -37,6 +37,7 @@ const ORDER = [
   'mt5_investor_sync_migration.sql',
   'sub_admin_console_migration.sql',
   'partner_portal_migration.sql',
+  'mentor_access_migration.sql',
   'fix_rls_policies.sql',
 ];
 
