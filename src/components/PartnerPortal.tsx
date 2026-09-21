@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Check, Copy, Link2, Pencil, Ticket, Users, X } from 'lucide-react';
 import SubAdminConsole from './SubAdminConsole';
+import ReferralIncomeHub from './ReferralIncomeHub';
 
 interface PartnerMe {
   partnerId: string;
@@ -169,6 +170,10 @@ export default function PartnerPortal() {
           )}
         </div>
       </div>
+
+      {/* Pricing, coupon and campaign links. Moved here from the admin
+          dashboard, where none of it applied to the viewer. */}
+      <ReferralIncomeHub />
 
       {/* Sets expectations before the partner opens a card and finds it locked. */}
       <div className="flex items-start gap-2.5 rounded-2xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
