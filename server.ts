@@ -5565,6 +5565,17 @@ app.get('/api/announcements', async (req, res) => {
 const PRO_PLAN_AMOUNT_PAISE = 49900; // ₹499/month
 
 /**
+ * What the platform keeps from every referred subscription, in rupees.
+ *
+ * A partner sets a student offer price between this floor and the standard
+ * ₹499, and earns the difference — the rule the Partner Portal states as
+ * "Student Pays − ₹199". It was written as a bare 199 in four places,
+ * including the admin income report, so a change would have had to be found
+ * in all of them.
+ */
+const PARTNER_PLATFORM_FLOOR_INR = 199;
+
+/**
  * Whether the shortcuts that hand out Pro without a real payment may run.
  *
  * These exist so the upgrade flow can be exercised before Razorpay keys are
@@ -5691,13 +5702,13 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
     partner = await findPartnerByCode(couponCode);
     if (partner && partner.isActive !== false) {
       // Clamped between 199 and 499
-      appliedOfferPrice = Math.min(499, Math.max(199, Number(partner.offerPrice) || 499));
+      appliedOfferPrice = Math.min(499, Math.max(PARTNER_PLATFORM_FLOOR_INR, Number(partner.offerPrice) || 499));
       orderAmountPaise = appliedOfferPrice * 100;
       await linkReferral(req, currentUser.id, couponCode);
     }
   }
 
-  const mentorCommission = partner ? Math.max(0, appliedOfferPrice - 199) : 0;
+  const mentorCommission = partner ? Math.max(0, appliedOfferPrice - PARTNER_PLATFORM_FLOOR_INR) : 0;
 
   const auth = razorpayAuth();
   if (!auth) {
@@ -6986,6 +6997,26 @@ const localAllUsers = (): any[] => {
   return [...byId.values()];
 };
 
+/**
+ * Every payment the local store knows about, from the file and from each
+ * cached database.
+ *
+ * Reading the file alone missed everyone who registered on this server, since
+ * those rows live only in userDatabases — the same split that has bitten the
+ * admin routes before. Deduplicated on the payment id, because a user's row
+ * can appear in more than one cache.
+ */
+const localAllPayments = (): any[] => {
+  const byId = new Map<string, any>();
+  try {
+    for (const p of loadDatabaseFromFile()?.payments || []) if (p?.id) byId.set(p.id, p);
+  } catch { /* caches below are still worth reading */ }
+  for (const cached of userDatabases.values()) {
+    for (const p of cached?.payments || []) if (p?.id && !byId.has(p.id)) byId.set(p.id, p);
+  }
+  return [...byId.values()];
+};
+
 /** Every local copy of one user row: the file's, and each cached database's. */
 const localUserRows = (userId: string): { rows: any[]; fileDb: any | null } => {
   const rows: any[] = [];
@@ -7253,10 +7284,10 @@ app.get(['/api/referral/:code', '/api/coupon/validate/:code', '/api/coupon/:code
   }
 
   const standardPrice = 499;
-  const offerPrice = Math.min(499, Math.max(199, Number(partner.offerPrice) || 499));
+  const offerPrice = Math.min(499, Math.max(PARTNER_PLATFORM_FLOOR_INR, Number(partner.offerPrice) || 499));
   const discountAmount = Math.max(0, standardPrice - offerPrice);
   const discountPercent = Math.round((discountAmount / standardPrice) * 100);
-  const mentorCommission = Math.max(0, offerPrice - 199);
+  const mentorCommission = Math.max(0, offerPrice - PARTNER_PLATFORM_FLOOR_INR);
 
   res.json({
     valid: true,
@@ -7788,27 +7819,60 @@ app.get('/api/admin/partners', async (req, res) => {
   let counts: Record<string, number> = {};
   let sharing: Record<string, number> = {};
 
+  // Referral earnings, per partner. There is no commission column on
+  // payments, so it is derived the same way the Partner Portal states it:
+  // every captured payment from a referred user yields
+  // (amount - PARTNER_PLATFORM_FLOOR_INR), never below zero. Counting the
+  // payments rather than the users matters — a partner with ten signups and
+  // one subscriber has earned once.
+  const income: Record<string, number> = {};
+  const paidCounts: Record<string, number> = {};
+  const creditPayment = (referrerId: string, amount: number) => {
+    if (!referrerId) return;
+    income[referrerId] = (income[referrerId] || 0) + Math.max(0, amount - PARTNER_PLATFORM_FLOOR_INR);
+    paidCounts[referrerId] = (paidCounts[referrerId] || 0) + 1;
+  };
+
   if (!useSupabase) {
     const all = localAllUsers();
     partners = all.filter((u: any) => u.role === 'PARTNER');
     for (const p of readPartnerProfiles()) profiles[p.userId] = p.referralCode;
+    const referrerOf: Record<string, string> = {};
     for (const u of all) {
       if (!u.referredBy) continue;
+      referrerOf[u.id] = u.referredBy;
       counts[u.referredBy] = (counts[u.referredBy] || 0) + 1;
       if (u.allowPartnerTradeView === true) sharing[u.referredBy] = (sharing[u.referredBy] || 0) + 1;
+    }
+    for (const pay of localAllPayments()) {
+      if (String(pay.status || '').toLowerCase() !== 'captured') continue;
+      creditPayment(referrerOf[pay.userId || pay.user_id], Number(pay.amount) || 0);
     }
   } else {
     const [{ data: ps }, { data: prof }, { data: refs }] = await Promise.all([
       supabase.from('users').select('id, email, name, is_pro, status, created_at').eq('role', 'PARTNER'),
       supabase.from('partner_profiles').select('user_id, referral_code'),
-      supabase.from('users').select('referred_by, allow_partner_trade_view').not('referred_by', 'is', null),
+      supabase.from('users').select('id, referred_by, allow_partner_trade_view').not('referred_by', 'is', null),
     ]);
     partners = (ps || []).map(toCamel);
     for (const p of prof || []) profiles[(p as any).user_id] = (p as any).referral_code;
+    const referrerOf: Record<string, string> = {};
     for (const r of refs || []) {
       const key = (r as any).referred_by;
+      referrerOf[(r as any).id] = key;
       counts[key] = (counts[key] || 0) + 1;
       if ((r as any).allow_partner_trade_view) sharing[key] = (sharing[key] || 0) + 1;
+    }
+    const referredIds = Object.keys(referrerOf);
+    if (referredIds.length > 0) {
+      const { data: pays } = await supabase
+        .from('payments')
+        .select('user_id, amount, status')
+        .in('user_id', referredIds)
+        .eq('status', 'captured');
+      for (const pay of pays || []) {
+        creditPayment(referrerOf[(pay as any).user_id], Number((pay as any).amount) || 0);
+      }
     }
   }
 
@@ -7824,7 +7888,16 @@ app.get('/api/admin/partners', async (req, res) => {
       referralUrl: profiles[p.id] ? partnerReferralUrl(req, profiles[p.id]) : null,
       linkedUsers: counts[p.id] || 0,
       sharingTrades: sharing[p.id] || 0,
-    })).sort((a, b) => b.linkedUsers - a.linkedUsers),
+      paidReferrals: paidCounts[p.id] || 0,
+      referralIncome: Math.round((income[p.id] || 0) * 100) / 100,
+    })).sort((a, b) => b.referralIncome - a.referralIncome || b.linkedUsers - a.linkedUsers),
+    totals: {
+      partners: partners.length,
+      linkedUsers: Object.values(counts).reduce((a, b) => a + b, 0),
+      paidReferrals: Object.values(paidCounts).reduce((a, b) => a + b, 0),
+      referralIncome: Math.round(Object.values(income).reduce((a, b) => a + b, 0) * 100) / 100,
+      platformFloor: PARTNER_PLATFORM_FLOOR_INR,
+    },
   });
 });
 

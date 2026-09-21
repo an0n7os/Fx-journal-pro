@@ -87,6 +87,8 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
   const [bugs, setBugs] = useState<any[]>([]);
   const [features, setFeatures] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
+  const [partners, setPartners] = useState<any[]>([]);
+  const [partnerTotals, setPartnerTotals] = useState<any>(null);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [billingData, setBillingData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -155,7 +157,16 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
         if (data.users) setUsers(data.users);
       }
 
-      if (activeTab === 'team') {
+      if (activeTab === 'assigned' && myRole !== 'SUB_ADMIN') {
+        // The partner roster is only meaningful to a full admin; a sub-admin
+        // has no partner.manage permission and the server would refuse it.
+        const res = await fetch('/api/admin/partners', { headers: authHeaders });
+        if (res.ok) {
+          const data = await res.json();
+          setPartners(data.partners || []);
+          setPartnerTotals(data.totals || null);
+        }
+      } else if (activeTab === 'team') {
         const res = await fetch('/api/admin/team', { headers: authHeaders });
         if (res.ok) {
           const data = await res.json();
@@ -1001,6 +1012,90 @@ Their referral link stops working and ` +
               </p>
             </div>
           </div>
+          {/* Partner roster. Answers the three questions an admin actually has
+              about the referral programme: who the partners are, how many
+              users each brought in, and what each has earned. */}
+          {myRole !== 'SUB_ADMIN' && (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="p-2 rounded-xl bg-emerald-600/15 text-emerald-400 border border-emerald-500/30">
+                    <Users className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white">Partners</h3>
+                    <p className="text-[11px] text-slate-400">
+                      Referral income is each student's payment minus the ₹{partnerTotals?.platformFloor ?? 199} platform floor.
+                    </p>
+                  </div>
+                </div>
+                {partnerTotals && (
+                  <div className="flex items-center gap-5 text-right">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Partners</p>
+                      <p className="text-base font-extrabold text-white">{partnerTotals.partners}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Linked users</p>
+                      <p className="text-base font-extrabold text-white">{partnerTotals.linkedUsers}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Paid</p>
+                      <p className="text-base font-extrabold text-white">{partnerTotals.paidReferrals}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Total payout</p>
+                      <p className="text-base font-extrabold text-emerald-400">₹{partnerTotals.referralIncome.toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {partners.length === 0 ? (
+                <p className="px-5 py-8 text-center text-xs text-slate-500">
+                  No partners yet. Upgrade a user to Partner from the User Registry.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs min-w-[640px]">
+                    <thead>
+                      <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-800">
+                        <th className="px-5 py-3 font-bold">Partner</th>
+                        <th className="px-4 py-3 font-bold">Code</th>
+                        <th className="px-4 py-3 font-bold text-center">Users</th>
+                        <th className="px-4 py-3 font-bold text-center">Sharing trades</th>
+                        <th className="px-4 py-3 font-bold text-center">Paid</th>
+                        <th className="px-5 py-3 font-bold text-right">Referral income</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {partners.map((p) => (
+                        <tr key={p.id} className="border-b border-slate-800/60 last:border-0">
+                          <td className="px-5 py-3">
+                            <p className="font-semibold text-slate-200">{p.name}</p>
+                            <p className="text-[11px] text-slate-500">{p.email}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            {p.referralCode
+                              ? <span className="font-mono text-[11px] text-violet-300">{p.referralCode}</span>
+                              : <span className="text-slate-600">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center font-bold text-slate-200">{p.linkedUsers}</td>
+                          {/* Consent is per user, so this is always <= Users. */}
+                          <td className="px-4 py-3 text-center text-slate-400">{p.sharingTrades}</td>
+                          <td className="px-4 py-3 text-center text-slate-400">{p.paidReferrals}</td>
+                          <td className="px-5 py-3 text-right font-extrabold text-emerald-400">
+                            ₹{Number(p.referralIncome || 0).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           <SubAdminConsole subAdminId={myRole === 'SUB_ADMIN' ? undefined : (assignFor?.id || undefined)} />
           {myRole !== 'SUB_ADMIN' && !assignFor && (
             <p className="text-[11px] text-slate-500">
