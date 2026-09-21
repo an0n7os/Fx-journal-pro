@@ -845,7 +845,7 @@ export default function App() {
       chart: 'Live Chart | FX Journal Pro',
       fxnews: 'FX News & Economic Calendar | FX Journal Pro',
       tools: 'Trading Tools & Calculators | FX Journal Pro',
-      insights: 'AI Trade Mentor | FX Journal Pro',
+      insights: 'Heyza AI | FX Journal Pro',
       settings: 'Account Settings | FX Journal Pro',
       admin: 'Admin Panel | FX Journal Pro',
     };
@@ -3970,7 +3970,7 @@ export default function App() {
     {
       label: 'Tools & AI',
       items: [
-        { id: 'insights', label: 'AI Mentor', icon: Brain, pro: true },
+        { id: 'insights', label: 'Heyza', icon: Brain, pro: true },
         { id: 'tools', label: 'Tools', icon: Wrench },
         { id: 'settings', label: 'Settings', icon: Settings },
       ]
@@ -4171,7 +4171,7 @@ export default function App() {
                     onClick={() => { setActiveTab('insights'); setShowMobileNavProfile(false); }}
                     className="profile-menu-item w-full text-left px-3 py-2.5 text-sm text-slate-700 dark:text-slate-300 rounded-xl flex items-center gap-2.5"
                   >
-                    <Brain className="h-4 w-4 text-slate-400 dark:text-slate-500" /> AI Mentor
+                    <Brain className="h-4 w-4 text-slate-400 dark:text-slate-500" /> Heyza AI
                     {!isProActive && (
                       <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-violet-500/12 border border-violet-500/25 px-1.5 py-px text-[8px] font-extrabold uppercase tracking-wider text-violet-600 dark:text-violet-300">
                         <Lock className="h-2 w-2" /> Pro
@@ -4468,7 +4468,7 @@ export default function App() {
                                   activeTab === 'fxnews' ? 'FX News' :
                                     activeTab === 'settings' ? 'Settings' :
                                       activeTab === 'tools' ? 'Tools' :
-                                        activeTab === 'insights' ? 'AI Mentor' :
+                                        activeTab === 'insights' ? 'Heyza' :
                                           activeTab === 'partner' ? 'Partner Portal' : (adminRole === 'SUB_ADMIN' ? 'PARTNER PORTAL' : 'Admin Panel')}
                   </h1>
                   <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 sm:line-clamp-1">
@@ -4482,7 +4482,7 @@ export default function App() {
                                 activeTab === 'settings' ? 'Configure portfolio guard, import tools, and co-pilot preferences.' :
                                   activeTab === 'tools' ? 'Precision calculators to plan your trades with confidence.' :
                                     activeTab === 'fxnews' ? 'Stay updated with the latest market-moving forex news and economic events.' :
-                                      activeTab === 'insights' ? 'Analyze your psychology and get actionable coaching.' :
+                                      activeTab === 'insights' ? 'Your personal AI trading coach & mindset guide' :
                                         activeTab === 'partner' ? 'Your referral network, and the users who joined through it.' : (adminRole === 'SUB_ADMIN' ? 'Mentor & partner operations portal, assigned traders inspection and performance analytics.' : 'Administrative system configs.')}
                   </p>
                 </div>
@@ -7509,7 +7509,7 @@ export default function App() {
           { id: 'calendar', icon: Calendar, label: 'Calendar' },
           { id: 'chart', icon: LineChart, label: 'Live Chart' },
           { id: 'tools', icon: Wrench, label: 'Tools' },
-          { id: 'insights', icon: Brain, label: 'AI Mentor' },
+          { id: 'insights', icon: Brain, label: 'Heyza' },
           { id: 'settings', icon: Settings, label: 'Settings' },
           ...(isPartner ? [{ id: 'partner', icon: Users, label: 'Partner Portal' }] : []),
           ...(isAdmin && !isPartner ? [{ id: 'admin', icon: Shield, label: 'Admin Panel' }] : []),
