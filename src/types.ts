@@ -130,6 +130,7 @@ export interface NotebookNote {
   isFavourite?: boolean;
   isArchived?: boolean;
   isTrash?: boolean;
+  images?: string[];
   createdAt: string;
   updatedAt: string;
 }
