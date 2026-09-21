@@ -2014,6 +2014,32 @@ export default function App() {
         setAccounts(accsData.accounts || []);
       } else {
         const errorData = await res.json();
+        // The account this form was pointing at is gone — deleted elsewhere,
+        // or the database moved under us. Resync and retry once, rather than
+        // leaving the trader staring at a dialog about an account they did
+        // not know had changed.
+        if (errorData.code === 'ACCOUNT_STALE') {
+          const fresh = errorData.accounts || [];
+          setAccounts(fresh);
+          const nextId = fresh[0]?.id || null;
+          setSelectedAccountId(nextId);
+          if (nextId) {
+            const retry = await authFetch('/api/trades', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...tradeData, accountId: nextId }),
+            });
+            if (retry.ok) {
+              setShowTradeModal(false);
+              setEditingTradeId(null);
+              await fetchTradesAndParams(nextId);
+              const accsRes = await authFetch('/api/accounts');
+              const accsData = await accsRes.json();
+              setAccounts(accsData.accounts || []);
+              return;
+            }
+          }
+        }
         alert(errorData.error || 'Error saving trade record');
       }
     } catch (err: any) {

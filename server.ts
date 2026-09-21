@@ -4108,11 +4108,57 @@ app.post('/api/trades', async (req, res) => {
   const ownAccounts = (db.accounts || []).filter((acc: any) => acc.userId === currentUser.id);
   if (accountId) {
     const requestedAccount = db.accounts.find((acc: any) => acc.id === accountId);
-    if (!requestedAccount) {
-      return res.status(404).json({ error: 'Account not found' });
-    }
-    if (requestedAccount.userId !== currentUser.id) {
+    if (requestedAccount && requestedAccount.userId !== currentUser.id) {
       return res.status(403).json({ error: 'You can only add trades to your own accounts.' });
+    }
+    if (!requestedAccount) {
+      // No account of the caller's carries this id. Two very different causes,
+      // and req.userDb cannot tell them apart: it is scoped to the caller, so
+      // someone else's account is not in it to be found — which is what makes
+      // a cross-account write impossible, rather than the check above, which
+      // never fires. So ask whether the id exists at all before answering.
+      //
+      // Only on this error path, so the extra lookup costs nothing in normal
+      // use.
+      let existsElsewhere = false;
+      if (!useSupabase) {
+        try {
+          existsElsewhere = (loadDatabaseFromFile()?.accounts || [])
+            .some((a: any) => a.id === accountId);
+        } catch { /* treated as "gone" below */ }
+        if (!existsElsewhere) {
+          for (const cached of userDatabases.values()) {
+            if ((cached?.accounts || []).some((a: any) => a.id === accountId)) {
+              existsElsewhere = true;
+              break;
+            }
+          }
+        }
+      } else {
+        const { data } = await supabase
+          .from('trading_accounts').select('id').eq('id', accountId).maybeSingle();
+        existsElsewhere = !!data;
+      }
+
+      if (existsElsewhere) {
+        return res.status(403).json({ error: 'You can only add trades to your own accounts.' });
+      }
+
+      // The account is gone — deleted in another tab, or the database was
+      // restored underneath an open page. The fallback below, which would
+      // otherwise pick their primary account, is unreachable from here, so
+      // this used to answer a bare "Account not found": a dead end, since the
+      // same request with no accountId at all succeeds.
+      //
+      // Silently writing to a different account than the one asked for would
+      // be worse than refusing, so the response names what changed and
+      // carries the caller's current list. The client resyncs from it and
+      // retries once against an account that does exist.
+      return res.status(409).json({
+        error: 'That trading account no longer exists. Your account list has been refreshed — please save again.',
+        code: 'ACCOUNT_STALE',
+        accounts: ownAccounts.map((a: any) => ({ id: a.id, name: a.name })),
+      });
     }
   }
 
