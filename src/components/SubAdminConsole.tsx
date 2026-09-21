@@ -195,12 +195,24 @@ export default function SubAdminConsole({
   const [search, setSearch] = useState('');
   const [accessDenied, setAccessDenied] = useState(false);
 
+  const getAuthHeaders = () => {
+    const headers: Record<string, string> = {};
+    const userId = sessionStorage.getItem('auth_user_id');
+    const email = sessionStorage.getItem('auth_email');
+    if (userId) headers['x-auth-user-id'] = userId;
+    if (email) headers['x-auth-email'] = email;
+    return headers;
+  };
+
   const loadOverview = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const query = subAdminId ? `?subAdminId=${encodeURIComponent(subAdminId)}` : '';
-      const res = await fetch(`/api/subadmin/overview${query}`, { credentials: 'include' });
+      const res = await fetch(`/api/subadmin/overview${query}`, {
+        credentials: 'include',
+        headers: getAuthHeaders()
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || 'Could not load your users.');
@@ -220,7 +232,10 @@ export default function SubAdminConsole({
     let cancelled = false;
     setDetailLoading(true);
     setAccessDenied(false);
-    fetch(`/api/subadmin/user/${encodeURIComponent(openUserId)}`, { credentials: 'include' })
+    fetch(`/api/subadmin/user/${encodeURIComponent(openUserId)}`, {
+      credentials: 'include',
+      headers: getAuthHeaders()
+    })
       .then(async (res) => {
         const body = await res.json().catch(() => ({}));
         if (res.status === 403 && body.code === 'TRADE_ACCESS_DENIED') {
@@ -260,8 +275,7 @@ export default function SubAdminConsole({
           {detail && (
             <>
               <div>
-                <h3 className="text-base font-extrabold text-white leading-tight">{detail.user?.name || detail.user?.email}</h3>
-                <p className="text-[11px] text-slate-500">{detail.user?.email}</p>
+                <h3 className="text-base font-extrabold text-white leading-tight">{detail.user?.name || 'Trader'}</h3>
               </div>
               <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${
                 detail.user?.isPro
@@ -523,8 +537,8 @@ export default function SubAdminConsole({
           >
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="min-w-0">
-                <p className="font-bold text-white text-sm truncate">{u.name}</p>
-                <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
+                <p className="font-bold text-white text-sm truncate">{u.name || 'Trader'}</p>
+                <p className="text-[11px] text-slate-500 truncate">{u.isPro ? 'Pro Member' : 'Free Member'}</p>
               </div>
               <span className={`shrink-0 text-[9px] font-bold px-2 py-0.5 rounded-full border ${
                 u.isPro

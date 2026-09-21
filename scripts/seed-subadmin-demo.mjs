@@ -12,7 +12,7 @@ import bcrypt from 'bcryptjs';
 
 const DB = path.resolve('db.json');
 const BACKUP = path.resolve('db.json.bak');
-const PASSWORD = process.env.DEV_ADMIN_PASSWORD?.trim() || 'LocalAdmin123';
+const PASSWORD = process.env.DEV_ADMIN_PASSWORD?.trim() || 'Demo@12345';
 
 if (!fs.existsSync(DB)) {
   console.error('db.json not found. Start the server once (npm run dev) so it creates one.');

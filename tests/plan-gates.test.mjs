@@ -37,7 +37,7 @@ const stamp = Date.now();
 // db.json was written. Hardcoding it here meant that changing the seed
 // password silently turned every assertion below into a failure, because the
 // admin login returned no cookie and nothing after it could run.
-const adminPassword = process.env.DEV_ADMIN_PASSWORD?.trim() || 'LocalAdmin123';
+const adminPassword = process.env.DEV_ADMIN_PASSWORD?.trim() || 'Demo@12345';
 const admin = await signIn('admin@axyfx.com', adminPassword);
 ok('setup: signed in as super admin', !!admin.cookie);
 const free = await signIn(`plan_free_${stamp}@example.com`);

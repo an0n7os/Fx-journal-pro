@@ -9,8 +9,27 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-html {
+html,
+body {
   scroll-behavior: smooth;
+  overscroll-behavior-x: none;
+}
+
+/* Ensure browser autofill stays seamlessly dark on dark inputs */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus,
+.dark input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #090d16 inset !important;
+  box-shadow: 0 0 0 1000px #090d16 inset !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  color: #f8fafc !important;
+  caret-color: #f8fafc !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 @keyframes fade-up {
@@ -843,6 +862,34 @@ html.dark #ai-mentor-card input[type="text"],
 html.dark #ai-mentor-card input[type="text"]::placeholder,
 .dark #ai-mentor-card input[type="text"]::placeholder {
   color: #475569 !important;
+}
+
+/* AI Mentor Send Button - Vibrant, never dim */
+#ai-mentor-card .ai-send-btn {
+  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #2563eb 100%) !important;
+  color: #ffffff !important;
+  opacity: 1 !important;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+}
+
+#ai-mentor-card .ai-send-btn:hover {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #3b82f6 100%) !important;
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.65) !important;
+  transform: scale(1.06) !important;
+}
+
+#ai-mentor-card .ai-send-btn svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  opacity: 1 !important;
+}
+
+/* User Chat Bubble */
+#ai-mentor-card .user-chat-bubble {
+  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(124, 58, 237, 0.3) !important;
 }
 
 @keyframes flame-flicker {
@@ -2252,6 +2299,7 @@ html.dark .bg-white .text-slate-400:only-child {
     padding: 18px !important;
   }
 }
+
 /* ── Phone touch targets and legibility ─────────────────────────────────
    Audited at 375px: action buttons were 34px tall and several icon buttons
    were 14px square, well under the ~44px a fingertip needs. Type at 9.5px
@@ -2324,10 +2372,10 @@ html.dark .dx-glass::before {
   right: 0;
   height: 1px;
   background: linear-gradient(90deg,
-    transparent,
-    rgb(var(--dash-accent-hi) / .60) 30%,
-    rgb(var(--dash-accent-hi) / .60) 70%,
-    transparent);
+      transparent,
+      rgb(var(--dash-accent-hi) / .60) 30%,
+      rgb(var(--dash-accent-hi) / .60) 70%,
+      transparent);
   pointer-events: none;
   z-index: 1;
 }
@@ -2337,8 +2385,8 @@ html.dark .dx-glass::before {
 html.dark .dx-glass-tile {
   background-color: rgba(255, 255, 255, .035) !important;
   background-image: linear-gradient(158deg,
-    rgb(var(--dash-accent) / .10),
-    rgba(255, 255, 255, .008)) !important;
+      rgb(var(--dash-accent) / .10),
+      rgba(255, 255, 255, .008)) !important;
   border-color: rgb(var(--dash-accent-hi) / .15) !important;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -2352,9 +2400,9 @@ html.dark .dx-glass-tile:hover {
 
 html.dark .dx-glass-tile-accent {
   background-image: linear-gradient(150deg,
-    rgb(var(--dash-accent) / .45) 0%,
-    rgb(var(--dash-accent) / .16) 55%,
-    rgba(255, 255, 255, .02) 100%) !important;
+      rgb(var(--dash-accent) / .45) 0%,
+      rgb(var(--dash-accent) / .16) 55%,
+      rgba(255, 255, 255, .02) 100%) !important;
   border-color: rgb(var(--dash-accent-hi) / .45) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .14),
@@ -2368,6 +2416,7 @@ html.dark .dx-glass-tile-accent:hover {
 /* Reduced transparency is an accessibility setting, not a preference:
    honour it by falling back to the flat card. */
 @media (prefers-reduced-transparency: reduce) {
+
   html.dark .dx-glass,
   html.dark .dx-glass-tile {
     backdrop-filter: none !important;
@@ -2411,8 +2460,8 @@ html.dark .dx-nav-idle:hover svg {
 html.dark .dx-nav-active {
   background-color: rgb(var(--dash-accent)) !important;
   background-image: linear-gradient(180deg,
-    rgba(255, 255, 255, .10),
-    rgba(255, 255, 255, 0) 60%) !important;
+      rgba(255, 255, 255, .10),
+      rgba(255, 255, 255, 0) 60%) !important;
   border: 1px solid rgb(var(--dash-accent-hi) / .45) !important;
   color: #ffffff !important;
   box-shadow:
@@ -2468,6 +2517,37 @@ html:not(.dark) .dx-nav-rail-active {
   box-shadow: none;
   color: #1e293b;
 }
+
+/* ── Settings Sidebar Navigation Cards & Active State ────────────────── */
+.settings-nav-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+html.dark .settings-nav-card {
+  background-color: #0b101d !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.5) !important;
+}
+
+.settings-nav-active {
+  background-color: #7c3aed !important;
+  background-image: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 4px 16px -3px rgba(124, 58, 237, 0.45) !important;
+}
+
+.settings-nav-active svg,
+.settings-nav-active span,
+.settings-nav-active div {
+  color: #ffffff !important;
+}
+
+.settings-nav-active .settings-desc {
+  color: #ddd6fe !important;
+}
+
 
 /* ── Rank badge: one accent in both themes ──────────────────────────────
    It used to take the tier's own colour (emerald at Tier 1, blue at Tier 2,
@@ -2685,20 +2765,20 @@ html.dark .dx-hero {
   inset: 0 0 auto 0;
   height: 1px;
   background: linear-gradient(90deg,
-    transparent,
-    rgba(255, 255, 255, .55) 26%,
-    rgba(255, 255, 255, .55) 74%,
-    transparent);
+      transparent,
+      rgba(255, 255, 255, .55) 26%,
+      rgba(255, 255, 255, .55) 74%,
+      transparent);
   pointer-events: none;
   z-index: 2;
 }
 
 html.dark .dx-hero::before {
   background: linear-gradient(90deg,
-    transparent,
-    rgb(var(--dash-accent-hi) / .85) 26%,
-    rgb(var(--dash-accent-hi) / .85) 74%,
-    transparent);
+      transparent,
+      rgb(var(--dash-accent-hi) / .85) 26%,
+      rgb(var(--dash-accent-hi) / .85) 74%,
+      transparent);
 }
 
 /* Two ambient glows instead of the flat white/5 discs that were there before.
@@ -2737,12 +2817,16 @@ html.dark .dx-hero-tile {
 }
 
 @media (prefers-reduced-transparency: reduce) {
+
   html.dark .dx-hero,
   html.dark .dx-hero-tile {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
-  html.dark .dx-hero { background-color: #17102e; }
+
+  html.dark .dx-hero {
+    background-color: #17102e;
+  }
 }
 
 /* ============================================================
@@ -2887,45 +2971,162 @@ html.dark .dx-sentiment-neutral {
    animation; only the vertical axis scrolls.
    ============================================================ */
 .dx-sidebar-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, .35) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .dx-sidebar-scroll::-webkit-scrollbar {
-  width: 6px;
+  display: none;
+  width: 0px;
+  height: 0px;
 }
 
-.dx-sidebar-scroll::-webkit-scrollbar-track {
-  background: transparent;
+/* ============================================================
+   CYBER NEON AUTH CARD (FX Journal Pro Theme Matched)
+   Deep dark frosted glass with FXJP theme ambient backlight:
+   - Violet & Indigo primary neon glow (brand color)
+   - Subtle Trading Emerald & Cyan edge halo (candlestick & profit color)
+   - Micro-dot matrix background pattern matching the dark console
+   - Floating glowing brand star badge
+   - Luminous "Let's start" Violet-Indigo gradient CTA button
+   ============================================================ */
+
+.cyber-matrix-backdrop {
+  background-color: rgba(7, 8, 12, 0.85);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 16px 16px;
 }
 
-.dx-sidebar-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(148, 163, 184, .30);
-  border-radius: 999px;
+.cyber-card-glow-wrap {
+  position: relative;
+  border-radius: 32px;
 }
 
-.dx-sidebar-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(148, 163, 184, .50);
+/* Ambient Backlight Glow - Theme Matched (Violet, Indigo & Trading Emerald) */
+.cyber-card-glow-wrap::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 40px;
+  background: conic-gradient(from 215deg at 50% 50%,
+      #8b5cf6 0deg,
+      #6366f1 85deg,
+      rgba(139, 92, 246, 0.2) 140deg,
+      #06b6d4 210deg,
+      #10b981 250deg,
+      rgba(99, 102, 241, 0.3) 300deg,
+      #8b5cf6 360deg);
+  filter: blur(28px);
+  opacity: 0.85;
+  z-index: 0;
+  pointer-events: none;
+  animation: cyber-glow-pulse 6s ease-in-out infinite alternate;
 }
 
-html.dark .dx-sidebar-scroll {
-  scrollbar-color: rgba(255, 255, 255, .18) transparent;
+/* Sharp subtle neon rim border - Theme Matched */
+.cyber-card-glow-wrap::after {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 33.5px;
+  background: conic-gradient(from 215deg at 50% 50%,
+      rgba(167, 139, 250, 0.95) 0deg,
+      rgba(99, 102, 241, 0.85) 85deg,
+      rgba(255, 255, 255, 0.08) 140deg,
+      rgba(56, 189, 248, 0.8) 215deg,
+      rgba(52, 211, 153, 0.85) 255deg,
+      rgba(255, 255, 255, 0.12) 300deg,
+      rgba(167, 139, 250, 0.95) 360deg);
+  z-index: 1;
+  pointer-events: none;
 }
 
-html.dark .dx-sidebar-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, .16);
-}
-
-html.dark .dx-sidebar-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, .30);
-}
-
-/* On a short window the sidebar's pitch is the first thing to go: the button
-   is what the card exists for, and losing two lines of description is better
-   than losing the button below the fold. 1366x768 laptops land here once
-   browser chrome is taken off, which is why the cut is at 760px. */
-@media (max-height: 760px) {
-  .dx-upsell-blurb {
-    display: none;
+@keyframes cyber-glow-pulse {
+  0% {
+    opacity: 0.75;
+    filter: blur(24px);
+    transform: scale(0.99);
   }
+
+  100% {
+    opacity: 0.95;
+    filter: blur(34px);
+    transform: scale(1.015);
+  }
+}
+
+.cyber-card-surface {
+  position: relative;
+  z-index: 2;
+  background: rgba(11, 13, 19, 0.95);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border-radius: 32px;
+  box-shadow:
+    0 30px 70px -15px rgba(0, 0, 0, 0.95),
+    inset 0 1px 1px rgba(255, 255, 255, 0.15),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.6);
+  background-image:
+    radial-gradient(circle at 12% 12%, rgba(139, 92, 246, 0.15) 0%, transparent 45%),
+    radial-gradient(circle at 88% 88%, rgba(52, 211, 153, 0.08) 0%, transparent 45%),
+    radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 18px 18px;
+}
+
+/* Floating Glowing Hex/Star Badge - Theme Violet & Indigo */
+.cyber-badge-glow {
+  background: linear-gradient(135deg, #a78bfa 0%, #6366f1 100%);
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.65), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+}
+
+/* Reference Button: "Let's start" / Radiant CTA - Theme Matched Violet to Indigo */
+.cyber-btn-cta {
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 55%, #4f46e5 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 25px -3px rgba(124, 58, 237, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-btn-cta:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: 0 12px 34px 0px rgba(124, 58, 237, 0.72), inset 0 1px 1px rgba(255, 255, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.cyber-btn-cta:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+
+/* Input Fields matching dark console theme */
+.cyber-input {
+  background-color: #0e111a;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #f8fafc;
+  border-radius: 18px;
+  padding: 14px 18px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.cyber-input:focus {
+  outline: none;
+  background-color: #131724;
+  border-color: rgba(139, 92, 246, 0.65);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22), inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.cyber-input::placeholder {
+  color: #64748b;
+}
+
+.cyber-input:focus {
+  outline: none;
+  background-color: #131724;
+  border-color: rgba(139, 92, 246, 0.65);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22), inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.cyber-input::placeholder {
+  color: #64748b;
 }

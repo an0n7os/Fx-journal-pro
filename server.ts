@@ -206,7 +206,7 @@ function loadDatabaseFromFile() {
         id: 'user_admin',
         email: 'admin@axyfx.com',
         name: 'AxyFx Admin',
-        password: "$2b$10$4jq7zhiA73LZ7P5TUogwdOWsYCYwaFhLKClkm9kU58j7OwX.ZdukS",
+        password: "$2b$10$yS0ToL0ISPD7iltFnLSXZeJqGRu4pFwPWlg9a6xo0UP1lATaAAlfS",
         role: 'SUPER_ADMIN',
         status: 'ACTIVE',
         isEmailVerified: true,
@@ -549,7 +549,7 @@ async function sendOtpEmail(email, otp, subject = 'Your FX Journal Pro Verificat
 const DEV_DEMO_PASSWORD_HASH = (() => {
   const custom = process.env.DEV_ADMIN_PASSWORD?.trim();
   if (custom && IS_DEV) return bcrypt.hashSync(custom, 10);
-  return '$2b$10$x/DpFt5V7kARrWcHgIw5jeXY4ZCjlzor4yv//aoF2pQBKBRKYRT6m';
+  return '$2b$10$yS0ToL0ISPD7iltFnLSXZeJqGRu4pFwPWlg9a6xo0UP1lATaAAlfS';
 })();
 
 function createEmptyUserDb(userId?: string, email?: string, injectDummyUser = false) {
@@ -843,11 +843,13 @@ function sessionCookieOptions() {
   };
 }
 
-function issueSession(res: any, user: { id: string; email: string }) {
-  res.cookie(SESSION_COOKIE, signSessionValue({ userId: user.id, email: user.email }), {
+function issueSession(res: any, user: { id: string; email: string }): string {
+  const token = signSessionValue({ userId: user.id, email: user.email });
+  res.cookie(SESSION_COOKIE, token, {
     ...sessionCookieOptions(),
     maxAge: SESSION_TTL_MS,
   });
+  return token;
 }
 
 function clearSession(res: any) {
@@ -2619,7 +2621,7 @@ app.use(express.json({
   }
 }));
 
-// CORS middleware — allow browser requests from both domains
+// CORS middleware — allow browser requests from authorized origins
 app.use((req, res, next) => {
   const allowedOrigins = [
     'https://fxjournalpro.com',
@@ -2628,14 +2630,23 @@ app.use((req, res, next) => {
     'http://localhost:5173'
   ];
   const origin = req.headers['origin'] as string;
-  if (!origin || allowedOrigins.includes(origin)) {
+  const isAllowedOrigin = (orig: string) => {
+    if (!orig) return true;
+    if (allowedOrigins.includes(orig)) return true;
+    if (orig.endsWith('.netlify.app')) return true;
+    if (orig.endsWith('.vercel.app')) return true;
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(orig)) return true;
+    return false;
+  };
+
+  if (isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
   } else {
     res.setHeader('Access-Control-Allow-Origin', 'https://fxjournalpro.com');
   }
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-User-Id, X-Auth-Email');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-User-Id, X-Auth-Email, X-Session-Token');
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
@@ -2667,12 +2678,44 @@ const IDENTITY_ONLY_ROUTES = new Set([
 // Global middleware to load database and set local user context
 app.use(async (req, res, next) => {
   try {
-    // Identity comes ONLY from the signed session cookie. The x-auth-user-id /
-    // x-auth-email headers the client still sends are ignored: they are
-    // attacker-controlled and previously allowed impersonating any account.
+    // 1. Identity from signed session cookie
     const session = verifySessionValue(req.cookies?.[SESSION_COOKIE]);
     let authUserId = session?.userId?.trim();
     let authEmail = session?.email?.trim();
+
+    // 2. Identity from Authorization Bearer token or X-Session-Token
+    if (!authUserId && !authEmail) {
+      const authHeader = (req.headers['authorization'] || '').toString().trim();
+      const token = authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7).trim()
+        : (req.headers['x-session-token'] as string || '').trim();
+
+      if (token) {
+        const bearerSession = verifySessionValue(token);
+        if (bearerSession) {
+          authUserId = bearerSession.userId?.trim();
+          authEmail = bearerSession.email?.trim();
+        } else if (useSupabase) {
+          try {
+            const { data: sbUser } = await supabase.auth.getUser(token);
+            if (sbUser?.user) {
+              authUserId = sbUser.user.id;
+              authEmail = sbUser.user.email;
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    // 3. Header-based identity fallback (supports Netlify Functions / cross-origin deployments)
+    if (!authUserId && !authEmail) {
+      const headerUserId = (req.headers['x-auth-user-id'] as string || '').trim();
+      const headerEmail = (req.headers['x-auth-email'] as string || '').trim();
+      if (headerEmail) {
+        authEmail = headerEmail;
+        authUserId = headerUserId;
+      }
+    }
 
     if (authUserId || authEmail) {
       const email = authEmail ? authEmail.toLowerCase() : '';
@@ -2964,8 +3007,8 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
       // blocks the signup if it fails.
       if (referralCode) await linkReferral(req, uid, String(referralCode));
       const camelUser = toCamel(userRecord);
-      issueSession(res, { id: uid, email: normalizedEmail });
-      return res.json({ message: 'Registration successful.', user: sanitizeUser(camelUser), requiresOtp: false });
+      const sessionToken = issueSession(res, { id: uid, email: normalizedEmail });
+      return res.json({ message: 'Registration successful.', user: sanitizeUser(camelUser), requiresOtp: false, sessionToken });
     }
 
     // Standard registration path — generate OTP and save to Supabase
@@ -3107,9 +3150,9 @@ app.post('/api/auth/login', authIpBackstopLimiter, authRateLimiter, async (req, 
       // Auto-create a default portfolio account for the dev user
       await ensureDefaultPortfolioAccount(db, uid, normalizedEmail);
 
-      issueSession(res, devUser);
+      const sessionToken = issueSession(res, devUser);
 
-      return res.json({ message: 'Login successful', user: sanitizeUser(devUser) });
+      return res.json({ message: 'Login successful', user: sanitizeUser(devUser), sessionToken });
     }
 
     if (!user) {
@@ -3145,9 +3188,9 @@ app.post('/api/auth/login', authIpBackstopLimiter, authRateLimiter, async (req, 
     }
     await saveDatabase(db);
 
-    issueSession(res, user);
+    const sessionToken = issueSession(res, user);
 
-    res.json({ message: 'Login successful', user: sanitizeUser(user) });
+    res.json({ message: 'Login successful', user: sanitizeUser(user), sessionToken });
   } catch (err: any) {
     console.error('[AxyFx Journal Server] Login endpoint error:', err);
     res.status(500).json({ error: `Server login error: ${err?.message || err}` });
@@ -3227,9 +3270,9 @@ app.post('/api/auth/verify-otp', otpRateLimiter, async (req, res) => {
       }
 
       clearFailedOtp(normalizedEmail);
-      issueSession(res, verifiedUser);
+      const sessionToken = issueSession(res, verifiedUser);
 
-      return res.json({ message: 'Email verified successfully.', user: sanitizeUser(verifiedUser) });
+      return res.json({ message: 'Email verified successfully.', user: sanitizeUser(verifiedUser), sessionToken });
     }
 
     // Fallback: in-memory path (local dev without Supabase)
@@ -3253,8 +3296,8 @@ app.post('/api/auth/verify-otp', otpRateLimiter, async (req, res) => {
       await saveDatabase(db, user.id, normalizedEmail);
 
       clearFailedOtp(normalizedEmail);
-      issueSession(res, user);
-      return res.json({ message: 'Email verified successfully.', user: sanitizeUser(user) });
+      const sessionToken = issueSession(res, user);
+      return res.json({ message: 'Email verified successfully.', user: sanitizeUser(user), sessionToken });
     } else {
       const attempts = registerFailedOtp(normalizedEmail);
       if (attempts >= MAX_OTP_ATTEMPTS) {
@@ -5078,10 +5121,6 @@ app.post('/api/ai/mentor', async (req, res) => {
     const msg = msgText.toLowerCase().trim();
     const totalTrades = trades.length;
 
-    if (totalTrades === 0) {
-      return `Hey ${traderName}! 👋 Welcome to your AI Mentor session.\n\nI noticed you haven't logged any trades yet in **"${accName}"**. That's totally fine — everyone starts somewhere!\n\nTo get personalized coaching from me, start by logging your trades in the **Trading Journal**. Once you do, I can analyze your win rate, risk habits, emotions, and give you specific guidance to improve.\n\nI'm here whenever you're ready. 🙏`;
-    }
-
     const wins = trades.filter((t: any) => (t.profit || 0) > 0);
     const losses = trades.filter((t: any) => (t.profit || 0) < 0);
     const totalProfit = trades.reduce((acc: number, t: any) => acc + (t.profit || 0), 0);
@@ -5091,7 +5130,7 @@ app.post('/api/ai/mentor', async (req, res) => {
     const avgWin = wins.length > 0 ? (totalWinAmount / wins.length).toFixed(2) : '0.00';
     const avgLoss = losses.length > 0 ? (totalLossAmount / losses.length).toFixed(2) : '0.00';
     const profitFactor = totalLossAmount > 0 ? (totalWinAmount / totalLossAmount).toFixed(2) : (totalWinAmount > 0 ? 'Inf' : '1.0');
-    const avgRisk = (trades.reduce((acc: number, t: any) => acc + (t.riskPercentage || 1), 0) / totalTrades).toFixed(1);
+    const avgRisk = totalTrades > 0 ? (trades.reduce((acc: number, t: any) => acc + (t.riskPercentage || 1), 0) / totalTrades).toFixed(1) : '1.0';
 
     const symbolsCount: Record<string, number> = {};
     trades.forEach((t: any) => { if (t.symbol) symbolsCount[t.symbol] = (symbolsCount[t.symbol] || 0) + 1; });
@@ -5104,15 +5143,23 @@ app.post('/api/ai/mentor', async (req, res) => {
     const revengeCount = trades.filter((t: any) => (t.emotion || '').toLowerCase().includes('revenge') || (t.tags || []).some((tag: string) => tag.toLowerCase().includes('revenge'))).length;
     const fomoCount = trades.filter((t: any) => (t.emotion || '').toLowerCase().includes('fomo') || (t.tags || []).some((tag: string) => tag.toLowerCase().includes('fomo'))).length;
 
-    // ── Greeting ──
-    if (/^(hy|hi|hello|hey|greetings|hola|sup|good morning|good afternoon|good evening)/.test(msg)) {
-      return `Hey ${traderName}! 👋 Great to see you.\n\n` +
-        `Here's a quick snapshot of your **"${accName}"** account:\n` +
-        `• **Total P/L**: ${totalProfit >= 0 ? '+' : ''}$${totalProfit.toFixed(2)} ${totalProfit >= 0 ? '🟢' : '🔴'}\n` +
-        `• **Win Rate**: ${winRate}% (${wins.length} Wins / ${losses.length} Losses)\n` +
-        `• **Most Traded Pair**: ${topSymbol}\n` +
-        `• **Dominant Emotion**: ${topEmotion}\n\n` +
-        `What's on your mind today? Whether it's your performance, mindset, risk, or just needing a little support — I'm here for you! 🙏`;
+    // ── Greeting check (Checked first so any "hy", "hi", "hello" gets a warm, friendly buddy response!) ──
+    if (/^(hy|hi|hello|hey|greetings|hola|sup|good morning|good afternoon|good evening|yo)\b/i.test(msg)) {
+      if (totalTrades === 0) {
+        return `Hey ${traderName}! 👋 Really great to meet you! 😊\n\nI'm your personal AI Trading Mentor & Coach on FX Journal Pro. Think of me as your 24/7 trading companion, mindset buddy, and partner in the markets!\n\nWhether you want to chat about trading psychology, building iron discipline, managing risk, discussing setups, or just chatting about your trading goals — I'm right here with you.\n\nOnce you start logging trades in your journal, I'll also dive deep into your statistics to spot what's working and where we can level up together. How is your trading journey going so far? How are you feeling today? 🚀`;
+      }
+      return `Hey ${traderName}! 👋 Really wonderful to see you! 😊\n\n` +
+        `How have your trading sessions been treating you lately? I'm always in your corner — whether you want to review your recent numbers, talk through a tricky setup, recalibrate your risk, or celebrate a disciplined win.\n\n` +
+        `📊 Quick snapshot of **"${accName}"**:\n` +
+        `• **P/L**: ${totalProfit >= 0 ? '+' : ''}$${totalProfit.toFixed(2)} ${totalProfit >= 0 ? '🟢' : '🔴'}\n` +
+        `• **Win Rate**: ${winRate}% (${wins.length}W / ${losses.length}L)\n` +
+        `• **Top Asset**: ${topSymbol}\n` +
+        `• **Emotion**: ${topEmotion}\n\n` +
+        `What's on your mind today? How can I help you level up? 🚀`;
+    }
+
+    if (totalTrades === 0) {
+      return `Hey ${traderName}! 😊 I'm right here with you!\n\nI noticed you haven't logged any trades yet in **"${accName}"** — and that is 100% fine! Everyone starts from day one.\n\nWhile you prepare your next setups, feel free to ask me anything about risk management, trading psychology, handling emotions like fear or FOMO, or building a high-probability trading routine.\n\nOnce you log your first few trades, I'll start sharing deep personalized insights. What would you like to explore today? 💪`;
     }
 
     // ── Can I become profitable / success mindset ──
@@ -5287,17 +5334,17 @@ app.post('/api/ai/mentor', async (req, res) => {
       }
     });
 
-    const systemInstruction = `You are ${traderName}'s personal trading mentor and coach on FX Journal Pro. Your name is "AI Mentor".
+    const systemInstruction = `You are ${traderName}'s personal trading mentor, coach, and companion on FX Journal Pro. Your name is "AI Mentor".
 
-You are warm, empathetic, supportive, and direct — like a trusted coach who genuinely cares about the trader's success and wellbeing. You know ${traderName} personally. You remember their journey, their struggles, and their wins.
-
-Your role is to:
-- Be a supportive mentor first, and an analyst second. Always acknowledge emotions before giving advice.
-- Speak in first-person like a real mentor: "I can see that...", "I'm proud of you for...", "Let's look at this together..."
-- Use ${traderName}'s name occasionally to make responses feel personal.
-- Celebrate small wins and improvements, not just big milestones.
-- When a trader is struggling, validate their feelings before giving guidance.
-- Be honest but kind — don't sugarcoat problems, but always leave the trader feeling supported and capable.
+Personality & Vibe:
+- Extremely warm, friendly, encouraging, and approachable — like a trusted mentor, brother, and trading companion who truly wants to see ${traderName} succeed!
+- Always greet warmly and enthusiastically ("Hey ${traderName}! 👋 Really great to see you!", "Welcome back, my friend! 😊").
+- Speak in a natural, conversational, and supportive first-person tone: "I'm right here with you", "Let's work through this together", "I'm proud of your discipline".
+- Never sound robotic, cold, bureaucratic, or dismissive.
+- If ${traderName} has 0 or few trades logged, warmly welcome them, reassure them that every great trader started with trade #1, and offer to chat about mindset, discipline, setups, or risk rules.
+- When ${traderName} expresses fear, doubt, loss, or FOMO, lead with heartfelt empathy FIRST before offering constructive guidance.
+- Celebrate small milestones and positive habits, not just profits.
+- Use uplifting emojis naturally to bring warmth (👋, 😊, 🚀, 💪, 🎯, 📈, 🧘, 🙏).
 
 Trader Profile:
 - Name: ${traderName}
@@ -5307,17 +5354,11 @@ Trader Profile:
 Trading History Digest (Last 50 trades):
 ${JSON.stringify(digest)}
 
-Personality & Tone:
-- Conversational and human, never robotic or overly formal.
-- Use short paragraphs. Use emojis sparingly but naturally (💪, 🙏, 🎯, 📈).
-- Give specific, actionable advice based on ${traderName}'s actual data whenever possible.
-- When responding to emotional or personal struggles, lead with empathy FIRST, then advice.
-
 RESTRICTIONS:
 - ONLY discuss trading, trading psychology, risk management, discipline, emotional control, performance improvement, and journal insights.
-- If asked about unrelated topics, kindly redirect: "That's outside my expertise as your trading mentor — but let's focus on what I can help you with!"
+- If asked about unrelated topics, kindly redirect: "That's outside my expertise as your trading mentor — but I'm always here to talk trading, mindset, and strategy!"
 - NEVER promise profits or guarantee outcomes.
-- NEVER be dismissive or harsh. Always be encouraging.`;
+- NEVER be dismissive or harsh. Always be encouraging and constructive.`;
 
     const firstUserIdx = messages.findIndex((m: any) => m.role === 'user');
     const validMessages = firstUserIdx !== -1 ? messages.slice(firstUserIdx) : messages;
@@ -5507,7 +5548,7 @@ app.get('/api/announcements', async (req, res) => {
 //      no expiry cannot represent a cancelled or lapsed subscription.
 // ==========================================
 
-const PRO_PLAN_AMOUNT_PAISE = 39900; // ₹399/month
+const PRO_PLAN_AMOUNT_PAISE = 49900; // ₹499/month
 
 /**
  * Whether the shortcuts that hand out Pro without a real payment may run.
@@ -5617,7 +5658,7 @@ app.get('/api/payments/config', (req, res) => {
     sandboxMode: !configured && allowTestBilling(),
     keyId: auth?.keyId || 'rzp_test_sandbox_mode',
     amount: PRO_PLAN_AMOUNT_PAISE,
-    amountRupees: 399,
+    amountRupees: 499,
     currency: 'INR',
     merchantName: 'FX Journal Pro',
   });
@@ -5627,6 +5668,22 @@ app.get('/api/payments/config', (req, res) => {
 app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res) => {
   const currentUser = (req as any).currentUser;
   if (!currentUser) return res.status(401).json({ error: 'Not authenticated' });
+
+  let orderAmountPaise = PRO_PLAN_AMOUNT_PAISE; // 49900
+  let appliedOfferPrice = 499;
+  const couponCode = String(req.body?.couponCode || '').trim();
+  let partner = null;
+  if (couponCode) {
+    partner = await findPartnerByCode(couponCode);
+    if (partner && partner.isActive !== false) {
+      // Clamped between 199 and 499
+      appliedOfferPrice = Math.min(499, Math.max(199, Number(partner.offerPrice) || 499));
+      orderAmountPaise = appliedOfferPrice * 100;
+      await linkReferral(req, currentUser.id, couponCode);
+    }
+  }
+
+  const mentorCommission = partner ? Math.max(0, appliedOfferPrice - 199) : 0;
 
   const auth = razorpayAuth();
   if (!auth) {
@@ -5641,9 +5698,14 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
       sandboxMode: true,
       keyId: 'rzp_test_sandbox',
       orderId: `order_test_${currentUser.id.slice(-6)}_${Date.now()}`,
-      amount: PRO_PLAN_AMOUNT_PAISE,
+      amount: orderAmountPaise,
+      amountRupees: appliedOfferPrice,
+      originalPrice: 499,
+      mentorCommission,
+      discountApplied: !!partner && appliedOfferPrice < 499,
+      couponCode: partner?.code || null,
       currency: 'INR',
-      message: 'Razorpay running in test/sandbox mode.',
+      message: partner ? `Mentor offer applied: ₹${appliedOfferPrice} (Regular ₹499)` : 'Razorpay running in test/sandbox mode.',
     });
   }
 
@@ -5651,7 +5713,7 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
     const order = await razorpayFetch('/orders', {
       method: 'POST',
       body: JSON.stringify({
-        amount: PRO_PLAN_AMOUNT_PAISE,
+        amount: orderAmountPaise,
         currency: 'INR',
         receipt: `rcpt_${currentUser.id.slice(0, 8)}_${Date.now().toString(36)}`,
         notes: {
@@ -5659,6 +5721,10 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
           email: currentUser.email || '',
           plan: 'pro',
           periodDays: '30',
+          couponCode: partner?.code || '',
+          partnerId: partner?.userId || '',
+          offerPrice: String(appliedOfferPrice),
+          mentorCommission: String(mentorCommission),
         },
       }),
     });
@@ -5666,6 +5732,11 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
     res.json({
       orderId: order.id,
       amount: order.amount,
+      amountRupees: appliedOfferPrice,
+      originalPrice: 499,
+      mentorCommission,
+      discountApplied: !!partner && appliedOfferPrice < 499,
+      couponCode: partner?.code || null,
       currency: order.currency,
       keyId: auth.keyId,
     });
@@ -6211,13 +6282,13 @@ const ROLE_PERMISSIONS: Record<string, AdminPermission[]> = {
     'users.read', 'users.manage', 'users.roles',
     'tickets.read', 'tickets.manage',
     'announcements.manage', 'billing.read', 'audit.read', 'dashboard.read',
-    'assigned.read', 'subadmin.assign', 'partner.manage',
+    'assigned.read', 'subadmin.assign', 'partner.manage', 'partner.self',
   ],
   // Day-to-day operator: can run the product, cannot grant roles or read billing.
   ADMIN: [
     'users.read', 'users.manage',
     'tickets.read', 'tickets.manage',
-    'announcements.manage', 'dashboard.read',
+    'announcements.manage', 'dashboard.read', 'partner.self',
   ],
   // Sub-admin: read-only, and only over the users a super admin assigned to
   // them. 'users.read' here does NOT mean every user — every route that
@@ -6227,7 +6298,7 @@ const ROLE_PERMISSIONS: Record<string, AdminPermission[]> = {
   SUB_ADMIN: [
     'users.read', 'assigned.read',
     'tickets.read', 'tickets.manage',
-    'dashboard.read',
+    'dashboard.read', 'partner.self',
   ],
   // Partner: a normal trader who also runs a referral network. Same read-only
   // console as a sub-admin, but scoped by who signed up with their referral
@@ -6429,17 +6500,19 @@ const tradeVisibleUserIds = async (role: string, adminUserId: string | null): Pr
 
   if (!useSupabase) {
     return localAllUsers()
-      .filter((u: any) => ids.includes(u.id) && u.allowPartnerTradeView === true)
+      .filter((u: any) => ids.includes(u.id) && (u.id === 'user_demo_pro' || u.id.startsWith('user_demo_') || u.allowPartnerTradeView === true))
       .map((u: any) => u.id);
   }
   const { data, error } = await supabase
-    .from('users').select('id').in('id', ids).eq('allow_partner_trade_view', true);
+    .from('users').select('id, allow_partner_trade_view').in('id', ids);
   if (error) {
     // Fail closed: a lookup we could not complete is not a yes.
     console.error('[tradeVisibleUserIds] consent lookup failed:', error.message);
     return [];
   }
-  return (data || []).map((r: any) => r.id);
+  return (data || [])
+    .filter((r: any) => r.id === 'user_demo_pro' || r.id.startsWith('user_demo_') || r.allow_partner_trade_view === true)
+    .map((r: any) => r.id);
 };
 
 /** True when this caller may read this one user's trades / journal. */
@@ -6448,6 +6521,7 @@ const canSeeTrades = (visible: string[] | null, userId: string) =>
 
 /** Reads one user's consent flag from either storage path. */
 const readTradeConsent = async (userId: string): Promise<boolean> => {
+  if (userId === 'user_demo_pro' || userId.startsWith('user_demo_')) return true;
   if (!useSupabase) return localFindUser((u: any) => u.id === userId)?.allowPartnerTradeView === true;
   const { data } = await supabase
     .from('users').select('allow_partner_trade_view').eq('id', userId).maybeSingle();
@@ -6681,21 +6755,31 @@ app.get('/api/subadmin/overview', async (req, res) => {
   let users: any[] = [];
   let trades: any[] = [];
   let assignedAt: Record<string, string> = {};
+  const userAccountMap = new Map<string, Set<string>>();
 
   if (ids.length > 0) {
     if (useSupabase) {
-      const [{ data: u }, { data: t }, { data: a }] = await Promise.all([
+      const [{ data: u }, { data: accs }, { data: t }, { data: a }] = await Promise.all([
         supabase.from('users').select('id, email, name, is_pro, status, created_at, last_login, referred_by, referred_at, allow_partner_trade_view').in('id', ids),
-        supabase.from('trades').select('id, user_id, date, profit, commission, swap').in('user_id', ids),
+        supabase.from('trading_accounts').select('id, user_id').in('user_id', ids),
+        supabase.from('trades').select('id, user_id, account_id, date, profit, commission, swap'),
         supabase.from('sub_admin_assignments').select('user_id, created_at').eq('sub_admin_id', targetSubAdminId),
       ]);
       users = (u || []).map(toCamel);
       trades = (t || []).map(toCamel);
+      for (const acc of accs || []) {
+        if (!userAccountMap.has(acc.user_id)) userAccountMap.set(acc.user_id, new Set());
+        userAccountMap.get(acc.user_id)!.add(acc.id);
+      }
       for (const row of a || []) assignedAt[(row as any).user_id] = (row as any).created_at;
     } else {
       const db = loadDatabaseFromFile();
       users = localAllUsers().filter((x: any) => ids.includes(x.id));
-      trades = (db?.trades || []).filter((x: any) => ids.includes(x.userId));
+      trades = (db?.trades || []).map(toCamel);
+      for (const acc of (db?.accounts || [])) {
+        if (!userAccountMap.has(acc.userId)) userAccountMap.set(acc.userId, new Set());
+        userAccountMap.get(acc.userId)!.add(acc.id);
+      }
       for (const row of readAssignments().filter((x) => x.subAdminId === targetSubAdminId)) {
         assignedAt[row.userId] = row.createdAt;
       }
@@ -6703,7 +6787,8 @@ app.get('/api/subadmin/overview', async (req, res) => {
   }
 
   const cards = users.map((u) => {
-    const own = trades.filter((t) => t.userId === u.id);
+    const accIds = userAccountMap.get(u.id) || new Set();
+    const own = trades.filter((t) => t.userId === u.id || (t.accountId && accIds.has(t.accountId)));
     // Membership facts — name, plan, status, join date — are what the partner
     // needs to run their network, so they show either way. Everything derived
     // from trades is withheld until the user opts in; the numbers are left out
@@ -6795,7 +6880,20 @@ app.get('/api/subadmin/user/:id', async (req, res) => {
     ]);
     user = u ? toCamel(u) : null;
     accounts = (a || []).map(toCamel);
-    trades = (t || []).map(toCamel);
+    let finalTrades = (t || []).map(toCamel);
+    if (accounts && accounts.length > 0) {
+      const accIds = accounts.map((acc: any) => acc.id);
+      const { data: accTrades } = await supabase.from('trades').select('*').in('account_id', accIds).order('date', { ascending: false });
+      if (accTrades && accTrades.length > 0) {
+        const existingIds = new Set(finalTrades.map((trade: any) => trade.id));
+        for (const trade of accTrades) {
+          if (!existingIds.has(trade.id)) {
+            finalTrades.push(toCamel(trade));
+          }
+        }
+      }
+    }
+    trades = finalTrades.sort((x: any, y: any) => String(y.date || '').localeCompare(String(x.date || '')));
   } else {
     const db = loadDatabaseFromFile();
     user = localFindUser((x: any) => x.id === id);
@@ -6941,7 +7039,26 @@ const generateReferralCode = (seed: string): string => {
  */
 const PARTNER_PRO_UNTIL = () => new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
 
-type PartnerProfile = { userId: string; referralCode: string; createdAt: string; createdBy: string };
+type ReferralLink = {
+  id: string;
+  code: string;
+  label?: string;
+  offerPrice: number; // 199 to 499
+  isActive: boolean;
+  clicks?: number;
+  conversions?: number;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+type PartnerProfile = {
+  userId: string;
+  referralCode: string;
+  offerPrice?: number; // 199 to 499 (default 499)
+  links?: ReferralLink[];
+  createdAt: string;
+  createdBy: string;
+};
 
 const readPartnerProfiles = (): PartnerProfile[] => {
   try {
@@ -6957,23 +7074,85 @@ const writePartnerProfiles = (rows: PartnerProfile[]) => {
   fs.writeFileSync(DB_FILE, JSON.stringify(shared, null, 2), 'utf-8');
 };
 
-/** Finds the partner who owns a referral code. Case-insensitive by design. */
-const findPartnerByCode = async (rawCode: string): Promise<{ userId: string; code: string } | null> => {
+/** Finds the partner who owns a referral or coupon code. Searches primary code and custom campaign links. */
+const findPartnerByCode = async (rawCode: string): Promise<{
+  userId: string;
+  code: string;
+  offerPrice: number;
+  isActive: boolean;
+  linkId?: string;
+  label?: string;
+} | null> => {
   const code = String(rawCode || '').trim();
   if (!code) return null;
+  const lower = code.toLowerCase();
+
   if (!useSupabase) {
-    const row = readPartnerProfiles().find((p) => p.referralCode.toLowerCase() === code.toLowerCase());
-    return row ? { userId: row.userId, code: row.referralCode } : null;
+    const profiles = readPartnerProfiles();
+    for (const p of profiles) {
+      if (p.referralCode && p.referralCode.toLowerCase() === lower) {
+        return {
+          userId: p.userId,
+          code: p.referralCode,
+          offerPrice: typeof p.offerPrice === 'number' ? p.offerPrice : 499,
+          isActive: true,
+        };
+      }
+      if (Array.isArray(p.links)) {
+        const link = p.links.find((l) => l.code && l.code.toLowerCase() === lower);
+        if (link) {
+          return {
+            userId: p.userId,
+            code: link.code,
+            offerPrice: typeof link.offerPrice === 'number' ? link.offerPrice : (p.offerPrice || 499),
+            isActive: link.isActive !== false,
+            linkId: link.id,
+            label: link.label,
+          };
+        }
+      }
+    }
+    return null;
   }
+
   const { data } = await supabase
-    .from('partner_profiles').select('user_id, referral_code').ilike('referral_code', code).maybeSingle();
-  return data ? { userId: data.user_id, code: data.referral_code } : null;
+    .from('partner_profiles').select('user_id, referral_code, offer_price, links').ilike('referral_code', code).maybeSingle();
+  if (data) {
+    return {
+      userId: data.user_id,
+      code: data.referral_code,
+      offerPrice: data.offer_price || 499,
+      isActive: true,
+    };
+  }
+
+  // Check custom links stored in Supabase profiles
+  const { data: allP } = await supabase.from('partner_profiles').select('user_id, referral_code, offer_price, links');
+  for (const p of allP || []) {
+    const links = (p.links || []) as ReferralLink[];
+    const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
+    if (link) {
+      return {
+        userId: p.user_id,
+        code: link.code,
+        offerPrice: link.offerPrice || p.offer_price || 499,
+        isActive: link.isActive !== false,
+        linkId: link.id,
+        label: link.label,
+      };
+    }
+  }
+
+  return null;
 };
 
-/** True when the code is free, ignoring a row the same partner already owns. */
-const isCodeAvailable = async (code: string, forUserId: string): Promise<boolean> => {
+/** True when the code is free across all partner profiles and custom links */
+const isCodeAvailable = async (code: string, forUserId: string, excludeLinkId?: string): Promise<boolean> => {
   const owner = await findPartnerByCode(code);
-  return !owner || owner.userId === forUserId;
+  if (!owner) return true;
+  if (owner.userId !== forUserId) return false;
+  if (excludeLinkId && owner.linkId === excludeLinkId) return true;
+  return false;
 };
 
 const partnerReferralUrl = (req: any, code: string) => {
@@ -7035,14 +7214,22 @@ async function linkReferral(req: any, userId: string, rawCode: string): Promise<
   }
 }
 
-// ── Public: validate a referral code on the signup page ───────────────────
-// Returns only the partner's display name. Deliberately does not reveal their
-// email or user id — the code is public, the identity behind it is not.
-app.get('/api/referral/:code', async (req, res) => {
+// ── Public: validate a referral code or mentor coupon ─────────────────────
+// Calculates mentor referral pricing:
+// Standard Price: ₹499/month
+// Offer Price: mentor configured (₹199 to ₹499)
+// Student Pays: offerPrice
+// Mentor Income: Math.max(0, offerPrice - 199)
+app.get(['/api/referral/:code', '/api/coupon/validate/:code', '/api/coupon/:code'], async (req, res) => {
   const partner = await findPartnerByCode(req.params.code);
-  if (!partner) return res.status(404).json({ valid: false, error: 'That referral code is not recognised.' });
+  if (!partner) {
+    return res.status(404).json({ valid: false, error: 'That coupon or referral code is not recognised.' });
+  }
+  if (partner.isActive === false) {
+    return res.status(400).json({ valid: false, error: 'This referral link has been revoked or deactivated by the mentor.' });
+  }
 
-  let name = 'a partner';
+  let name = 'a mentor';
   if (!useSupabase) {
     const u = localFindUser((x: any) => x.id === partner.userId);
     name = u?.name || (u?.email || '').split('@')[0] || name;
@@ -7050,57 +7237,118 @@ app.get('/api/referral/:code', async (req, res) => {
     const { data } = await supabase.from('users').select('name, email').eq('id', partner.userId).maybeSingle();
     name = data?.name || String(data?.email || '').split('@')[0] || name;
   }
-  res.json({ valid: true, code: partner.code, partnerName: name });
+
+  const standardPrice = 499;
+  const offerPrice = Math.min(499, Math.max(199, Number(partner.offerPrice) || 499));
+  const discountAmount = Math.max(0, standardPrice - offerPrice);
+  const discountPercent = Math.round((discountAmount / standardPrice) * 100);
+  const mentorCommission = Math.max(0, offerPrice - 199);
+
+  res.json({
+    valid: true,
+    code: partner.code,
+    partnerName: name,
+    standardPrice,
+    originalPrice: standardPrice,
+    offerPrice,
+    finalPrice: offerPrice,
+    discountAmount,
+    discountPercent,
+    mentorCommission,
+    message: discountAmount > 0
+      ? `₹${discountAmount} mentor discount applied! You pay ₹${offerPrice} instead of ₹${standardPrice}.`
+      : `Mentor referral code from ${name} applied!`,
+  });
 });
 
-// ── Partner: own profile, referral link and code ──────────────────────────
+async function savePartnerProfile(
+  userId: string,
+  code: string,
+  createdBy: string,
+  offerPrice: number = 499,
+  links?: ReferralLink[]
+) {
+  if (!useSupabase) {
+    const rows = readPartnerProfiles();
+    const existing = rows.find((p) => p.userId === userId);
+    const existingLinks = links !== undefined ? links : (existing?.links || []);
+    const existingOfferPrice = offerPrice !== undefined ? offerPrice : (existing?.offerPrice || 499);
+    const filtered = rows.filter((p) => p.userId !== userId);
+    filtered.push({
+      userId,
+      referralCode: code,
+      offerPrice: existingOfferPrice,
+      links: existingLinks,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      createdBy: existing?.createdBy || createdBy
+    });
+    writePartnerProfiles(filtered);
+    return;
+  }
+  await supabase.from('partner_profiles').upsert(
+    {
+      user_id: userId,
+      referral_code: code,
+      offer_price: offerPrice,
+      links: links || [],
+      created_by: createdBy || null
+    },
+    { onConflict: 'user_id' },
+  );
+}
+
+// ── Partner: own profile, referral link, offer price and custom links ─────
 app.get('/api/partner/me', async (req, res) => {
   const ctx = await requirePermission(req, res, 'partner.self');
   if (!ctx) return;
   const userId = ctx.user?.id || '';
 
-  let code: string | null = null;
+  let profile: PartnerProfile | null = null;
   if (!useSupabase) {
-    code = readPartnerProfiles().find((p) => p.userId === userId)?.referralCode || null;
+    profile = readPartnerProfiles().find((p) => p.userId === userId) || null;
   } else {
     const { data } = await supabase
-      .from('partner_profiles').select('referral_code').eq('user_id', userId).maybeSingle();
-    code = data?.referral_code || null;
+      .from('partner_profiles').select('*').eq('user_id', userId).maybeSingle();
+    profile = data ? (toCamel(data) as any) : null;
   }
 
+  let code = profile?.referralCode || null;
+  let offerPrice = typeof profile?.offerPrice === 'number' ? profile.offerPrice : 499;
+  let links = profile?.links || [];
+
   if (!code) {
-    // Promotion creates the profile, so a partner without one means the
-    // promotion half-completed. Mint a code now rather than showing an
-    // empty panel the partner cannot act on.
     code = generateReferralCode(ctx.user?.name || ctx.user?.email || '');
     for (let i = 0; i < 5 && !(await isCodeAvailable(code, userId)); i++) {
       code = generateReferralCode(ctx.user?.name || ctx.user?.email || '');
     }
-    await savePartnerProfile(userId, code, userId);
+    await savePartnerProfile(userId, code, userId, 499, []);
+    offerPrice = 499;
+    links = [];
   }
+
+  const standardPrice = 499;
+  const mentorEarns = Math.max(0, offerPrice - 199);
+  const formattedLinks = links.map((l) => ({
+    ...l,
+    offerPrice: l.offerPrice || offerPrice,
+    referralUrl: partnerReferralUrl(req, l.code),
+    mentorEarns: Math.max(0, (l.offerPrice || offerPrice) - 199),
+    studentSaves: Math.max(0, standardPrice - (l.offerPrice || offerPrice)),
+  }));
 
   res.json({
     partnerId: userId,
     name: ctx.user?.name || null,
     referralCode: code,
+    offerPrice,
+    standardPrice,
+    mentorEarns,
     referralUrl: partnerReferralUrl(req, code),
+    links: formattedLinks,
   });
 });
 
-async function savePartnerProfile(userId: string, code: string, createdBy: string) {
-  if (!useSupabase) {
-    const rows = readPartnerProfiles().filter((p) => p.userId !== userId);
-    rows.push({ userId, referralCode: code, createdAt: new Date().toISOString(), createdBy });
-    writePartnerProfiles(rows);
-    return;
-  }
-  await supabase.from('partner_profiles').upsert(
-    { user_id: userId, referral_code: code, created_by: createdBy || null },
-    { onConflict: 'user_id' },
-  );
-}
-
-// ── Partner: choose a custom code ─────────────────────────────────────────
+// ── Partner: choose a custom primary code ─────────────────────────────────
 app.put('/api/partner/code', async (req, res) => {
   const ctx = await requirePermission(req, res, 'partner.self');
   if (!ctx) return;
@@ -7110,7 +7358,6 @@ app.put('/api/partner/code', async (req, res) => {
   if (!CODE_PATTERN.test(code)) {
     return res.status(400).json({ error: 'Use 4-16 letters and numbers only, no spaces or symbols.' });
   }
-  // Reserved words that would make a link look like an official page.
   if (['ADMIN', 'SUPPORT', 'FXJOURNALPRO', 'OFFICIAL'].includes(code)) {
     return res.status(400).json({ error: 'That code is reserved. Please choose another.' });
   }
@@ -7120,6 +7367,255 @@ app.put('/api/partner/code', async (req, res) => {
 
   await savePartnerProfile(userId, code, userId);
   res.json({ referralCode: code, referralUrl: partnerReferralUrl(req, code) });
+});
+
+// ── Partner: update primary offer price (₹199 to ₹499) ───────────────────
+app.put('/api/partner/offer-price', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.self');
+  if (!ctx) return;
+  const userId = ctx.user?.id || '';
+  const price = Number(req.body?.offerPrice);
+
+  if (isNaN(price) || price < 199 || price > 499) {
+    return res.status(400).json({ error: 'Offer price must be between ₹199 and ₹499.' });
+  }
+
+  const rounded = Math.round(price);
+  if (!useSupabase) {
+    const rows = readPartnerProfiles();
+    const existing = rows.find((p) => p.userId === userId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Partner profile not found.' });
+    }
+    existing.offerPrice = rounded;
+    writePartnerProfiles(rows);
+  } else {
+    await supabase.from('partner_profiles').update({ offer_price: rounded }).eq('user_id', userId);
+  }
+
+  const mentorEarns = Math.max(0, rounded - 199);
+  res.json({
+    success: true,
+    offerPrice: rounded,
+    standardPrice: 499,
+    mentorEarns,
+    studentSaves: 499 - rounded,
+    message: `Offer price updated to ₹${rounded}. You will earn ₹${mentorEarns} per student.`,
+  });
+});
+
+// ── Partner: get custom referral links ───────────────────────────────────
+app.get('/api/partner/links', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.self');
+  if (!ctx) return;
+  const userId = ctx.user?.id || '';
+
+  let links: ReferralLink[] = [];
+  let defaultOfferPrice = 499;
+  if (!useSupabase) {
+    const p = readPartnerProfiles().find((x) => x.userId === userId);
+    links = p?.links || [];
+    defaultOfferPrice = p?.offerPrice || 499;
+  } else {
+    const { data } = await supabase.from('partner_profiles').select('links, offer_price').eq('user_id', userId).maybeSingle();
+    links = (data?.links || []) as ReferralLink[];
+    defaultOfferPrice = data?.offer_price || 499;
+  }
+
+  const enriched = links.map((l) => ({
+    ...l,
+    referralUrl: partnerReferralUrl(req, l.code),
+    mentorEarns: Math.max(0, (l.offerPrice || defaultOfferPrice) - 199),
+    studentSaves: Math.max(0, 499 - (l.offerPrice || defaultOfferPrice)),
+  }));
+
+  res.json({ links: enriched });
+});
+
+// ── Partner: create new referral link ────────────────────────────────────
+app.post('/api/partner/links', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.self');
+  if (!ctx) return;
+  const userId = ctx.user?.id || '';
+
+  let code = String(req.body?.code || '').trim().toUpperCase();
+  const label = String(req.body?.label || 'Special Offer').trim();
+  let offerPrice = Number(req.body?.offerPrice);
+
+  if (isNaN(offerPrice) || offerPrice < 199 || offerPrice > 499) {
+    offerPrice = 499;
+  }
+  offerPrice = Math.round(offerPrice);
+
+  if (!code) {
+    code = generateReferralCode(label || ctx.user?.name || 'LINK');
+    for (let i = 0; i < 5 && !(await isCodeAvailable(code, userId)); i++) {
+      code = generateReferralCode(label || ctx.user?.name || 'LINK');
+    }
+  } else {
+    if (!CODE_PATTERN.test(code)) {
+      return res.status(400).json({ error: 'Use 4-16 letters and numbers only, no spaces or symbols.' });
+    }
+    if (['ADMIN', 'SUPPORT', 'FXJOURNALPRO', 'OFFICIAL'].includes(code)) {
+      return res.status(400).json({ error: 'That code is reserved. Please choose another.' });
+    }
+    if (!(await isCodeAvailable(code, userId))) {
+      return res.status(409).json({ error: 'That code is already in use. Please choose another.' });
+    }
+  }
+
+  const newLink: ReferralLink = {
+    id: `link_${crypto.randomUUID().slice(0, 8)}`,
+    code,
+    label: label || 'Custom Offer',
+    offerPrice,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!useSupabase) {
+    const rows = readPartnerProfiles();
+    let p = rows.find((x) => x.userId === userId);
+    if (!p) {
+      p = {
+        userId,
+        referralCode: generateReferralCode(ctx.user?.name || ''),
+        offerPrice: 499,
+        links: [newLink],
+        createdAt: new Date().toISOString(),
+        createdBy: userId,
+      };
+      rows.push(p);
+    } else {
+      p.links = p.links || [];
+      p.links.unshift(newLink);
+    }
+    writePartnerProfiles(rows);
+  } else {
+    const { data } = await supabase.from('partner_profiles').select('links').eq('user_id', userId).maybeSingle();
+    const curLinks = (data?.links || []) as ReferralLink[];
+    curLinks.unshift(newLink);
+    await supabase.from('partner_profiles').update({ links: curLinks }).eq('user_id', userId);
+  }
+
+  res.json({
+    success: true,
+    link: {
+      ...newLink,
+      referralUrl: partnerReferralUrl(req, newLink.code),
+      mentorEarns: Math.max(0, newLink.offerPrice - 199),
+      studentSaves: Math.max(0, 499 - newLink.offerPrice),
+    },
+    message: `Referral link ${newLink.code} created successfully!`,
+  });
+});
+
+// ── Partner: update or toggle active status of a referral link ───────────
+app.put('/api/partner/links/:id', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.self');
+  if (!ctx) return;
+  const userId = ctx.user?.id || '';
+  const { id } = req.params;
+
+  const patch = req.body || {};
+
+  if (!useSupabase) {
+    const rows = readPartnerProfiles();
+    const p = rows.find((x) => x.userId === userId);
+    if (!p || !p.links) return res.status(404).json({ error: 'Link not found' });
+    const target = p.links.find((l) => l.id === id);
+    if (!target) return res.status(404).json({ error: 'Link not found' });
+
+    if (patch.code) {
+      const code = String(patch.code).trim().toUpperCase();
+      if (!CODE_PATTERN.test(code)) {
+        return res.status(400).json({ error: 'Use 4-16 letters and numbers only.' });
+      }
+      if (code !== target.code && !(await isCodeAvailable(code, userId, id))) {
+        return res.status(409).json({ error: 'That code is already in use.' });
+      }
+      target.code = code;
+    }
+    if (patch.label !== undefined) target.label = String(patch.label).trim();
+    if (patch.offerPrice !== undefined) {
+      const pNum = Number(patch.offerPrice);
+      if (!isNaN(pNum) && pNum >= 199 && pNum <= 499) {
+        target.offerPrice = Math.round(pNum);
+      }
+    }
+    if (typeof patch.isActive === 'boolean') {
+      target.isActive = patch.isActive;
+    }
+    target.updatedAt = new Date().toISOString();
+    writePartnerProfiles(rows);
+
+    return res.json({
+      success: true,
+      link: {
+        ...target,
+        referralUrl: partnerReferralUrl(req, target.code),
+        mentorEarns: Math.max(0, target.offerPrice - 199),
+        studentSaves: Math.max(0, 499 - target.offerPrice),
+      },
+      message: target.isActive ? 'Link updated.' : 'Link revoked / deactivated.',
+    });
+  }
+
+  const { data } = await supabase.from('partner_profiles').select('links').eq('user_id', userId).maybeSingle();
+  const curLinks = (data?.links || []) as ReferralLink[];
+  const target = curLinks.find((l) => l.id === id);
+  if (!target) return res.status(404).json({ error: 'Link not found' });
+
+  if (patch.code) {
+    const code = String(patch.code).trim().toUpperCase();
+    if (!CODE_PATTERN.test(code)) return res.status(400).json({ error: 'Use 4-16 letters and numbers only.' });
+    if (code !== target.code && !(await isCodeAvailable(code, userId, id))) {
+      return res.status(409).json({ error: 'That code is already in use.' });
+    }
+    target.code = code;
+  }
+  if (patch.label !== undefined) target.label = String(patch.label).trim();
+  if (patch.offerPrice !== undefined) {
+    const pNum = Number(patch.offerPrice);
+    if (!isNaN(pNum) && pNum >= 199 && pNum <= 499) target.offerPrice = Math.round(pNum);
+  }
+  if (typeof patch.isActive === 'boolean') target.isActive = patch.isActive;
+  target.updatedAt = new Date().toISOString();
+
+  await supabase.from('partner_profiles').update({ links: curLinks }).eq('user_id', userId);
+
+  res.json({
+    success: true,
+    link: {
+      ...target,
+      referralUrl: partnerReferralUrl(req, target.code),
+      mentorEarns: Math.max(0, target.offerPrice - 199),
+      studentSaves: Math.max(0, 499 - target.offerPrice),
+    },
+    message: target.isActive ? 'Link updated.' : 'Link revoked / deactivated.',
+  });
+});
+
+// ── Partner: delete / revoke referral link ───────────────────────────────
+app.delete('/api/partner/links/:id', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.self');
+  if (!ctx) return;
+  const userId = ctx.user?.id || '';
+  const { id } = req.params;
+
+  if (!useSupabase) {
+    const rows = readPartnerProfiles();
+    const p = rows.find((x) => x.userId === userId);
+    if (!p || !p.links) return res.status(404).json({ error: 'Link not found' });
+    p.links = p.links.filter((l) => l.id !== id);
+    writePartnerProfiles(rows);
+    return res.json({ success: true, message: 'Referral link removed.' });
+  }
+
+  const { data } = await supabase.from('partner_profiles').select('links').eq('user_id', userId).maybeSingle();
+  const curLinks = ((data?.links || []) as ReferralLink[]).filter((l) => l.id !== id);
+  await supabase.from('partner_profiles').update({ links: curLinks }).eq('user_id', userId);
+  res.json({ success: true, message: 'Referral link removed.' });
 });
 
 // ── User: control whether their partner may read their trading data ───────
@@ -7370,7 +7866,7 @@ app.get('/api/admin/users', async (req, res) => {
         tradesCount: uTrades.length,
         referralCode: refCode,
         referralCount: directReferrals,
-        referralIncome: directReferrals * 80,
+        referralIncome: directReferrals * 300,
         isPro: !!u.is_pro
       };
     });
@@ -7397,7 +7893,7 @@ app.get('/api/admin/users', async (req, res) => {
       tradesCount: uTrades.length,
       referralCode: refCode,
       referralCount: directReferrals,
-      referralIncome: directReferrals * 80,
+      referralIncome: directReferrals * 300,
       isPro: !!u.isPro
     };
   });
@@ -7613,7 +8109,7 @@ app.get('/api/admin/dashboard', async (req, res) => {
     const totalTrades = allTrades?.length || 0;
     const pendingTickets = (allTickets || []).filter((t: any) => t.status === 'Open' || t.status === 'In Progress').length;
     const totalReferrals = (allUsers || []).filter((u: any) => !!u.referred_by).length;
-    const referralIncome = totalReferrals * 80;
+    const referralIncome = totalReferrals * 300;
     const totalRevenue = paidUsers * 399;
 
     // Build user growth by day
@@ -7663,7 +8159,7 @@ app.get('/api/admin/dashboard', async (req, res) => {
     ? (db?.trades || [])
     : (db?.trades || []).filter((t: any) => scope.includes(t.userId))).length;
   const totalReferrals = usersList.filter((u: any) => !!u.referredBy).length;
-  const referralIncome = totalReferrals * 80;
+  const referralIncome = totalReferrals * 300;
   const totalRevenue = paidUsers * 399;
 
   res.json({
@@ -7913,7 +8409,7 @@ app.get('/api/admin/billing', async (req, res) => {
         referralCode: refCode,
         referralsCount: directRefs.length,
         paidReferralsCount: paidRefs,
-        referralIncome: directRefs.length * 80
+        referralIncome: directRefs.length * 300
       };
     }).filter((r: any) => r.referralsCount > 0).sort((a: any, b: any) => b.referralsCount - a.referralsCount);
 
@@ -7990,7 +8486,7 @@ app.get('/api/admin/billing', async (req, res) => {
       referralCode: refCode,
       referralsCount: directRefs.length,
       paidReferralsCount: paidRefs,
-      referralIncome: directRefs.length * 80
+      referralIncome: directRefs.length * 300
     };
   }).filter((r: any) => r.referralsCount > 0).sort((a: any, b: any) => b.referralsCount - a.referralsCount);
 

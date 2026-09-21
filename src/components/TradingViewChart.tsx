@@ -435,9 +435,16 @@ const TradingViewChart = memo(function TradingViewChart({
         applyMarkers();
         setTimeout(() => {
           if (chartRef.current) {
-            chartRef.current.timeScale().scrollToPosition(0, true);
+            try {
+              chartRef.current.timeScale().scrollToRealTime();
+              chartRef.current.timeScale().scrollToPosition(0, true);
+            } catch (_) {
+              try {
+                chartRef.current.timeScale().resetTimeScale();
+              } catch (_) {}
+            }
           }
-        }, 50);
+        }, 30);
       }
       setLastUpdated(new Date());
     } catch (err: any) {
@@ -590,6 +597,14 @@ const TradingViewChart = memo(function TradingViewChart({
 
   // ─── Symbol search handlers ───────────────────────────────────────────────
 
+  const commitSymbol = useCallback((sym?: string) => {
+    const newSym = (sym || symbolInput).toUpperCase().trim();
+    if (!newSym) return;
+    setSymbol(newSym);
+    setSymbolInput(newSym);
+    setShowSuggestions(false);
+  }, [symbolInput]);
+
   const handleSymbolInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.toUpperCase();
     setSymbolInput(val);
@@ -597,19 +612,32 @@ const TradingViewChart = memo(function TradingViewChart({
       setSuggestions(POPULAR_SYMBOLS.slice(0, 10));
       setShowSuggestions(true);
     } else {
-      const matches = POPULAR_SYMBOLS.filter(s => s.startsWith(val) && s !== val);
+      const matches = POPULAR_SYMBOLS.filter(s => s.includes(val) && s !== val);
       setSuggestions(matches.slice(0, 8));
       setShowSuggestions(matches.length > 0);
+
+      // Auto-commit if user entered a complete known symbol
+      if (POPULAR_SYMBOLS.includes(val) && val !== symbol) {
+        setSymbol(val);
+        setShowSuggestions(false);
+      }
     }
   };
 
-  const commitSymbol = (sym?: string) => {
-    const newSym = (sym || symbolInput).toUpperCase().trim();
-    if (!newSym) return;
-    setSymbol(newSym);
-    setSymbolInput(newSym);
-    setShowSuggestions(false);
-  };
+  // ─── Refresh chart and scroll to current real-time price ──────────────────
+  const handleRefresh = useCallback(() => {
+    fetchData(symbol, timeframe);
+    if (chartRef.current) {
+      try {
+        chartRef.current.timeScale().scrollToRealTime();
+        chartRef.current.timeScale().scrollToPosition(0, true);
+      } catch (_) {
+        try {
+          chartRef.current.timeScale().resetTimeScale();
+        } catch (_) {}
+      }
+    }
+  }, [fetchData, symbol, timeframe]);
 
   // ─── Styles ───────────────────────────────────────────────────────────────
 
@@ -641,49 +669,60 @@ const TradingViewChart = memo(function TradingViewChart({
 
         {/* Symbol search */}
         <div className="relative flex-shrink-0">
-          <div className="flex items-center gap-1">
-            <div className="relative">
-              <Search className={`absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 ${textMuted} pointer-events-none`} />
-              <input
-                type="text"
-                value={symbolInput}
-                onChange={handleSymbolInputChange}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitSymbol();
-                  if (e.key === 'Escape') setShowSuggestions(false);
-                }}
-                onFocus={() => {
-                  const matches = symbolInput
-                    ? POPULAR_SYMBOLS.filter(s => s.includes(symbolInput)).slice(0, 8)
-                    : POPULAR_SYMBOLS.slice(0, 10);
-                  setSuggestions(matches);
-                  setShowSuggestions(true);
-                }}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 180)}
-                placeholder="XAUUSD"
-                className={`pl-7 pr-2 py-1.5 text-xs font-bold uppercase rounded-lg border w-24 focus:outline-none focus:ring-2 transition ${inputCls}`}
-              />
-            </div>
-            <button
-              onClick={() => commitSymbol()}
-              className={`text-xs font-semibold px-2 py-1.5 rounded-lg transition ${btnInactive}`}
-            >
-              Go
-            </button>
+          <div className="relative">
+            <Search className={`absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 ${textMuted} pointer-events-none`} />
+            <input
+              type="text"
+              value={symbolInput}
+              onChange={handleSymbolInputChange}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (suggestions.length > 0 && !POPULAR_SYMBOLS.includes(symbolInput.trim().toUpperCase())) {
+                    commitSymbol(suggestions[0]);
+                  } else {
+                    commitSymbol();
+                  }
+                }
+                if (e.key === 'Escape') setShowSuggestions(false);
+              }}
+              onFocus={() => {
+                const matches = symbolInput
+                  ? POPULAR_SYMBOLS.filter(s => s.includes(symbolInput)).slice(0, 8)
+                  : POPULAR_SYMBOLS.slice(0, 10);
+                setSuggestions(matches);
+                setShowSuggestions(true);
+              }}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+              placeholder="Search symbol..."
+              className={`pl-7 pr-2.5 py-1.5 text-xs font-bold uppercase rounded-lg border w-28 sm:w-36 focus:outline-none focus:ring-2 transition ${inputCls}`}
+            />
           </div>
 
           {/* Autocomplete */}
           {showSuggestions && suggestions.length > 0 && (
-            <div className={`absolute top-full left-0 mt-1 w-36 rounded-xl shadow-2xl border z-[100] overflow-hidden ${isDark ? 'bg-[#18181b] border-slate-700' : 'bg-white border-slate-200'}`}>
-              {suggestions.map(s => (
-                <button
-                  key={s}
-                  onMouseDown={() => commitSymbol(s)}
-                  className={`w-full text-left px-3 py-1.5 text-xs font-bold hover:bg-blue-600 hover:text-white transition border-b last:border-0 ${isDark ? 'border-slate-800 text-slate-200' : 'border-slate-50 text-slate-700'}`}
-                >
-                  {s}
-                </button>
-              ))}
+            <div className={`absolute top-full left-0 mt-1.5 w-44 rounded-xl shadow-2xl border z-[100] overflow-hidden ${isDark ? 'bg-[#18181b] border-slate-700' : 'bg-white border-slate-200'}`}>
+              <div className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800/40">
+                Popular Symbols
+              </div>
+              <div className="max-h-56 overflow-y-auto">
+                {suggestions.map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      commitSymbol(s);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-xs font-bold hover:bg-violet-600 hover:text-white transition flex items-center justify-between border-b last:border-0 ${isDark ? 'border-slate-800/60 text-slate-200' : 'border-slate-100 text-slate-700'}`}
+                  >
+                    <span className="font-mono">{s}</span>
+                    <span className="text-[9px] font-semibold opacity-60">
+                      {s === 'XAUUSD' || s === 'XAGUSD' ? 'METAL' : s.includes('BTC') || s.includes('ETH') ? 'CRYPTO' : s.includes('US30') || s.includes('US500') || s.includes('NAS100') ? 'INDEX' : 'FOREX'}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -757,11 +796,11 @@ const TradingViewChart = memo(function TradingViewChart({
           )}
         </div>
 
-        {/* Refresh */}
+        {/* Refresh & Jump to current price */}
         <button
-          onClick={() => fetchData(symbol, timeframe)}
+          onClick={handleRefresh}
           disabled={loading}
-          title="Refresh"
+          title="Refresh data & jump to current price"
           className={`p-1.5 rounded-lg transition flex-shrink-0 ${btnInactive}`}
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-blue-500' : ''}`} />

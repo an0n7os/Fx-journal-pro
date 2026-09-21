@@ -63,7 +63,7 @@ const stamp = Date.now();
 // See the note in plan-gates.test.mjs: the seeded admin's password follows
 // DEV_ADMIN_PASSWORD, and hardcoding it made every later assertion fail as
 // soon as the seed password changed.
-const adminPassword = process.env.DEV_ADMIN_PASSWORD?.trim() || 'LocalAdmin123';
+const adminPassword = process.env.DEV_ADMIN_PASSWORD?.trim() || 'Demo@12345';
 const admin = await signIn('admin@axyfx.com', adminPassword);
 ok('setup: signed in as super admin', !!admin.cookie);
 

@@ -18,7 +18,7 @@ export default function ProFeaturePanel({
   title,
   blurb,
   onUpgrade,
-  price = 399,
+  price = 499,
 }: {
   title: string;
   blurb: string;

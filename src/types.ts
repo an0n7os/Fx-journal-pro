@@ -118,3 +118,18 @@ export interface PaymentHistory {
   date: string;
   razorpayId: string;
 }
+
+export interface NotebookNote {
+  id: string;
+  userId?: string;
+  title: string;
+  content: string;
+  folder: string;
+  tags: string[];
+  mood?: 'Calm' | 'Disciplined' | 'Excited' | 'Anxious' | 'FOMO' | 'Frustrated' | 'Confident';
+  isFavourite?: boolean;
+  isArchived?: boolean;
+  isTrash?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

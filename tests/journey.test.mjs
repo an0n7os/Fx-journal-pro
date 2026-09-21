@@ -184,7 +184,7 @@ section('10. Admin console');
 
 // Matches DEV_ADMIN_PASSWORD from .env.testbilling, or whatever the seed
 // script used. Skips cleanly when the local admin has a different password.
-const adminPassword = process.env.DEV_ADMIN_PASSWORD?.trim() || 'LocalAdmin123';
+const adminPassword = process.env.DEV_ADMIN_PASSWORD?.trim() || 'Demo@12345';
 const adminLogin = await api('/api/auth/login', { method: 'POST', body: { email: 'admin@axyfx.com', password: adminPassword } });
 if (adminLogin.status !== 200) {
   ok('admin sign-in (skipped: no local admin password on this server)', true, `status ${adminLogin.status}`);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, Check, Star, ShieldCheck, CreditCard, Sparkles,
-  Loader2, ArrowRight, Zap, RefreshCw, AlertCircle, CheckCircle2
+  Loader2, ArrowRight, Zap, RefreshCw, AlertCircle, CheckCircle2, Ticket
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -74,9 +74,66 @@ export default function ProUpgradeModal({
     testBilling: false,
     sandboxMode: false,
     keyId: 'rzp_test_sandbox_mode',
-    amountRupees: 399,
+    amountRupees: 499,
     merchantName: 'FX Journal Pro'
   });
+
+  const [couponInput, setCouponInput] = useState(() => {
+    try { return sessionStorage.getItem('fx_referral_code') || ''; } catch { return ''; }
+  });
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    partnerName: string;
+    standardPrice: number;
+    offerPrice: number;
+    discountPercent: number;
+    discountAmount: number;
+    mentorCommission: number;
+  } | null>(null);
+  const [couponValidating, setCouponValidating] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
+  const handleApplyCoupon = async (codeToTest?: string) => {
+    const code = (codeToTest || couponInput).trim().toUpperCase();
+    if (!code) return;
+    setCouponValidating(true);
+    setCouponError(null);
+    try {
+      const res = await fetch(`/api/referral/${encodeURIComponent(code)}`);
+      const data = await res.json();
+      if (res.ok && data?.valid) {
+        setAppliedCoupon({
+          code: data.code,
+          partnerName: data.partnerName,
+          standardPrice: data.standardPrice || 499,
+          offerPrice: data.offerPrice !== undefined ? data.offerPrice : (data.finalPrice || 499),
+          discountPercent: data.discountPercent || 0,
+          discountAmount: data.discountAmount || 0,
+          mentorCommission: data.mentorCommission || 0
+        });
+        setCouponError(null);
+      } else {
+        setCouponError(data?.error || 'That coupon code is not recognised.');
+        setAppliedCoupon(null);
+      }
+    } catch {
+      setCouponError('Could not validate coupon code.');
+      setAppliedCoupon(null);
+    } finally {
+      setCouponValidating(false);
+    }
+  };
+
+  // Auto-apply referral code if stored in sessionStorage from referral link
+  useEffect(() => {
+    if (!isOpen) return;
+    try {
+      const savedCode = sessionStorage.getItem('fx_referral_code');
+      if (savedCode && !appliedCoupon) {
+        handleApplyCoupon(savedCode);
+      }
+    } catch {}
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -105,7 +162,7 @@ export default function ProUpgradeModal({
 
   if (!isOpen) return null;
 
-  const amountRupees = config.amountRupees || 399;
+  const amountRupees = config.amountRupees || 499;
 
   const handleTestModeToggle = async (targetTier: 'pro' | 'free') => {
     if (!DEV_BYPASS) return;
@@ -121,14 +178,12 @@ export default function ProUpgradeModal({
       if (res.ok) {
         setStatusMessage({ type: 'success', text: data.message || 'Plan state updated!' });
         await onSuccess();
-        setTimeout(() => {
-          onClose();
-        }, 1500);
+        setTimeout(() => onClose(), 1200);
       } else {
-        setStatusMessage({ type: 'error', text: data.error || 'Could not update plan.' });
+        setStatusMessage({ type: 'error', text: data.error || 'Failed to update plan.' });
       }
     } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err?.message || 'Error updating plan.' });
+      setStatusMessage({ type: 'error', text: err?.message || 'Could not reach server.' });
     } finally {
       setLoading(false);
     }
@@ -137,38 +192,40 @@ export default function ProUpgradeModal({
   const handleGatewayCheckout = async () => {
     setLoading(true);
     setStatusMessage(null);
-    try {
-      const res = await authFetch('/api/payments/order', { method: 'POST' });
-      const data = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        setStatusMessage({ type: 'error', text: data?.error || 'Could not initiate checkout.' });
-        return;
+    try {
+      const createRes = await authFetch('/api/payments/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ couponCode: appliedCoupon?.code || undefined })
+      });
+      const data = await createRes.json();
+      if (!createRes.ok) {
+        throw new Error(data?.error || 'Could not create payment order');
       }
 
-      // Only when the SERVER says it is in sandbox. Taking this branch on
-      // `!config.configured` meant an unconfigured production deploy handed
-      // out Pro instead of reporting that payments were not ready.
-      if (data?.sandboxMode) {
-        const verify = await authFetch('/api/payments/verify', {
+      // If test billing is enabled and returned sandbox mode
+      if (data.sandboxMode) {
+        const verifyRes = await authFetch('/api/payments/toggle-test-tier', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isSandbox: true }),
+          body: JSON.stringify({ tier: 'pro' })
         });
-        const vData = await verify.json();
-        setStatusMessage({ type: 'success', text: vData.message || 'Sandbox Upgrade Complete! Welcome to Pro.' });
-        await onSuccess();
-        setTimeout(() => onClose(), 1800);
-        return;
+        if (verifyRes.ok) {
+          setStatusMessage({
+            type: 'success',
+            text: appliedCoupon 
+              ? `Mentor offer applied! You paid ₹${appliedCoupon.offerPrice}. Pro activated.`
+              : 'Payment simulated! 30 days Pro active.'
+          });
+          await onSuccess();
+          setTimeout(() => onClose(), 1500);
+          return;
+        }
       }
 
-      // Load razorpay script
-      if (!(window as any).Razorpay) {
-        const script = document.createElement('script');
-        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-        script.async = true;
-        document.body.appendChild(script);
-        await new Promise((resolve) => { script.onload = resolve; });
+      if (typeof (window as any).Razorpay === 'undefined') {
+        throw new Error('Razorpay SDK failed to load. Please refresh and try again.');
       }
 
       const rzp = new (window as any).Razorpay({
@@ -177,7 +234,7 @@ export default function ProUpgradeModal({
         currency: data.currency || 'INR',
         order_id: data.orderId,
         name: 'FX Journal Pro',
-        description: `Pro Access (30 Days) — ₹${amountRupees}`,
+        description: appliedCoupon ? `Pro Access (30 Days) — ₹${appliedCoupon.offerPrice} (Mentor Offer Applied)` : `Pro Access (30 Days) — ₹${amountRupees}`,
         prefill: { email: user?.email, name: user?.name },
         theme: { color: '#8b5cf6' },
         config: {
@@ -275,10 +332,31 @@ export default function ProUpgradeModal({
           {/* The period and the USD note are one span, not two flex children:
               split, they wrapped separately on a phone and left a line
               beginning with a bare "·". */}
+          {/* The price belongs with the decision, not buried in the payment card */}
+          {/* The period and the USD note are one span, not two flex children:
+              split, they wrapped separately on a phone and left a line
+              beginning with a bare "·". */}
           <div className="flex items-baseline flex-wrap gap-x-2.5 gap-y-1 mt-5">
-            <span className="text-4xl font-black text-white font-display tracking-tight tabular-nums">₹{amountRupees}</span>
+            {appliedCoupon && appliedCoupon.offerPrice < 499 ? (
+              <>
+                <span className="text-4xl font-black text-emerald-400 font-display tracking-tight tabular-nums">₹{appliedCoupon.offerPrice}</span>
+                <span className="text-xl font-bold line-through text-slate-500 tabular-nums">₹499</span>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Save ₹{appliedCoupon.discountAmount} ({appliedCoupon.discountPercent}% OFF)
+                </span>
+              </>
+            ) : appliedCoupon ? (
+              <>
+                <span className="text-4xl font-black text-white font-display tracking-tight tabular-nums">₹499</span>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  Mentor Code Applied
+                </span>
+              </>
+            ) : (
+              <span className="text-4xl font-black text-white font-display tracking-tight tabular-nums">₹{amountRupees}</span>
+            )}
             <span className="text-sm text-slate-400">
-              / 30 days access <span className="text-xs text-slate-600">· about $3.90</span>
+              / 30 days access <span className="text-xs text-slate-600">· about $4.90</span>
             </span>
           </div>
         </div>
@@ -300,11 +378,10 @@ export default function ProUpgradeModal({
 
         <div className="px-7 py-6 space-y-5 relative z-10">
           {statusMessage && (
-            <div className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 border ${
-              statusMessage.type === 'success'
+            <div className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 border ${statusMessage.type === 'success'
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
                 : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
-            }`}>
+              }`}>
               {statusMessage.type === 'success' ? (
                 <CheckCircle2 className="h-4 w-4 shrink-0 mt-px text-emerald-400" />
               ) : (
@@ -326,11 +403,10 @@ export default function ProUpgradeModal({
                 <button
                   key={t.id}
                   onClick={() => setActiveTab(t.id)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-[11px] font-bold rounded-lg transition ${
-                    activeTab === t.id
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-[11px] font-bold rounded-lg transition ${activeTab === t.id
                       ? 'bg-violet-600 text-white shadow-sm'
                       : 'text-slate-400 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <t.icon className="h-3.5 w-3.5" />
                   {t.label}
@@ -341,13 +417,74 @@ export default function ProUpgradeModal({
 
           {activeTab === 'gateway' && (
             <div className="space-y-4">
-              {/* Payment methods as chips. They were one long value crammed
-                  into the right half of a table row, wrapping against the
-                  label. A "Gateway: Ready" row sat underneath, which is our
-                  own plumbing reported to the customer as if it were a
-                  feature — nobody buying this needs to know the integration
-                  booted. It now appears only when it is NOT ready, where it is
-                  the one thing worth saying before they press the button. */}
+              {/* Mentor Coupon / Discount Section */}
+              <div className="rounded-xl border border-white/[0.08] bg-slate-900/60 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+                    <Ticket className="h-3.5 w-3.5 text-amber-400" />
+                    <span>Mentor Coupon Code</span>
+                  </div>
+                  {appliedCoupon && (
+                    <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {appliedCoupon.discountAmount > 0 ? `Offer Applied: Save ₹${appliedCoupon.discountAmount}` : 'Mentor Code Applied'}
+                    </span>
+                  )}
+                </div>
+
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/25 rounded-lg px-3 py-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-emerald-300 tracking-wider uppercase">{appliedCoupon.code}</span>
+                      <span className="text-[11px] text-slate-400">({appliedCoupon.partnerName})</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setAppliedCoupon(null); setCouponInput(''); }}
+                      className="text-[11px] text-slate-400 hover:text-rose-400 underline transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={couponInput}
+                        onChange={(e) => {
+                          setCouponInput(e.target.value.toUpperCase());
+                          setCouponError(null);
+                        }}
+                        placeholder="Enter mentor coupon code (e.g. VIP60)"
+                        className="flex-1 bg-slate-950/80 border border-slate-700/80 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 uppercase tracking-wide"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleApplyCoupon();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCoupon()}
+                        disabled={couponValidating || !couponInput.trim()}
+                        className="px-3.5 py-2 bg-white/[0.08] hover:bg-white/[0.14] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed border border-white/[0.1] rounded-lg text-xs font-semibold text-white transition flex items-center gap-1.5"
+                      >
+                        {couponValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Apply'}
+                      </button>
+                    </div>
+                    {couponError && (
+                      <p className="text-[11px] text-rose-400 flex items-center gap-1 mt-1">
+                        <AlertCircle className="h-3 w-3 shrink-0" />
+                        {couponError}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Payment methods as chips */}
               <div className="rounded-xl border border-white/[0.06] px-4 py-3.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Pay with</p>
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -387,7 +524,13 @@ export default function ProUpgradeModal({
                   </>
                 ) : (
                   <>
-                    Continue to payment
+                    {appliedCoupon && appliedCoupon.offerPrice < 499 ? (
+                      <>
+                        Pay <span className="line-through opacity-60 font-normal mr-1">₹499</span> ₹{appliedCoupon.offerPrice} for Pro
+                      </>
+                    ) : (
+                      <>Pay ₹{amountRupees} for Pro</>
+                    )}
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}

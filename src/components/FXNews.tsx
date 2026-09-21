@@ -626,37 +626,37 @@ export default function FXNews({ initialTab = 'news', isPro = false }: { initial
 
   return (
     <div className="space-y-6" data-testid="fx-news-page">
-      {nextHigh && (
-        <div className="flex justify-end">
-          <div className="inline-flex items-center gap-2 bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-300 text-xs font-bold px-3 py-2 rounded-xl">
-            <Radio className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400" />
+      {/* Tabs & Upcoming High-Impact Event */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-white/[0.08] pb-1 sm:pb-0">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setTab('news')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+              tab === 'news'
+                ? 'border-violet-500 text-violet-600 dark:text-violet-400 font-bold'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <Newspaper className="h-4 w-4" /> Latest FX News
+          </button>
+          <button
+            onClick={() => setTab('calendar')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+              tab === 'calendar'
+                ? 'border-violet-500 text-violet-600 dark:text-violet-400 font-bold'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <CalendarRange className="h-4 w-4" /> Economic Calendar
+          </button>
+        </div>
+
+        {nextHigh && (
+          <div className="inline-flex items-center gap-2 bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-300 text-xs font-bold px-3 py-1.5 rounded-xl self-start sm:self-auto mb-1.5 sm:mb-0">
+            <Radio className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400 animate-pulse" />
             Next: {nextHigh.currency} {nextHigh.event} · Starts in {nextHighCountdown}
           </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-slate-200 dark:border-white/[0.08]">
-        <button
-          onClick={() => setTab('news')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
-            tab === 'news'
-              ? 'border-violet-500 text-violet-600 dark:text-violet-400 font-bold'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-          }`}
-        >
-          <Newspaper className="h-4 w-4" /> Latest FX News
-        </button>
-        <button
-          onClick={() => setTab('calendar')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
-            tab === 'calendar'
-              ? 'border-violet-500 text-violet-600 dark:text-violet-400 font-bold'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-          }`}
-        >
-          <CalendarRange className="h-4 w-4" /> Economic Calendar
-        </button>
+        )}
       </div>
 
       {/* ================= NEWS TAB ================= */}

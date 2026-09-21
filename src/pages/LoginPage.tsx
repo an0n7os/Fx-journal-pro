@@ -154,36 +154,18 @@ const CONTACT_EMAIL = 'contact@fxjournalpro.com';
  * sign-in box. The fallback is now dev-only: production shows the widget it
  * was given, or says the key is missing.
  */
-const TURNSTILE_TEST_KEY = '1x00000000000000000000AA';
+const TURNSTILE_TEST_KEY = '1x00000000000000000000BB'; // Cloudflare's official Invisible Always-Pass Test Key
 const TURNSTILE_SITE_KEY: string =
   import.meta.env.VITE_TURNSTILE_SITE_KEY || (import.meta.env.DEV ? TURNSTILE_TEST_KEY : '');
 
-/** The box sits on the dark auth card, so the widget renders dark to match. */
+/** Invisible Turnstile runs silently in the background without UI clutter */
 function TurnstileBox({ onToken }: { onToken: (token: string) => void }) {
-  if (!TURNSTILE_SITE_KEY) {
-    return (
-      <div className="w-full rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
-        Bot protection is not configured on this deployment. Set
-        <code className="mx-1 px-1 rounded bg-amber-500/10">VITE_TURNSTILE_SITE_KEY</code>
-        and rebuild.
-      </div>
-    );
-  }
+  if (!TURNSTILE_SITE_KEY) return null;
   return (
-    // size: 'flexible' makes the widget fill its container, so it lines up
-    // with the email and password fields instead of sitting at Turnstile's
-    // fixed 300px inside a wider card. It also replaces a `scale-[0.85]`
-    // transform that used to shrink the widget to fit narrow phones —
-    // scaling an iframe resamples its text, so the box read as slightly
-    // blurred next to the crisp inputs above it.
-    //
-    // theme is fixed to dark because this page is dark at every width: it is
-    // styled with its own lp-* rules rather than the dashboard's `dark:`
-    // variants, so it does not follow the app's light mode.
-    <div className="my-2 w-full">
+    <div className="sr-only pointer-events-none fixed -top-[9999px] -left-[9999px]" aria-hidden="true">
       <Turnstile
         siteKey={TURNSTILE_SITE_KEY}
-        options={{ theme: 'dark', size: 'flexible' }}
+        options={{ theme: 'dark', size: 'invisible' }}
         onSuccess={onToken}
       />
     </div>
@@ -232,8 +214,8 @@ const benefits = [
 
 // Plan comparison. Every row here is a promise to a paying customer, so each
 // one has to be enforced in the product before this page goes live.
-const PRO_PRICE_USD = '$3.90';
-const PRO_PRICE_INR = '₹399';
+const PRO_PRICE_USD = '$5.90';
+const PRO_PRICE_INR = '₹499';
 
 const planMatrix: { feature: string; free: string | boolean; pro: string | boolean }[] = [
   { feature: 'Trading accounts', free: '1 account', pro: 'Unlimited' },
@@ -347,7 +329,7 @@ const security = [
 
 const faqs = [
   { q: 'Can I cancel Pro anytime?', a: 'Yes. Pro is billed monthly and you can cancel whenever you like — you keep access until the end of the period you have paid for, and your journal stays intact on the free plan afterwards.' },
-  { q: 'Is there a free plan?', a: 'Yes. The free plan covers one trading account with manual trade logging, full analytics, the calendar, FX news, live charts and the calculators — no card required. Pro adds unlimited accounts, MT5 automatic sync, the AI Mentor and full history export for ₹399 (about $3.90) per month.' },
+  { q: 'Is there a free plan?', a: 'Yes. The free plan covers one trading account with manual trade logging, full analytics, the calendar, FX news, live charts and the calculators — no card required. Pro adds unlimited accounts, MT5 automatic sync, the AI Mentor and full history export for ₹499 (about $5.90) per month.' },
   { q: 'What is a trading journal?', a: 'A trading journal is a record of your trades used to review performance, identify strengths and weaknesses, and improve consistency. FX Journal Pro automates this with MT5 auto-sync and AI-driven analysis.' },
   { q: 'Does FX Journal Pro work with MetaTrader 5?', a: 'Yes. MT5 automatic sync is a Pro feature: install the Expert Advisor once and your trades, balance and equity sync in real time. On the free plan you add trades manually, or paste an MT5 report.' },
   { q: 'Do I need to enter trades manually?', a: 'On the free plan, yes — logging a trade takes a few seconds. On Pro the MT5 Expert Advisor imports them automatically in real time, and you can still add or edit any trade by hand.' },
@@ -649,14 +631,26 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     };
   }, [location.pathname]);
 
-  const persistAuthSession = (userId: string, email?: string) => {
+  const persistAuthSession = (userId: string, email?: string, sessionToken?: string) => {
     if (typeof window === 'undefined') return;
-    if (userId) window.sessionStorage.setItem('auth_user_id', userId);
-    else window.sessionStorage.removeItem('auth_user_id');
-    if (email) window.sessionStorage.setItem('auth_email', email);
-    else window.sessionStorage.removeItem('auth_email');
-    window.localStorage.removeItem('auth_user_id');
-    window.localStorage.removeItem('auth_email');
+    if (userId) {
+      window.sessionStorage.setItem('auth_user_id', userId);
+      window.localStorage.setItem('auth_user_id', userId);
+    } else {
+      window.sessionStorage.removeItem('auth_user_id');
+      window.localStorage.removeItem('auth_user_id');
+    }
+    if (email) {
+      window.sessionStorage.setItem('auth_email', email);
+      window.localStorage.setItem('auth_email', email);
+    } else {
+      window.sessionStorage.removeItem('auth_email');
+      window.localStorage.removeItem('auth_email');
+    }
+    if (sessionToken) {
+      window.sessionStorage.setItem('auth_session_token', sessionToken);
+      window.localStorage.setItem('auth_session_token', sessionToken);
+    }
   };
 
   const syncSupabaseUser = async (sessionUser: any, accessToken?: string) => {
@@ -668,6 +662,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-auth-user-id': userId, 'x-auth-email': email },
         body: JSON.stringify({ id: userId, email, name, provider: authProvider, supabaseAccessToken: accessToken, referralCode: referralCode || undefined })
       });
@@ -675,7 +670,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
         const data = await res.json();
         if (data.user) {
           // Keep sessionStorage in sync with the server's canonical user id
-          persistAuthSession(data.user.id || userId, data.user.email || email);
+          persistAuthSession(data.user.id || userId, data.user.email || email, data.sessionToken);
           onLoginSuccess();
           return;
         }
@@ -709,6 +704,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
       persistAuthSession(sessionStorage.getItem('auth_user_id') || '', authEmail);
       const res = await fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-auth-email': authEmail },
         body: JSON.stringify({ email: authEmail, password: authPassword, turnstileToken })
       });
@@ -719,7 +715,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
       }
       const data = await res.json();
       if (data.user) {
-        persistAuthSession(data.user.id, data.user.email || authEmail);
+        persistAuthSession(data.user.id, data.user.email || authEmail, data.sessionToken);
         onLoginSuccess();
       }
     } catch (err: any) {
@@ -754,6 +750,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
       persistAuthSession('');
       const res = await fetch('/api/auth/register', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-auth-email': authEmail },
         body: JSON.stringify({ email: authEmail, name: authName, password: authPassword, turnstileToken, referralCode: referralCode || undefined })
       });
@@ -796,12 +793,13 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     try {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-auth-email': authEmail },
         body: JSON.stringify({ email: authEmail, otp: otpCode })
       });
       const data = await res.json();
       if (!res.ok) { setAuthError(data.error || 'Invalid or expired code.'); return; }
-      if (data.user) { persistAuthSession(data.user.id, data.user.email || authEmail); onLoginSuccess(); return; }
+      if (data.user) { persistAuthSession(data.user.id, data.user.email || authEmail, data.sessionToken); onLoginSuccess(); return; }
     } catch (err: any) {
       setAuthError(`Verification error: ${err?.message || err}`);
     } finally {
@@ -872,8 +870,9 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     finally { setActionLoading(false); }
   };
 
-  const inputClass = "w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/35 focus:border-violet-500/45 transition";
-  const buttonPrimary = "lp-btn-primary w-full font-semibold text-sm rounded-xl py-3 disabled:opacity-50";
+  const inputClass = "cyber-input w-full";
+  const buttonPrimary = "cyber-btn-cta w-full font-semibold text-base py-3.5 rounded-2xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+
 
   const isNavLinkActive = (linkId: string, current: string) => {
     if (current === linkId) return true;
@@ -889,8 +888,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
       <header className="lp-nav fixed top-0 inset-x-0 z-50" data-scrolled={navScrolled}>
         <div className="lp-navbar max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[68px] flex items-center justify-between gap-4">
           <a href="/" onClick={(e) => handleNavClick(e, '/', 'top')} className="flex items-center gap-2.5 shrink-0 group">
-            <Logo size={26} />
-            <span className="font-display text-[15px] font-bold leading-none tracking-[-0.02em] text-white group-hover:text-violet-300 transition-colors">FX<span className="text-slate-400 font-semibold"> Journal Pro</span></span>
+            <Logo size={36} />
           </a>
           <nav className="lp-navgroup hidden lg:flex">
             {navLinks.map((l) => {
@@ -1500,12 +1498,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 ))}
               </ul>
               <button
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    sessionStorage.setItem('pending_upgrade_to_pro', 'true');
-                  }
-                  openAuthModal('register');
-                }}
+                onClick={() => openAuthModal('register')}
                 className="lp-btn-primary mt-7 w-full font-semibold rounded-full px-6 py-3 text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-violet-900/30"
               >
                 <span>Go Pro — {PRO_PRICE_INR}/mo</span>
@@ -1677,9 +1670,6 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             <div className="lg:col-span-4 space-y-5">
               <div className="flex items-center gap-2.5">
                 <Logo size={28} />
-                <span className="font-display text-base font-bold leading-none tracking-[-0.02em] text-white">
-                  FX<span className="text-slate-400 font-semibold"> Journal Pro</span>
-                </span>
               </div>
 
               <p className="text-sm text-slate-400 leading-relaxed max-w-sm">
@@ -1869,22 +1859,25 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
       )}
 
       <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal}>
-        {typeof window !== 'undefined' && sessionStorage.getItem('pending_upgrade_to_pro') === 'true' && (
-          <div className="mb-4 p-3 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center gap-2.5 text-violet-200 text-xs font-semibold animate-fade-in">
-            <Sparkles className="h-4 w-4 text-violet-400 shrink-0 animate-pulse" />
-            <span>You're signing up to activate <strong>FX Journal Pro (₹399/mo)</strong>. We'll open checkout right after login.</span>
+        {/* Glowing Badge & Header inspired by Cyber Reference */}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="cyber-badge-glow h-12 w-12 rounded-2xl flex items-center justify-center text-white shadow-lg">
+            <svg className="w-6 h-6 fill-white drop-shadow-md" viewBox="0 0 24 24">
+              <path d="M12 2l2.4 5.2 5.6.8-4 4.1 1 5.7-5-2.8-5 2.8 1-5.7-4-4.1 5.6-.8L12 2z" />
+            </svg>
           </div>
-        )}
-        <div className="mb-6 pr-8">
-          <h3 className="text-xl font-bold text-white mb-1">
-            {isRegistering ? 'Create your account' : isForgotPassword ? 'Reset password' : 'Welcome back'}
+        </div>
+
+        <div className="mb-6">
+          <h3 className="text-2xl font-bold text-white tracking-tight">
+            {isRegistering ? 'Activate your account' : isForgotPassword ? 'Reset password' : 'Sign in to your account'}
           </h3>
-          <p className="text-sm text-slate-400">
+          <p className="text-[13px] text-slate-400 mt-1.5 leading-relaxed">
             {isRegistering
-              ? 'Start tracking your trades with AI-powered insights.'
+              ? 'Join FX Journal Pro to automate MT5 sync and unlock AI insights.'
               : isForgotPassword
-                ? 'Enter your email to receive a reset code.'
-                : 'Sign in to your trading dashboard.'}
+                ? 'Enter your email to receive a secure password reset code.'
+                : 'Enter your credentials below to access your trading dashboard.'}
           </p>
         </div>
 
@@ -1994,42 +1987,42 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             </div>
             {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
             <TurnstileBox onToken={setTurnstileToken} />
-            <button type="submit" disabled={actionLoading || (!turnstileToken && isSupabaseConfigured)} className={buttonPrimary}>
-              {actionLoading ? 'Creating Account...' : 'Create Account'}
+            <button type="submit" disabled={actionLoading} className={buttonPrimary}>
+              {actionLoading ? 'Activating...' : "Let's start"}
             </button>
-            <p className="text-center text-sm text-slate-400">
+            <p className="text-center text-sm text-slate-400 pt-1">
               Already have an account?{' '}
-              <button type="button" onClick={() => { setIsRegistering(false); setAuthError(null); }} className="text-violet-300 hover:text-violet-200 font-semibold transition-colors">Sign in</button>
+              <button type="button" onClick={() => { setIsRegistering(false); setAuthError(null); }} className="text-violet-300 hover:text-violet-200 font-semibold transition-colors cursor-pointer">Sign in</button>
             </p>
           </form>
         ) : (
-          <form onSubmit={handleLogin} className="space-y-3">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Email address</label>
-              <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className={inputClass} placeholder="Email address" />
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Email address</label>
+              <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className={inputClass} placeholder="trader@example.com" />
             </div>
             <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label className="text-sm font-medium text-slate-300">Password</label>
-                <button type="button" onClick={() => setIsForgotPassword(true)} className="text-xs text-violet-300 hover:text-violet-200 font-medium transition-colors">Forgot password?</button>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Password</label>
+                <button type="button" onClick={() => setIsForgotPassword(true)} className="text-xs text-violet-300 hover:text-violet-200 font-medium transition-colors cursor-pointer">Forgot password?</button>
               </div>
               <div className="relative">
                 <input type={showPassword ? "text" : "password"} required value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-11'} placeholder="Password" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-3 text-slate-400 hover:text-white transition-colors">
+                  onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-11'} placeholder="••••••••••••" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-3.5 text-slate-400 hover:text-white transition-colors cursor-pointer">
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
             {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
             <TurnstileBox onToken={setTurnstileToken} />
-            <button type="submit" disabled={actionLoading || (!turnstileToken && isSupabaseConfigured)} className={buttonPrimary}>
-              {actionLoading ? 'Signing in...' : 'Sign in'}
+            <button type="submit" disabled={actionLoading} className={buttonPrimary}>
+              {actionLoading ? 'Starting...' : "Let's start"}
             </button>
 
-            <div className="relative my-2">
+            <div className="relative my-3">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
-              <div className="relative flex justify-center text-xs"><span className="bg-transparent px-3 text-slate-500">or</span></div>
+              <div className="relative flex justify-center text-xs"><span className="bg-[#0b0d13] px-3 text-slate-400 font-medium">or continue with</span></div>
             </div>
 
             <button type="button" disabled={actionLoading}
@@ -2043,24 +2036,19 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                   if (error) { setAuthError(error.message); setActionLoading(false); }
                 } catch (err: any) { setAuthError(`Google error: ${err?.message || err}`); setActionLoading(false); }
               }}
-              className="w-full border border-white/10 hover:bg-white/[0.06] text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2.5 transition disabled:opacity-50">
-              {/* Google's official four-colour G, as their sign-in branding
-                  guidelines require. The previous mark was a hand-drawn
-                  approximation with the blue, green and yellow paths set to
-                  opacity 0.15 — so only the red arc rendered and the button
-                  showed a plain red "G" that is not Google's logo. */}
+              className="w-full bg-[#0e111a] hover:bg-[#131724] border border-white/10 hover:border-white/20 text-white rounded-2xl py-3.5 text-sm font-semibold flex items-center justify-center gap-2.5 transition shadow-sm disabled:opacity-50 cursor-pointer">
               <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
                 <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
                 <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
                 <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
               </svg>
-              Continue with Google
+              Google
             </button>
 
-            <p className="text-center text-sm text-slate-400">
+            <p className="text-center text-sm text-slate-400 pt-1">
               New to FX Journal Pro?{' '}
-              <button type="button" onClick={() => { setIsRegistering(true); setAuthError(null); }} className="text-violet-300 hover:text-violet-200 font-semibold transition-colors">Get started</button>
+              <button type="button" onClick={() => { setIsRegistering(true); setAuthError(null); }} className="text-violet-300 hover:text-violet-200 font-semibold transition-colors cursor-pointer">Get started</button>
             </p>
           </form>
         )}
@@ -2070,6 +2058,10 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 }
 
 function AuthModal({ isOpen, onClose, children }: { isOpen: boolean; onClose: () => void; children: React.ReactNode }) {
+  const mouseDownTargetRef = useRef<EventTarget | null>(null);
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isDraggingRef = useRef(false);
+
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -2086,15 +2078,54 @@ function AuthModal({ isOpen, onClose, children }: { isOpen: boolean; onClose: ()
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start sm:items-center justify-center overflow-y-auto p-4" onClick={onClose}>
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" aria-hidden="true"></div>
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-md my-8 sm:my-0 animate-fade-up" onClick={(e) => e.stopPropagation()}>
-        <div className="relative">
-          <div className="absolute -inset-1 bg-gradient-to-r from-violet-600/25 via-indigo-600/15 to-violet-600/25 rounded-2xl blur-xl opacity-60"></div>
-          <div className="relative bg-[#0a0b12]/95 backdrop-blur-2xl border border-white/[0.12] rounded-[22px] p-5 sm:p-7 shadow-2xl shadow-black/60">
-            <div className="absolute top-0 left-6 right-6 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-            <button type="button" onClick={onClose} aria-label="Close sign in dialog" className="absolute right-4 top-4 text-slate-400 hover:text-white transition-colors">
-              <X className="h-5 w-5" />
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4 sm:p-6"
+      onMouseDown={(e) => {
+        mouseDownTargetRef.current = e.target;
+        mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+        isDraggingRef.current = false;
+      }}
+      onMouseMove={(e) => {
+        if (mouseDownPosRef.current) {
+          const dx = e.clientX - mouseDownPosRef.current.x;
+          const dy = e.clientY - mouseDownPosRef.current.y;
+          if (Math.hypot(dx, dy) > 4) {
+            isDraggingRef.current = true;
+          }
+        }
+      }}
+      onMouseUp={() => {
+        // Retain drag status through the immediate click event
+        setTimeout(() => {
+          mouseDownPosRef.current = null;
+          isDraggingRef.current = false;
+        }, 100);
+      }}
+      onClick={(e) => {
+        // If a drag movement occurred anywhere, ignore the click
+        if (isDraggingRef.current) return;
+        if (mouseDownPosRef.current) {
+          const dist = Math.hypot(e.clientX - mouseDownPosRef.current.x, e.clientY - mouseDownPosRef.current.y);
+          if (dist > 4) return;
+        }
+
+        // Only close on stationary click directly on the backdrop container
+        if (e.target === e.currentTarget && mouseDownTargetRef.current === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="cyber-matrix-backdrop fixed inset-0 backdrop-blur-md pointer-events-none" aria-hidden="true"></div>
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-[440px] my-auto animate-fade-up z-10" onClick={(e) => e.stopPropagation()}>
+        <div className="cyber-card-glow-wrap">
+          <div className="cyber-card-surface p-6 sm:p-8">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close dialog"
+              className="absolute right-5 top-5 z-20 text-slate-400 hover:text-white h-8 w-8 rounded-full bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center cursor-pointer"
+            >
+              <X className="h-4 w-4" />
             </button>
             {children}
           </div>

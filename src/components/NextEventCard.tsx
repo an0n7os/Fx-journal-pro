@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Radio, CalendarRange, ArrowRight, Clock } from 'lucide-react';
+import { Radio, CalendarRange, ArrowRight } from 'lucide-react';
 
 interface EconEvent {
   id: string;
@@ -120,10 +120,6 @@ export default function NextEventCard({ onOpenCalendar }: { onOpenCalendar: () =
           <p className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
             Next: {nextEvent.currency} {nextEvent.event}
           </p>
-          <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900/60 px-1.5 py-0.5 rounded">
-            <Clock className="h-3 w-3" />
-            {nextEvent.impact === 'high' ? 'HIGH IMPACT' : nextEvent.impact.toUpperCase()}
-          </span>
         </div>
         <p className="text-xs font-semibold text-red-600 dark:text-red-400 mt-1 tabular-nums">
           Starts in {countdown}
