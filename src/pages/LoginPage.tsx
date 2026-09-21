@@ -217,20 +217,6 @@ const benefits = [
 const PRO_PRICE_USD = '$5.90';
 const PRO_PRICE_INR = '₹499';
 
-const planMatrix: { feature: string; free: string | boolean; pro: string | boolean }[] = [
-  { feature: 'Trading accounts', free: '1 account', pro: 'Unlimited' },
-  { feature: 'Manual trade logging', free: true, pro: true },
-  { feature: 'MT5 automatic sync', free: false, pro: true },
-  { feature: 'Performance analytics', free: true, pro: true },
-  { feature: 'Trading calendar', free: true, pro: true },
-  { feature: 'FX news & economic calendar', free: true, pro: true },
-  { feature: 'Live charts', free: true, pro: true },
-  { feature: 'Pip & position size tools', free: true, pro: true },
-  { feature: 'AI Mentor', free: false, pro: true },
-  { feature: 'Trade history export', free: 'Last 30 days', pro: 'Full history' },
-  { feature: 'Risk & drawdown guards', free: true, pro: true },
-];
-
 const heroPoints = [
   'MT5 Trade Syncing',
   'AI Trading Mentor',
@@ -1507,39 +1493,6 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             </div>
           </div>
 
-          {/* Full comparison, so nobody has to guess what "core features" means */}
-          <div className="lp-card overflow-hidden" data-reveal="up">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[420px]">
-                <caption className="sr-only">Free and Pro plan comparison</caption>
-                <thead>
-                  <tr className="border-b border-white/[0.08]">
-                    <th scope="col" className="text-left font-semibold text-white px-5 py-3.5">Compare plans</th>
-                    <th scope="col" className="text-center lp-eyebrow px-4 py-3.5 w-28">Free</th>
-                    <th scope="col" className="text-center lp-eyebrow px-4 py-3.5 w-28 text-violet-300">Pro</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {planMatrix.map((row) => (
-                    <tr key={row.feature} className="border-b border-white/[0.05] last:border-0">
-                      <th scope="row" className="text-left font-normal text-[13px] text-slate-300 px-5 py-3">{row.feature}</th>
-                      {[row.free, row.pro].map((val, i) => (
-                        <td key={i} className="text-center px-4 py-3">
-                          {val === true ? (
-                            <Check className={`h-4 w-4 mx-auto ${i ? 'text-violet-300' : 'text-emerald-400'}`} aria-label="Included" />
-                          ) : val === false ? (
-                            <span className="text-slate-600" aria-label="Not included">—</span>
-                          ) : (
-                            <span className={`text-[12px] ${i ? 'text-violet-200' : 'text-slate-400'}`}>{val}</span>
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -1805,8 +1758,6 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           <div className="border-t border-white/[0.06] pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
             <p>&copy; {new Date().getFullYear()} FX Journal Pro. All rights reserved.</p>
             <div className="flex items-center gap-4 text-[11px] font-mono">
-              <span className="text-slate-400">London &middot; New York &middot; Tokyo</span>
-              <span className="text-slate-600">&middot;</span>
               <span className="text-slate-400">Made with obsession for traders.</span>
             </div>
           </div>

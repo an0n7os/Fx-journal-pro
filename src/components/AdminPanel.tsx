@@ -960,9 +960,8 @@ Their referral link stops working and ` +
 
               {/* Live Preview Display Box */}
               <div className="lg:col-span-5 p-4 rounded-xl bg-slate-950/80 border border-purple-500/25 space-y-3">
-                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center justify-between">
-                  <span>Live Conversion Preview</span>
-                  <span className="text-emerald-400 font-semibold">Automatic Calculation</span>
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                  Live Conversion Preview
                 </div>
                 <div className="grid grid-cols-2 gap-3 pt-1 border-t border-white/[0.06]">
                   <div>
