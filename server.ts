@@ -2707,15 +2707,29 @@ app.use(async (req, res, next) => {
       }
     }
 
-    // 3. Header-based identity fallback (supports Netlify Functions / cross-origin deployments)
-    if (!authUserId && !authEmail) {
-      const headerUserId = (req.headers['x-auth-user-id'] as string || '').trim();
-      const headerEmail = (req.headers['x-auth-email'] as string || '').trim();
-      if (headerEmail) {
-        authEmail = headerEmail;
-        authUserId = headerUserId;
-      }
-    }
+    // 3. There is deliberately no third path.
+    //
+    // This used to accept identity from x-auth-email / x-auth-user-id whenever
+    // the cookie and the bearer token were both absent, with no signature and
+    // no other proof:
+    //
+    //   curl https://<site>/api/auth/me -H 'x-auth-email: someone@example.com'
+    //
+    // answered with that account's row. For the routes that are not in
+    // IDENTITY_ONLY_ROUTES it went further and loaded their whole database, so
+    // their trades could be read and written too. A complete authentication
+    // bypass, in production as well — the comment claimed it was for "Netlify
+    // Functions / cross-origin deployments", which is exactly where it was
+    // most reachable.
+    //
+    // It also explains an intermittent security test: A2 only failed when the
+    // victim's scoped database happened to be warm in the in-memory cache, so
+    // the same attack passed or failed run to run.
+    //
+    // Nothing needed it. The frontend sends these headers, but it sends them
+    // on same-origin fetches that carry the signed cookie anyway, and the EA
+    // authenticates with its own token and HMAC. Identity now comes only from
+    // something the server signed.
 
     if (authUserId || authEmail) {
       const email = authEmail ? authEmail.toLowerCase() : '';
