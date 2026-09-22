@@ -6673,7 +6673,7 @@ export default function App() {
                         {partnerLink?.hasPartner && mentorAccess && (
                           <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs space-y-4">
                             <div>
-                              <h3 className="font-extrabold text-slate-900 text-base">Mentor access</h3>
+                              <h3 className="font-extrabold text-slate-900 text-base">Privacy &amp; Mentor Access</h3>
                               <p className="text-xs text-slate-400">
                                 Choose what {partnerLink.partnerName || 'your mentor'} can open. Change it
                                 whenever you like — your data, your choice.

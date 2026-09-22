@@ -2970,7 +2970,7 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
         is_pro: existingUserRow?.is_pro || false,
         is_email_verified: true,
         auth_provider: provider || 'google',
-        last_login: new Date().toISOString()
+        last_login: new Date().toISOString(),
       };
       if (useSupabase) {
         const { error: upsertErr } = await supabase.from('users').upsert(userRecord, { onConflict: 'id' });
@@ -3043,7 +3043,7 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
       email_otp: otp,
       otp_expires_at: otpExpiresAt,
       otp_attempts: 0,
-      otp_sent_at: new Date().toISOString()
+      otp_sent_at: new Date().toISOString(),
     };
 
     if (useSupabase) {
@@ -6663,6 +6663,34 @@ type MentorAccess = {
   liveCharts: boolean;
   journal: boolean;
   notebook: boolean;
+};
+
+/**
+ * The spec's stated defaults: every section on except the notebook.
+ *
+ * NOT applied at registration, and deliberately so — this is a product
+ * decision that is still open, not an oversight.
+ *
+ * The rest of the product promises the opposite. The Partner Portal tells a
+ * partner their network's "trades, analysis and journal stay private until
+ * each user turns on Allow Partner to View Trade Details", the settings copy
+ * says "Off by default", and tests/partner.test.mjs asserts that a new
+ * referral shares nothing ("a new referral does not share trades by
+ * default"). Writing these defaults at signup makes all three false at once
+ * and shares a new student's data with their mentor before they have looked
+ * at the screen.
+ *
+ * To adopt the spec, set mentor_access to this on the registration records
+ * and update that assertion and both pieces of copy together.
+ */
+const MENTOR_ACCESS_DEFAULTS = {
+  dashboard: true,
+  analysis: true,
+  accounts: null as string[] | null,
+  calendar: true,
+  liveCharts: true,
+  journal: true,
+  notebook: false,
 };
 
 const MENTOR_ACCESS_BOOLEAN_SECTIONS = [
