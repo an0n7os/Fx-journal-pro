@@ -783,7 +783,7 @@ export default function App() {
       // Check admin status from server (accounts for role updates in Supabase after login)
       authFetch('/api/admin/check')
         .then(res => res.json())
-        .then(data => { setIsAdmin(!!data.isAdmin); setAdminRole(data.role || 'USER'); loadPartnerLink(); })
+        .then(data => { setIsAdmin(!!data.isAdmin); setAdminRole(data.role || 'USER'); loadPartnerLink(); loadMentorAccess(); })
         .catch(() => setIsAdmin(false));
     } else {
       setIsAdmin(false);
@@ -2611,16 +2611,12 @@ export default function App() {
     try {
       const res = await fetch('/api/user/partner-link', { credentials: 'include' });
       if (res.ok) {
-        const body = await res.json();
-        setPartnerLink(body);
-        // Only worth loading for someone who has a mentor; there is nobody the
-        // permissions could apply to otherwise.
-        if (body?.hasPartner) loadMentorAccess();
+        setPartnerLink(await res.json());
       }
     } catch {
       // A failure here just leaves the section hidden; nothing else depends on it.
     }
-  }, [loadMentorAccess]);
+  }, []);
 
   /**
    * Saves one section. The request carries only the key that changed, because
@@ -6670,13 +6666,14 @@ export default function App() {
                           the server: a section that is off is left out of the
                           response, rather than sent and hidden in the console.
                         */}
-                        {partnerLink?.hasPartner && mentorAccess && (
+                        {mentorAccess && (
                           <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs space-y-4">
                             <div>
                               <h3 className="font-extrabold text-slate-900 text-base">Privacy &amp; Mentor Access</h3>
                               <p className="text-xs text-slate-400">
-                                Choose what {partnerLink.partnerName || 'your mentor'} can open. Change it
-                                whenever you like — your data, your choice.
+                                {partnerLink?.hasPartner
+                                  ? `Choose what ${partnerLink.partnerName || 'your mentor'} can open. Change it whenever you like — your data, your choice.`
+                                  : 'Set now what a mentor would be able to open. Nobody has access until you join through one — your data, your choice.'}
                               </p>
                             </div>
 
