@@ -3379,3 +3379,194 @@ html.dark .dx-sentiment-neutral {
 :root:not(.dark) .dx-dark-surface [class*="from-emerald-9"] {
   background-image: linear-gradient(to right, rgba(5, 150, 105, 0.07), rgba(16, 185, 129, 0.04));
 }
+
+/* ==========================================================================
+   Permission rows and switches
+   ==========================================================================
+   Privacy & Mentor Access shipped with bare <input type="checkbox">, which
+   renders as the operating system's square box — the one control in the
+   product that looked like a browser default. The app already had a switch
+   (the theme toggle, Portfolio Guard): an h-5 w-9 track with a translating
+   white knob. This is that switch, named, so the three stop drifting.
+
+   The row carries the state too, not just the switch: a tinted border and a
+   filled icon chip, so a glance answers how much is shared without reading
+   seven labels. */
+
+.dx-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 2.25rem;   /* w-9 */
+  height: 1.25rem;  /* h-5 */
+  padding: 0 2px;
+  border-radius: 999px;
+  background-color: #cbd5e1;
+  transition: background-color .18s ease, box-shadow .18s ease;
+}
+
+.dark .dx-switch {
+  background-color: #334155;
+}
+
+.dx-switch-on,
+.dark .dx-switch-on {
+  background-color: #7c3aed;
+}
+
+.dx-switch-knob {
+  display: block;
+  width: 1rem;      /* h-4 w-4 */
+  height: 1rem;
+  border-radius: 999px;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.28);
+  transform: translateX(0);
+  transition: transform .18s ease;
+}
+
+.dx-switch-on .dx-switch-knob {
+  transform: translateX(1rem);
+}
+
+/* The account sub-list sits inside a row, so its switch is a size down. */
+.dx-switch-sm {
+  width: 1.75rem;
+  height: 1rem;
+}
+
+.dx-switch-sm .dx-switch-knob {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.dx-switch-sm.dx-switch-on .dx-switch-knob {
+  transform: translateX(0.75rem);
+}
+
+.dx-perm-row {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+
+.dark .dx-perm-row {
+  border-color: rgba(255, 255, 255, 0.07);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.dx-perm-row:hover:not(:disabled) {
+  border-color: #c7d2fe;
+  background-color: #ffffff;
+}
+
+.dark .dx-perm-row:hover:not(:disabled) {
+  border-color: rgba(139, 92, 246, 0.3);
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.dx-perm-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.22);
+}
+
+/* A shared row is tinted, so the panel reads at a glance. */
+.dx-perm-row-on {
+  border-color: rgba(124, 58, 237, 0.32);
+  background-color: rgba(124, 58, 237, 0.045);
+}
+
+.dark .dx-perm-row-on {
+  border-color: rgba(139, 92, 246, 0.34);
+  background-color: rgba(139, 92, 246, 0.07);
+}
+
+/* The Accounts row holds its own controls, so it is not itself a button. */
+.dx-perm-row-static {
+  cursor: default;
+  display: flex;
+}
+
+.dx-perm-row-static:hover {
+  border-color: #e2e8f0;
+  background-color: #f8fafc;
+}
+
+.dark .dx-perm-row-static:hover {
+  border-color: rgba(255, 255, 255, 0.07);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.dx-perm-row-static.dx-perm-row-on:hover {
+  border-color: rgba(124, 58, 237, 0.32);
+  background-color: rgba(124, 58, 237, 0.045);
+}
+
+.dark .dx-perm-row-static.dx-perm-row-on:hover {
+  border-color: rgba(139, 92, 246, 0.34);
+  background-color: rgba(139, 92, 246, 0.07);
+}
+
+.dx-perm-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.875rem;
+  height: 1.875rem;
+  margin-top: 1px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  color: #64748b;
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease;
+}
+
+.dark .dx-perm-icon {
+  border-color: rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.03);
+  color: #94a3b8;
+}
+
+.dx-perm-icon-on {
+  border-color: rgba(124, 58, 237, 0.3);
+  background-color: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+}
+
+.dark .dx-perm-icon-on {
+  border-color: rgba(139, 92, 246, 0.35);
+  background-color: rgba(139, 92, 246, 0.16);
+  color: #c4b5fd;
+}
+
+.dx-perm-subrow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 10px;
+  background-color: transparent;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+
+.dx-perm-subrow:hover:not(:disabled) {
+  background-color: rgba(100, 116, 139, 0.08);
+}
+
+.dx-perm-subrow:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+}

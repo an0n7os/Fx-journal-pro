@@ -6660,119 +6660,151 @@ export default function App() {
                         )}
 
                         {/*
-                          Mentor Access. Sharing used to be one switch, so a
-                          student who wanted help reading their analysis had to
-                          hand over their journal too. Each row is enforced on
-                          the server: a section that is off is left out of the
-                          response, rather than sent and hidden in the console.
+                        {/*
+                          Privacy & Mentor Access. Sharing used to be one
+                          switch, so a student who wanted help reading their
+                          analysis had to hand over their journal too. Each row
+                          is enforced on the server: a section that is off is
+                          left out of the response, rather than sent and hidden
+                          in the console.
+
+                          The controls are the app's own switch — the same
+                          h-5 w-9 track and translating knob as the theme and
+                          Portfolio Guard toggles — rather than the browser's
+                          square checkbox, and the whole row is the hit target.
                         */}
                         {mentorAccess && (
-                          <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs space-y-4">
-                            <div>
-                              <h3 className="font-extrabold text-slate-900 text-base">Privacy &amp; Mentor Access</h3>
-                              <p className="text-xs text-slate-400">
-                                {partnerLink?.hasPartner
-                                  ? `Choose what ${partnerLink.partnerName || 'your mentor'} can open. Change it whenever you like — your data, your choice.`
-                                  : 'Set now what a mentor would be able to open. Nobody has access until you join through one — your data, your choice.'}
-                              </p>
+                          <div className="dx-panel p-6 space-y-5">
+                            <div className="flex items-start justify-between gap-4">
+                              <div>
+                                <h3 className="dx-section-title">Privacy &amp; Mentor Access</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-lg leading-relaxed">
+                                  {partnerLink?.hasPartner
+                                    ? `Choose what ${partnerLink.partnerName || 'your mentor'} can open. Change it whenever you like.`
+                                    : 'Set now what a mentor would be able to open. Nobody has access until you join through one.'}
+                                </p>
+                              </div>
+                              {/* Answers "how exposed am I?" without reading
+                                  seven rows. Not the .dx-badge count pill —
+                                  that is for numbers, and a solid inverted
+                                  slab around a sentence reads far heavier than
+                                  a summary should. */}
+                              <span className="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+                                <span className={`h-1.5 w-1.5 rounded-full ${MENTOR_ACCESS_ROWS.some((r) => mentorAccess[r.key] === true) ? 'bg-violet-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                                {MENTOR_ACCESS_ROWS.filter((r) => mentorAccess[r.key] === true).length}
+                                {' of '}{MENTOR_ACCESS_ROWS.length} shared
+                              </span>
                             </div>
 
-                            <div className="border-t border-slate-50 pt-4 space-y-2.5">
-                              {MENTOR_ACCESS_ROWS.map((row) => (
-                                <div
-                                  key={row.key}
-                                  className="flex items-start justify-between gap-4 p-3 bg-slate-50/70 rounded-xl border border-slate-100"
-                                >
-                                  <div className="space-y-0.5 text-xs">
-                                    <strong className="text-slate-800 flex items-center gap-1.5">
-                                      <row.icon className="h-3.5 w-3.5 text-slate-400" />
-                                      {row.label}
-                                    </strong>
-                                    <span className="text-[11px] text-slate-500 block leading-relaxed">
-                                      {row.blurb}
-                                    </span>
-                                  </div>
-                                  <input
-                                    type="checkbox"
-                                    role="switch"
-                                    aria-label={row.label}
-                                    disabled={savingMentorAccess === row.key}
-                                    checked={mentorAccess[row.key] === true}
-                                    onChange={(e) => handleMentorAccessChange(row.key, e.target.checked)}
-                                    className="mt-0.5 h-4.5 w-4.5 shrink-0 rounded border-slate-300 text-violet-600 focus:ring-violet-500 cursor-pointer disabled:opacity-40"
-                                  />
-                                </div>
-                              ))}
-
-                              {/* Accounts is a selection, not a switch: the student
-                                  picks which portfolios are visible. null means every
-                                  account, including any they add later. */}
-                              <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100 space-y-2.5">
-                                <div className="flex items-start justify-between gap-4 text-xs">
-                                  <div className="space-y-0.5">
-                                    <strong className="text-slate-800 flex items-center gap-1.5">
-                                      <Layers className="h-3.5 w-3.5 text-slate-400" />
-                                      Accounts
-                                    </strong>
-                                    <span className="text-[11px] text-slate-500 block leading-relaxed">
-                                      Pick the portfolios to share. Hiding one hides its trades, analysis and
-                                      journal entries everywhere.
-                                    </span>
-                                  </div>
+                            <div className="space-y-2">
+                              {MENTOR_ACCESS_ROWS.map((row) => {
+                                const on = mentorAccess[row.key] === true;
+                                const busy = savingMentorAccess === row.key;
+                                return (
                                   <button
+                                    key={row.key}
                                     type="button"
-                                    disabled={savingMentorAccess === 'accounts'}
-                                    onClick={() => handleMentorAccessChange(
-                                      'accounts',
-                                      mentorAccess.accounts === null ? [] : null,
-                                    )}
-                                    className="shrink-0 text-[11px] font-bold text-violet-600 hover:text-violet-700 disabled:opacity-40"
+                                    role="switch"
+                                    aria-checked={on}
+                                    aria-label={row.label}
+                                    disabled={busy}
+                                    onClick={() => handleMentorAccessChange(row.key, !on)}
+                                    className={`dx-perm-row ${on ? 'dx-perm-row-on' : ''}`}
                                   >
-                                    {mentorAccess.accounts === null ? 'Choose accounts' : 'Share all'}
+                                    <span className={`dx-perm-icon ${on ? 'dx-perm-icon-on' : ''}`}>
+                                      <row.icon className="h-4 w-4" />
+                                    </span>
+                                    <span className="min-w-0 flex-1 text-left">
+                                      <span className="block text-[13px] font-bold text-slate-800 dark:text-slate-100">
+                                        {row.label}
+                                      </span>
+                                      <span className="block text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                                        {row.blurb}
+                                      </span>
+                                    </span>
+                                    <span className={`dx-switch ${on ? 'dx-switch-on' : ''} ${busy ? 'opacity-50' : ''}`}>
+                                      <span className="dx-switch-knob" />
+                                    </span>
                                   </button>
-                                </div>
+                                );
+                              })}
 
-                                {mentorAccess.accounts === null ? (
-                                  <p className="text-[11px] text-slate-400">
-                                    Sharing every account, including any you add later.
-                                  </p>
-                                ) : mentorAccounts.length === 0 ? (
-                                  <p className="text-[11px] text-slate-400">You have no trading accounts yet.</p>
-                                ) : (
-                                  <div className="space-y-1.5 border-t border-slate-100 pt-2.5">
-                                    {mentorAccounts.map((acc) => {
-                                      const on = (mentorAccess.accounts || []).includes(acc.id);
-                                      return (
-                                        <label
-                                          key={acc.id}
-                                          className="flex items-center gap-2.5 text-[11.5px] text-slate-700 cursor-pointer"
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            checked={on}
+                              {/* Accounts is a selection, not a switch: the
+                                  student picks which portfolios are visible.
+                                  null means every account, including any they
+                                  add later. */}
+                              <div className={`dx-perm-row dx-perm-row-static ${mentorAccess.accounts === null || (mentorAccess.accounts || []).length > 0 ? 'dx-perm-row-on' : ''}`}>
+                                <span className={`dx-perm-icon ${mentorAccess.accounts === null || (mentorAccess.accounts || []).length > 0 ? 'dx-perm-icon-on' : ''}`}>
+                                  <Layers className="h-4 w-4" />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="flex items-center justify-between gap-3">
+                                    <span className="block text-[13px] font-bold text-slate-800 dark:text-slate-100">Accounts</span>
+                                    <button
+                                      type="button"
+                                      disabled={savingMentorAccess === 'accounts'}
+                                      onClick={() => handleMentorAccessChange(
+                                        'accounts',
+                                        mentorAccess.accounts === null ? [] : null,
+                                      )}
+                                      className="shrink-0 text-[11px] font-bold text-violet-600 dark:text-violet-300 hover:underline disabled:opacity-40"
+                                    >
+                                      {mentorAccess.accounts === null ? 'Choose accounts' : 'Share all'}
+                                    </button>
+                                  </span>
+                                  <span className="block text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                                    Pick the portfolios to share. Hiding one hides its trades, analysis and
+                                    journal entries everywhere.
+                                  </span>
+
+                                  {mentorAccess.accounts === null ? (
+                                    <span className="mt-2 block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                                      Sharing every account, including any you add later.
+                                    </span>
+                                  ) : mentorAccounts.length === 0 ? (
+                                    <span className="mt-2 block text-[11px] text-slate-500 dark:text-slate-400">
+                                      You have no trading accounts yet.
+                                    </span>
+                                  ) : (
+                                    <span className="mt-2.5 block space-y-1.5 border-t border-slate-200/70 dark:border-white/[0.07] pt-2.5">
+                                      {mentorAccounts.map((acc) => {
+                                        const shown = (mentorAccess.accounts || []).includes(acc.id);
+                                        return (
+                                          <button
+                                            key={acc.id}
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={shown}
+                                            aria-label={acc.name}
                                             disabled={savingMentorAccess === 'accounts'}
-                                            onChange={() => {
+                                            onClick={() => {
                                               const current: string[] = mentorAccess.accounts || [];
                                               handleMentorAccessChange(
                                                 'accounts',
-                                                on ? current.filter((x) => x !== acc.id) : [...current, acc.id],
+                                                shown ? current.filter((x) => x !== acc.id) : [...current, acc.id],
                                               );
                                             }}
-                                            className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 disabled:opacity-40"
-                                          />
-                                          <span className="font-semibold">{acc.name}</span>
-                                        </label>
-                                      );
-                                    })}
-                                  </div>
-                                )}
+                                            className="dx-perm-subrow"
+                                          >
+                                            <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">
+                                              {acc.name}
+                                            </span>
+                                            <span className={`dx-switch dx-switch-sm ${shown ? 'dx-switch-on' : ''}`}>
+                                              <span className="dx-switch-knob" />
+                                            </span>
+                                          </button>
+                                        );
+                                      })}
+                                    </span>
+                                  )}
+                                </span>
                               </div>
                             </div>
 
                             {/* Said rather than left to be discovered: the notebook
                                 never leaves this browser, so there is nothing for the
                                 server to withhold. */}
-                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                            <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 border-t border-slate-200/70 dark:border-white/[0.07] pt-3.5">
                               Your notebook is stored only on this device and is never uploaded, so a mentor
                               cannot open it whatever this setting says. Live charts show market data; only the
                               trade markers drawn on them come from your account.
