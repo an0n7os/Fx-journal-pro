@@ -2557,6 +2557,14 @@ const eaIpLimiter = rateLimit({
 });
 const eaProtection = [eaAccountLimiter, eaTokenLimiter, eaIpLimiter];
 
+// Normalize duplicate slashes in request URL (e.g. //api/auth -> /api/auth)
+app.use((req, _res, next) => {
+  if (req.url.startsWith('//')) {
+    req.url = req.url.replace(/^\/+/, '/');
+  }
+  next();
+});
+
 // CORS middleware — allow browser requests from authorized origins
 app.use((req, res, next) => {
   const allowedOrigins = [
