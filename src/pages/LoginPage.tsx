@@ -1851,14 +1851,11 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
       )}
 
       <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal}>
-        {/* Glowing Brand Icon Badge & Terminal Tag */}
-        <div className="mb-5 flex items-center justify-between">
+        {/* Glowing Brand Icon Badge */}
+        <div className="mb-5 flex items-center">
           <div className="h-12 w-12 rounded-2xl flex items-center justify-center bg-slate-900/90 border border-violet-500/35 shadow-[0_0_25px_rgba(125,51,255,0.45)]">
             <Logo iconOnly size={26} />
           </div>
-          <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-violet-300 bg-violet-500/10 border border-violet-500/20 px-2.5 py-1 rounded-full">
-            Official Terminal
-          </span>
         </div>
 
         <div className="mb-6">
