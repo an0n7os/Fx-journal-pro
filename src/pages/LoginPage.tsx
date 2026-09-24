@@ -1851,13 +1851,14 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
       )}
 
       <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal}>
-        {/* Glowing Badge & Header inspired by Cyber Reference */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="cyber-badge-glow h-12 w-12 rounded-2xl flex items-center justify-center text-white shadow-lg">
-            <svg className="w-6 h-6 fill-white drop-shadow-md" viewBox="0 0 24 24">
-              <path d="M12 2l2.4 5.2 5.6.8-4 4.1 1 5.7-5-2.8-5 2.8 1-5.7-4-4.1 5.6-.8L12 2z" />
-            </svg>
+        {/* Glowing Brand Icon Badge & Terminal Tag */}
+        <div className="mb-5 flex items-center justify-between">
+          <div className="h-12 w-12 rounded-2xl flex items-center justify-center bg-slate-900/90 border border-violet-500/35 shadow-[0_0_25px_rgba(125,51,255,0.45)]">
+            <Logo iconOnly size={26} />
           </div>
+          <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-violet-300 bg-violet-500/10 border border-violet-500/20 px-2.5 py-1 rounded-full">
+            Official Terminal
+          </span>
         </div>
 
         <div className="mb-6">
