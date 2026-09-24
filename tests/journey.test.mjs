@@ -5,7 +5,7 @@
 //
 // This is the "does the product work end to end" test, as opposed to the
 // per-area suites. Run it with the dev server up on :3000.
-const BASE = 'http://localhost:3000';
+const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const ok = (n, p, d = '') => out.push({ n, p, d });
 const section = (t) => out.push({ section: t });
@@ -185,7 +185,11 @@ section('10. Admin console');
 // Matches DEV_ADMIN_PASSWORD from .env.testbilling, or whatever the seed
 // script used. Skips cleanly when the local admin has a different password.
 const adminPassword = process.env.DEV_ADMIN_PASSWORD?.trim() || 'Demo@12345';
-const adminLogin = await api('/api/auth/login', { method: 'POST', body: { email: 'admin@axyfx.com', password: adminPassword } });
+// The single developer account, the same one the server seeds from these two
+// variables. The demo admin@axyfx.com identity it replaced was a hardcoded
+// SUPER_ADMIN back door.
+const adminEmail = process.env.DEV_ACCOUNT_EMAIL?.trim().toLowerCase() || 'dev@localhost';
+const adminLogin = await api('/api/auth/login', { method: 'POST', body: { email: adminEmail, password: adminPassword } });
 if (adminLogin.status !== 200) {
   ok('admin sign-in (skipped: no local admin password on this server)', true, `status ${adminLogin.status}`);
 } else {

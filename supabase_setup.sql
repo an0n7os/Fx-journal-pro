@@ -268,6 +268,13 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- preferences: small per-user UI settings, e.g. skipDeleteConfirm ("don't ask
+-- again" on a trade delete). PATCH /api/auth/preferences answered "Preferences
+-- saved" and saveDatabase then dropped the field, because there was no column
+-- to drop it into — so the setting never survived a cold start and the app kept
+-- asking. JSONB so new settings need no further migration.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}'::jsonb;
+
 
 -- ============================================================================
 -- add_otp_columns.sql
@@ -927,6 +934,29 @@ DROP POLICY IF EXISTS "Users can manage their own risk settings" ON risk_setting
 DROP POLICY IF EXISTS "Allow anon full access on support_tickets" ON support_tickets;
 DROP POLICY IF EXISTS "Allow authenticated full access on support_tickets" ON support_tickets;
 DROP POLICY IF EXISTS "Users can manage their own tickets" ON support_tickets;
+
+-- These four were created above with FOR ALL TO anon USING (true) but were
+-- never revoked, so running this script left the public key -- which ships in
+-- the browser bundle as VITE_SUPABASE_KEY -- with full read AND write on them.
+-- admin_audit_logs is the worst of the four: anyone could have read the admin
+-- activity trail and, worse, rewritten or deleted it. mt5_deals holds every
+-- synced broker deal.
+ALTER TABLE mt5_deals         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bug_reports       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE feature_requests  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_audit_logs  ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow anon full access on mt5_deals" ON mt5_deals;
+DROP POLICY IF EXISTS "Allow authenticated full access on mt5_deals" ON mt5_deals;
+
+DROP POLICY IF EXISTS "Allow anon full access on bug_reports" ON bug_reports;
+DROP POLICY IF EXISTS "Allow authenticated full access on bug_reports" ON bug_reports;
+
+DROP POLICY IF EXISTS "Allow anon full access on feature_requests" ON feature_requests;
+DROP POLICY IF EXISTS "Allow authenticated full access on feature_requests" ON feature_requests;
+
+DROP POLICY IF EXISTS "Allow anon full access on admin_audit_logs" ON admin_audit_logs;
+DROP POLICY IF EXISTS "Allow authenticated full access on admin_audit_logs" ON admin_audit_logs;
 
 -- ── Result: no policy for `anon` ─────────────────────────────────────────────
 -- With RLS enabled and no policy granting it anything, the anon key can no

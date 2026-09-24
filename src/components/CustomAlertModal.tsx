@@ -31,17 +31,15 @@ export default function CustomAlertModal({
   const handleConfirm = () => {
     if (onConfirm) {
       onConfirm();
-    } else {
-      onClose();
     }
+    onClose();
   };
 
   const handleCancel = () => {
     if (onCancel) {
       onCancel();
-    } else {
-      onClose();
     }
+    onClose();
   };
 
   return (
@@ -153,11 +151,38 @@ export default function CustomAlertModal({
                 {cancelText || 'Maybe Later'}
               </button>
             </>
+          ) : cancelText ? (
+            <>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                className={`w-full sm:flex-1 py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white transition cursor-pointer active:scale-[0.98] ${
+                  type === 'warning' || type === 'error'
+                    ? 'bg-rose-600 hover:bg-rose-500 shadow-md shadow-rose-600/30'
+                    : 'bg-violet-600 hover:bg-violet-500 shadow-md'
+                }`}
+              >
+                {confirmText || 'Confirm'}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="w-full sm:w-auto py-2.5 px-4 rounded-xl font-semibold text-xs text-slate-400 hover:text-slate-200 hover:bg-white/[0.05] transition cursor-pointer"
+              >
+                {cancelText}
+              </button>
+            </>
           ) : (
             <button
               type="button"
               onClick={handleConfirm}
-              className="w-full py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white bg-violet-600 hover:bg-violet-500 shadow-md transition cursor-pointer"
+              className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white transition cursor-pointer active:scale-[0.98] ${
+                type === 'error'
+                  ? 'bg-rose-600 hover:bg-rose-500'
+                  : type === 'success'
+                  ? 'bg-emerald-600 hover:bg-emerald-500'
+                  : 'bg-violet-600 hover:bg-violet-500'
+              }`}
             >
               {confirmText || 'Got it'}
             </button>

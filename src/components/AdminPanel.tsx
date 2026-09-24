@@ -6,6 +6,16 @@ import { SupportTicket, Announcement } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import SubAdminConsole from './SubAdminConsole';
 
+/**
+ * The Pro list price, in rupees.
+ *
+ * The panel had 399 written into four places — a revenue fallback, the MRR
+ * fallback, the subscriber caption and the record-payment default — so after
+ * the plan moved to ₹499 the admin's own dashboard quoted the old price back
+ * at them. It mirrors the server's PRO_PLAN_AMOUNT_PAISE / 100.
+ */
+const PRO_PRICE_INR = 499;
+
 function formatDateTime(iso?: string | null): string {
   if (!iso) return 'Never';
   const d = new Date(iso);
@@ -105,7 +115,7 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
   // Manual payment recording modal
   const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
   const [recordEmail, setRecordEmail] = useState('');
-  const [recordAmount, setRecordAmount] = useState('399');
+  const [recordAmount, setRecordAmount] = useState(String(PRO_PRICE_INR));
   const [recordMethod, setRecordMethod] = useState<'upi' | 'card' | 'bank_transfer' | 'cash'>('upi');
   const [recordNotes, setRecordNotes] = useState('');
   const [recordDays, setRecordDays] = useState('30');
@@ -229,7 +239,7 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           userEmail: recordEmail.trim(),
-          amount: Number(recordAmount) || 399,
+          amount: Number(recordAmount) || PRO_PRICE_INR,
           method: recordMethod,
           notes: recordNotes,
           days: Number(recordDays) || 30
@@ -1504,7 +1514,11 @@ Their referral link stops working and ` +
                 </span>
               </div>
               <div className="text-2xl font-black text-yellow-400 font-mono">
-                ₹{billingData?.totalRevenue ?? (dashboardStats?.totalRevenue || (totalProCount * 399))}
+                {/* No `|| totalProCount * 399` tail: it invented revenue for a
+                    platform with no payments, at a price that has not applied
+                    since Pro became ₹499. The server now reports captured
+                    payments, and 0 is the honest answer when there are none. */}
+                ₹{billingData?.totalRevenue ?? dashboardStats?.totalRevenue ?? 0}
               </div>
               <div className="text-[10px] text-slate-500 mt-1">Platform gross subscriptions</div>
             </div>
@@ -1518,7 +1532,7 @@ Their referral link stops working and ` +
                 </span>
               </div>
               <div className="text-2xl font-black text-emerald-400 font-mono">
-                ₹{billingData?.mrr ?? (totalProCount * 399)}
+                ₹{billingData?.mrr ?? (totalProCount * PRO_PRICE_INR)}
               </div>
               <div className="text-[10px] text-slate-400 mt-1">Active monthly run-rate</div>
             </div>
@@ -1534,7 +1548,7 @@ Their referral link stops working and ` +
               <div className="text-2xl font-black text-violet-300 font-mono">
                 {billingData?.activeCount ?? totalProCount}
               </div>
-              <div className="text-[10px] text-slate-400 mt-1">Paying ₹399/mo Pro tier</div>
+              <div className="text-[10px] text-slate-400 mt-1">Paying ₹{PRO_PRICE_INR}/mo Pro tier</div>
             </div>
 
             {/* Free Plan Users */}
@@ -1708,12 +1722,15 @@ Their referral link stops working and ` +
                   }
 
                   return filtered.map((p: any) => {
-                    const amt = p.amount ? (p.amount > 1000 ? p.amount / 100 : p.amount) : 399;
+                    // Amounts are stored in rupees. The old `> 1000 ? / 100`
+                    // guess divided any genuine payment over ₹1,000 by a
+                    // hundred, and `: 399` showed money for a row that had none.
+                    const amt = Number(p.amount) || 0;
                     return (
                       <tr key={p.id} className="hover:bg-slate-800/40 transition">
                         <td className="py-3 px-4">
                           <div className="font-semibold text-white">{p.userName || p.userEmail?.split('@')[0] || 'Subscriber'}</div>
-                          <div className="text-[11px] text-slate-400 font-mono">{p.userEmail || 'subscriber@axyfx.com'}</div>
+                          <div className="text-[11px] text-slate-400 font-mono">{p.userEmail || 'Unknown account'}</div>
                         </td>
                         <td className="py-3 px-4 font-mono text-slate-400">{p.id}</td>
                         <td className="py-3 px-4">

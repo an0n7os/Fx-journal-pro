@@ -9,7 +9,7 @@
 // Runs against the dev server on :3000, same as the other suites. With no
 // Supabase configured the server uses its file-backed store, which exercises
 // the same code paths.
-const BASE = 'http://localhost:3000';
+const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const ok = (n, p, d = '') => out.push({ n, p, d });
 
@@ -64,7 +64,8 @@ const stamp = Date.now();
 // DEV_ADMIN_PASSWORD, and hardcoding it made every later assertion fail as
 // soon as the seed password changed.
 const adminPassword = process.env.DEV_ADMIN_PASSWORD?.trim() || 'Demo@12345';
-const admin = await signIn('admin@axyfx.com', adminPassword);
+const adminEmail = process.env.DEV_ACCOUNT_EMAIL?.trim().toLowerCase() || 'dev@localhost';
+const admin = await signIn(adminEmail, adminPassword);
 ok('setup: signed in as super admin', !!admin.cookie);
 
 const partnerA = await signIn(`pa_${stamp}@example.com`);

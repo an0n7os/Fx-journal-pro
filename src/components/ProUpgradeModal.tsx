@@ -39,13 +39,23 @@ const DEV_BYPASS = import.meta.env.DEV;
  * than the row beside it and knocked the whole two-column list out of
  * alignment. Anything much longer than these will do it again.
  */
+/*
+ * "WhatsApp news alerts" is deliberately absent.
+ *
+ * Nothing sends them. /api/reminders/whatsapp stores a reminder in a
+ * module-level array — wiped on every deploy, and on a serverless platform
+ * between invocations — and there is no sender, no cron and no provider
+ * anywhere in the codebase; the endpoint's own comment says so. Listing it
+ * here charged ₹499 for something that could never arrive. It goes back in the
+ * moment a sender exists.
+ */
 const PRO_BENEFITS = [
   'Unlimited portfolios',
   'MT5 auto-sync & cloud',
   'AI Mentor on your trades',
   'Live Chart with markers',
   'Excel & PDF reports',
-  'WhatsApp news alerts',
+  'Economic calendar & FX news',
 ];
 
 /** Shown as chips so the long list of methods stops crowding a table row. */
@@ -225,7 +235,26 @@ export default function ProUpgradeModal({
       }
 
       if (typeof (window as any).Razorpay === 'undefined') {
-        throw new Error('Razorpay SDK failed to load. Please refresh and try again.');
+        await new Promise<boolean>((resolve) => {
+          const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
+          if (existing) {
+            existing.addEventListener('load', () => resolve(true));
+            existing.addEventListener('error', () => resolve(false));
+            // In case it finished loading between checks
+            if ((window as any).Razorpay) return resolve(true);
+            return;
+          }
+          const script = document.createElement('script');
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          script.async = true;
+          script.onload = () => resolve(true);
+          script.onerror = () => resolve(false);
+          document.body.appendChild(script);
+        });
+      }
+
+      if (typeof (window as any).Razorpay === 'undefined') {
+        throw new Error('Razorpay SDK failed to load. Please check your internet connection and try again.');
       }
 
       const rzp = new (window as any).Razorpay({

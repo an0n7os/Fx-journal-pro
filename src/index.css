@@ -44,14 +44,18 @@ input:-webkit-autofill:active,
   }
 }
 
+/* No opacity ramp: this drives the settings section menu, which opens directly
+   over the panel it is about to replace. Fading in from 0 meant that for the
+   first frames of every open, the menu's eight rows and the panel's own
+   full-contrast text were both visible at once — "Plan & Billing" and
+   "CURRENT PLAN / Pro / Rs 499" printed through each other, unreadable. The
+   surface is opaque from frame one; translateY and scaleY carry the motion. */
 @keyframes slide-down {
   from {
-    opacity: 0;
     transform: translateY(-10px) scaleY(0.95);
   }
 
   to {
-    opacity: 1;
     transform: translateY(0) scaleY(1);
   }
 }
@@ -3569,4 +3573,155 @@ html.dark .dx-sentiment-neutral {
 .dx-perm-subrow:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+}
+
+/* ------------------------------------------------------------------ *
+ * Wordmark on the permanently dark shell
+ *
+ * `.lp` is the marketing, login and onboarding shell. It is dark in both
+ * themes, so the wordmark inside it must not follow the app theme: with a
+ * saved light preference the dark-ink variant painted #151223 lettering on
+ * the #070a12 hero, which was all but invisible.
+ *
+ * Logo renders both variants and lets CSS choose, so overriding the choice
+ * here needs no prop and no JavaScript theme read.
+ * ------------------------------------------------------------------ */
+.lp img[src="/Wordmark.svg"] {
+  display: none;
+}
+
+.lp img[src="/Wordmark-White.svg"] {
+  display: block;
+}
+
+/* ------------------------------------------------------------------ *
+ * Target size (WCAG 2.2, 2.5.8)
+ *
+ * The marketing footer's links rendered 15-16px tall and the FX News
+ * currency chips 21px, both under the 24px minimum — small enough to be
+ * genuinely hard to hit on a phone. The type sizes are deliberate, so the
+ * height comes from padding rather than from a larger font.
+ *
+ * Inline links inside a sentence are exempt from 2.5.8 and are left alone:
+ * these are list and chip targets, which are not.
+ * ------------------------------------------------------------------ */
+.lp footer a,
+.lp footer button {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.fx-news-currency-chip {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ------------------------------------------------------------------ *
+ * Mobile: stop one unbreakable child widening a whole grid track
+ *
+ * A grid track defaults to minmax(auto, 1fr), and `auto` cannot shrink below
+ * its content's min-content width. In #fx-news one decorative preview card
+ * had a 357px min-content, so at 375px the single column sized itself to
+ * 399px inside a 343px content box. Because `.lp` clips overflow-x, the
+ * section's heading and body copy were cut off 40px short with no way to
+ * scroll to them - 42 elements in all.
+ *
+ * min-width: 0 turns the track back into minmax(0, 1fr), so the column
+ * follows the container and the card clips its own decorative innards
+ * instead of pushing the text off-screen. It also stops this recurring:
+ * any future long URL or wide mock has the same effect otherwise.
+ * ------------------------------------------------------------------ */
+@media (max-width: 1023px) {
+  .lp .grid > * {
+    min-width: 0;
+  }
+}
+
+/* Eyebrow labels are 10px uppercase monospace with .18em tracking. That reads
+   on a desktop but is genuinely hard on a phone, and these carry real copy
+   ("#1 Best Trading Journal", "FX News & Economic Calendar"), not decoration.
+   One pixel and slightly tighter tracking is enough; the design language is
+   unchanged. The 10-11px text inside the mock preview cards is deliberately
+   dense UI and is left alone. */
+@media (max-width: 767px) {
+  .lp-eyebrow {
+    font-size: 11px;
+    letter-spacing: .14em;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Mobile: stop iOS zooming the page on every field focus
+ *
+ * Safari on iOS zooms the viewport whenever a focused text control has a
+ * font-size below 16px, and the user then has to pinch back out. Every input
+ * in the app renders at 14px, so tapping any field in the trade form — the
+ * most-used screen on a phone — jumped the layout.
+ *
+ * 16px only below the sm breakpoint, so the desktop density is untouched.
+ * `max-height` is checked too, because a landscape phone is wider than 640px
+ * and has the same behaviour.
+ * ------------------------------------------------------------------ */
+@media (max-width: 639px), (max-height: 500px) and (orientation: landscape) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Logo scale on a phone
+ *
+ * At 375px the lockup rendered 177px wide — 47% of the screen — which left
+ * the "Get Started" button and the hamburger fighting for the rest, and only
+ * 16px of headroom at 320px. One scale variable takes the mark from 28px to
+ * 24px and carries the wordmark and the gap with it, so the proportions the
+ * artwork was measured for are preserved exactly; scaling any of the three
+ * on its own is what throws a lockup out of true.
+ *
+ * Vertical alignment needs nothing: the wordmark's box IS its cap height, so
+ * `items-center` already puts the capitals on the mark's centre — measured at
+ * 34.0px for the mark, the wordmark, the CTA and the hamburger alike.
+ * ------------------------------------------------------------------ */
+@media (max-width: 639px) {
+  .dx-logo {
+    --logo-scale: 0.857;
+  }
+}
+
+/* At 320px the nav budget leaves the lockup ~130px, but the wordmark needs
+   146px to render at its natural aspect beside a 24px mark. maxWidth was
+   letterboxing it instead: object-contain shrank the artwork to 11.6px tall
+   against a 24px mark, a 0.48 ratio where the artwork is drawn for 0.62 — the
+   lockup visibly out of true. Below 360px the mark carries the brand on its
+   own, at full size, and the nav gets the room back. The mark's own alt text
+   keeps the link named. */
+@media (max-width: 359px) {
+  .dx-logo img[src="/Wordmark.svg"],
+  .dx-logo img[src="/Wordmark-White.svg"] {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * The settings column must not be a stacking context
+ *
+ * `.dark aside` above applies backdrop-filter: blur(16px) to every <aside>,
+ * which is right for the dashboard's nav rail. But backdrop-filter also makes
+ * the element a stacking context AND a containing block for absolutely
+ * positioned descendants, so the settings section dropdown could not rise
+ * above the panel rendered in the next grid column: raising its z-index to
+ * 9999 changed nothing, and the menu's eight rows and the panel's own text
+ * painted through each other.
+ *
+ * The blur bought nothing here — this column has no content behind it to
+ * blur — so switching it off costs no visual change and frees the dropdown.
+ * ------------------------------------------------------------------ */
+.dark aside.settings-aside,
+aside.settings-aside {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }

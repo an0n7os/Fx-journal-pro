@@ -4,7 +4,7 @@
 //
 // Runs against the dev server on :3000. When Supabase is not configured the
 // server uses its in-memory store, which exercises the same code paths.
-const BASE = 'http://localhost:3000';
+const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const ok = (n, p, d = '') => out.push({ n, p, d });
 

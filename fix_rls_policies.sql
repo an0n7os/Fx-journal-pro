@@ -47,6 +47,29 @@ DROP POLICY IF EXISTS "Allow anon full access on support_tickets" ON support_tic
 DROP POLICY IF EXISTS "Allow authenticated full access on support_tickets" ON support_tickets;
 DROP POLICY IF EXISTS "Users can manage their own tickets" ON support_tickets;
 
+-- These four tables were granted the same FOR ALL TO anon USING (true) by the
+-- schema migrations but were missed by the lockdown above, so running the whole
+-- setup still left the public key with full read AND write on them.
+-- admin_audit_logs is the worst: anyone holding the publishable key -- which
+-- ships in the browser bundle -- could read the admin activity trail and, worse,
+-- rewrite or delete it. mt5_deals holds every synced broker deal.
+ALTER TABLE mt5_deals         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bug_reports       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE feature_requests  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_audit_logs  ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow anon full access on mt5_deals" ON mt5_deals;
+DROP POLICY IF EXISTS "Allow authenticated full access on mt5_deals" ON mt5_deals;
+
+DROP POLICY IF EXISTS "Allow anon full access on bug_reports" ON bug_reports;
+DROP POLICY IF EXISTS "Allow authenticated full access on bug_reports" ON bug_reports;
+
+DROP POLICY IF EXISTS "Allow anon full access on feature_requests" ON feature_requests;
+DROP POLICY IF EXISTS "Allow authenticated full access on feature_requests" ON feature_requests;
+
+DROP POLICY IF EXISTS "Allow anon full access on admin_audit_logs" ON admin_audit_logs;
+DROP POLICY IF EXISTS "Allow authenticated full access on admin_audit_logs" ON admin_audit_logs;
+
 -- ── Result: no policy for `anon` ─────────────────────────────────────────────
 -- With RLS enabled and no policy granting it anything, the anon key can no
 -- longer read or write these tables at all. That is the intended state: the

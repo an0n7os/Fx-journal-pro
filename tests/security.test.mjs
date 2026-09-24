@@ -1,5 +1,5 @@
 // Re-runs the exact attacks found in the audit against the running dev server.
-const BASE = 'http://localhost:3000';
+const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const results = [];
 
 function record(name, passed, detail) {

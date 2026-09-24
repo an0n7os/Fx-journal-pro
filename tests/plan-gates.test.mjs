@@ -5,7 +5,7 @@
 // with proRequired is.
 //
 // Runs against the dev server on :3000.
-const BASE = 'http://localhost:3000';
+const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const ok = (n, p, d = '') => out.push({ n, p, d });
 
@@ -38,7 +38,8 @@ const stamp = Date.now();
 // password silently turned every assertion below into a failure, because the
 // admin login returned no cookie and nothing after it could run.
 const adminPassword = process.env.DEV_ADMIN_PASSWORD?.trim() || 'Demo@12345';
-const admin = await signIn('admin@axyfx.com', adminPassword);
+const adminEmail = process.env.DEV_ACCOUNT_EMAIL?.trim().toLowerCase() || 'dev@localhost';
+const admin = await signIn(adminEmail, adminPassword);
 ok('setup: signed in as super admin', !!admin.cookie);
 const free = await signIn(`plan_free_${stamp}@example.com`);
 ok('setup: free user signed in', !!free.cookie);

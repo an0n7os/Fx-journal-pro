@@ -1,51 +1,75 @@
-# Local development accounts
+# The developer account
 
-Seed accounts for trying the app on a developer machine. They exist only in the
-local `db.json`, which is **not** in this repository — every clone starts from
-the seed data written by `loadDatabaseFromFile()` in `server.ts`.
+One account, for local work and the test suite. It does not exist in
+production.
 
-These credentials do not work against a real deployment. In production the
-server runs on Supabase, never on `db.json`, and the development back doors
-below are closed by the `NODE_ENV === 'production'` guards.
+## Setting it up
 
-## Password
-
-All seeded accounts share one password:
+Both variables are needed. Without `DEV_ADMIN_PASSWORD` there is no developer
+account at all — not a weak one, none.
 
 ```
-Demo@12345
+DEV_ACCOUNT_EMAIL=dev@localhost
+DEV_ADMIN_PASSWORD=<choose one>
 ```
 
-To use a different one, hash it into `db.json`, or set `DEV_ADMIN_PASSWORD` in
-`.env` for the `admin@axyfx.com` / `demo@axyfx.com` fallback accounts (see the
-`DEV_DEMO_PASSWORD_HASH` block in `server.ts`).
+Start the server and sign in with those. The account is a `SUPER_ADMIN`, so the
+admin console, the sub-admin console and the partner portal are all reachable.
 
-## Accounts
+The password is hashed with bcrypt at boot, so changing `DEV_ADMIN_PASSWORD`
+takes effect on the next restart. `tsx` does not watch, so restart it yourself.
 
-| Email | Role | Plan | What it is for |
-| --- | --- | --- | --- |
-| `admin@axyfx.com` | `SUPER_ADMIN` | Pro | Admin Panel: every user, roles, plans, audit log |
-| `mentor@axyfx.com` | `SUB_ADMIN` | Pro | Sub-Admin Console: only the assigned users |
-| `arun@example.com` | `USER` | Pro | Pro features: MT5 Sync, Live Chart, AI Mentor, Excel/PDF export |
-| `nisha@example.com` | `USER` | Free | Free plan and the upgrade walls |
-| `sam@example.com` | `USER` | Free | A second free client |
+## Why it cannot reach production
 
-In development any unknown email signs in and creates a fresh free account on
-the spot, so extra test clients need no setup.
+`IS_DEV` gates both the email and the hash:
 
-## Partner role
+```ts
+const IS_DEV = !IS_SERVERLESS && process.env.NODE_ENV !== 'production';
+```
 
-No partner is seeded, because a partner is made through the admin flow rather
-than by editing a row. Sign in as `admin@axyfx.com`, open the Admin Panel,
-find a user and choose **Upgrade to Partner** with a referral code. That is
-also the only way to get a `partner_profiles` row, which the Partner Portal
-needs.
+`IS_SERVERLESS` is true on Vercel, Netlify and Lambda from the platform's own
+variables, so a serverless deployment is production whether or not `NODE_ENV`
+arrives — `netlify.toml`'s `[build.environment]` reaches the build, not the
+function runtime, and that gap once left a live site running as development.
 
-## Production
+On a live site `DEV_ACCOUNT_EMAIL` is the empty string and the hash is never
+computed, so the email cannot be signed into even if it is guessed.
 
-There is no in-app path to create the first administrator on a fresh
-deployment. Promote one directly in Supabase:
+## What this replaced
+
+The project used to ship demo identities, and they were removed rather than
+renamed:
+
+- `admin@axyfx.com` and `demo@axyfx.com` minted a `SUPER_ADMIN` from a
+  hardcoded bcrypt hash committed to the repository. Two guessable names
+  granting full admin wherever the guard did not hold.
+- The file-store seed carried a named person's real email address together with
+  their trading account and eleven of their trades. Sample rows in application
+  source become someone's revenue and activity figures on the admin dashboard
+  of any deployment that falls back to the file store.
+- `seed_accounts_supabase.sql` and `seed_demo_client_accounts.sql` inserted ten
+  more demo identities, including an `admin@axyfx.com` `SUPER_ADMIN`. Neither
+  was referenced by `supabase_setup.sql` or the migration checker, so nothing
+  stopped one being run by hand against the live database.
+- `scripts/seed-subadmin-demo.mjs` wrote a sub-admin and three traders into
+  `db.json`.
+- The audit log began with a fabricated `system.startup` entry attributed to
+  `admin@axyfx.com`. An audit trail whose first row is invented is worse than
+  an empty one; it is the record used to answer who changed a role or blocked
+  an account.
+
+## The first administrator on a live site
+
+There is no seeded admin in production. Create your account through the normal
+sign-up, then promote it once:
 
 ```sql
 UPDATE users SET role = 'SUPER_ADMIN' WHERE email = 'you@example.com';
 ```
+
+## Tests
+
+`journey`, `partner` and `plan-gates` sign in as the developer account and read
+the same two variables, defaulting to `dev@localhost`. They fail rather than
+skip if it is missing, because an admin-gated assertion that silently does not
+run is worse than a red one.

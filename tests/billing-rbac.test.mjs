@@ -3,7 +3,7 @@
 //   2. an unsigned or wrongly-signed webhook cannot grant Pro
 import crypto from 'node:crypto';
 
-const BASE = 'http://localhost:3000';
+const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const ok = (n, p, d = '') => out.push({ n, p, d });
 

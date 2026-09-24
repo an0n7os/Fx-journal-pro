@@ -611,8 +611,6 @@ export default function App() {
   const [guidedTourStep, setGuidedTourStep] = useState(1);
 
   // One-time MT5 Sync tour (all users)
-  const [showMT5Tour, setShowMT5Tour] = useState(false);
-  const [mt5TourStep, setMT5TourStep] = useState(1);
 
   // Theme state with local persistence
   // Two letters from the display name, falling back to the email. Shown in the
@@ -922,16 +920,12 @@ export default function App() {
   // opens with "we've fixed and improved MT5 syncing", which reads to a brand
   // new customer as "this used to be broken". It also points at a Pro feature.
   // So: existing users only (they have trades), and Pro only.
-  useEffect(() => {
-    if (!user || loading) return;
-    if (localStorage.getItem('journal_mt5_tour_done') === '1') return;
-    if (showGuidedTour) return;
-    if (!user.isPro) return;
-    if (trades.length > 0 && localStorage.getItem('journal_tutorial_done') === '1') {
-      setMT5TourStep(1);
-      setShowMT5Tour(true);
-    }
-  }, [user, loading, showGuidedTour, trades]);
+  // The MT5 Sync Tour was removed: the state and handlers existed but no
+  // component ever rendered it, so setting the flag showed nothing — and
+  // because the bottom tab bar hid itself whenever a tour was "open", the
+  // mobile navigation disappeared permanently for every Pro user with trades.
+  // Nothing could clear it, since completeMT5Tour had no UI to be called from.
+
 
   const startGuidedTour = () => {
     setGuidedTourStep(1);
@@ -956,32 +950,6 @@ export default function App() {
     setGuidedTourStep(prev => {
       const back = prev - 1;
       if (back === 2) setActiveTab('accounts');
-      if (back === 1) setActiveTab('dashboard');
-      return Math.max(back, 1);
-    });
-  };
-
-  const startMT5Tour = () => {
-    setMT5TourStep(1);
-    setShowMT5Tour(true);
-  };
-
-  const completeMT5Tour = () => {
-    localStorage.setItem('journal_mt5_tour_done', '1');
-    setShowMT5Tour(false);
-  };
-
-  const nextMT5TourStep = () => {
-    setMT5TourStep(prev => {
-      const next = prev + 1;
-      if (next === 2) setActiveTab('mt5');
-      return Math.min(next, 3);
-    });
-  };
-
-  const backMT5TourStep = () => {
-    setMT5TourStep(prev => {
-      const back = prev - 1;
       if (back === 1) setActiveTab('dashboard');
       return Math.max(back, 1);
     });
@@ -2478,6 +2446,19 @@ export default function App() {
     ? new Date(subscription.currentPeriodEnd).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
     : null;
 
+  /**
+   * When one-time Pro runs out. `user.proUntil` is what the server checks Pro
+   * against, and it is the only date a one-time buyer has — they have no
+   * subscription row, so renewalDate above is always null for them.
+   */
+  const proUntilLabel = (() => {
+    const raw = (user as any)?.proUntil;
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  })();
+
   const loadBilling = useCallback(async () => {
     try {
       const [cfgRes, subRes] = await Promise.all([
@@ -2517,19 +2498,37 @@ export default function App() {
     setShowProModal(true);
   };
 
-  const handleCancelSubscription = async () => {
-    if (!window.confirm('Cancel Pro? You keep access until the end of the period you have already paid for.')) return;
-    setActionLoading(true);
-    try {
-      const res = await authFetch('/api/payments/cancel', { method: 'POST' });
-      const data = await res.json().catch(() => ({}));
-      alert(data?.message || data?.error || 'Subscription updated.');
-      await loadBilling();
-    } catch (e) {
-      alert('Could not cancel right now. Please contact support.');
-    } finally {
-      setActionLoading(false);
-    }
+  const handleCancelSubscription = () => {
+    showAlert(
+      'Are you sure you want to cancel your Pro subscription? You will still keep access to all Pro features until your current billing period ends.',
+      {
+        title: 'Cancel Subscription?',
+        type: 'warning',
+        confirmText: 'Yes, Cancel Pro',
+        cancelText: 'Keep Subscription',
+        onConfirm: async () => {
+          setActionLoading(true);
+          try {
+            const res = await authFetch('/api/payments/cancel', { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+            showAlert(data?.message || data?.error || 'Your subscription has been cancelled. You will retain Pro access until the end of your billing cycle.', {
+              title: 'Subscription Cancelled',
+              type: 'info',
+              confirmText: 'OK',
+            });
+            await loadBilling();
+          } catch (e) {
+            showAlert('Could not cancel subscription right now. Please contact support.', {
+              title: 'Cancellation Failed',
+              type: 'error',
+              confirmText: 'OK',
+            });
+          } finally {
+            setActionLoading(false);
+          }
+        },
+      }
+    );
   };
 
 
@@ -3266,17 +3265,43 @@ export default function App() {
   };
 
   const BRAND_WEBSITE = 'https://fxjournalpro.com';
+  /**
+   * The PDF header mark, as a PNG data URL.
+   *
+   * It used to read /fxjournalpro-logo.png, an asset that no longer exists.
+   * The dev server and the SPA host both answer a missing path with index.html
+   * at status 200, so `res.ok` was true and the HTML was handed to jsPDF as a
+   * PNG — every exported PDF carried a broken image. It now rasterises
+   * Icon.svg, which is the mark the app itself renders, so there is no second
+   * binary copy of the logo to keep in step. jsPDF needs raster data, hence the
+   * canvas rather than passing the SVG straight through.
+   */
   const loadBrandLogoDataUrl = async (): Promise<string | null> => {
     try {
-      const res = await fetch('/fxjournalpro-logo.png');
+      const res = await fetch('/Icon.svg');
       if (!res.ok) return null;
-      const blob = await res.blob();
-      return await new Promise<string | null>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(blob);
+      const type = res.headers.get('content-type') || '';
+      if (!type.includes('svg')) return null;
+      const svg = await res.text();
+      const source = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+      const img = new Image();
+      const loaded = await new Promise<boolean>((resolve) => {
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        // An SVG with no width/height attributes rasterises at the browser's
+        // 300x150 default, which would letterbox the square mark.
+        img.width = 256;
+        img.height = 256;
+        img.src = source;
       });
+      if (!loaded) return null;
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, 256, 256);
+      return canvas.toDataURL('image/png');
     } catch {
       return null;
     }
@@ -4084,8 +4109,20 @@ export default function App() {
               logo appeared nowhere on mobile — and the greeting repeated
               information the account already shows. It now opens the hero
               card below, where there is room for it. */}
+          {/*
+            24, not 28, on the app chrome.
+            The bar is 60px tall and the page around it is quiet: body text
+            12px, sidebar rail icons 22px, the avatar 36px. A 28px mark put a
+            177px lockup at the head of a bar with 625px of empty space after
+            it, and its 17px wordmark read louder than anything on the page bar
+            the 30px heading. At 24 the mark sits with the rail icons it shares
+            an edge with, and the lockup comes down to 152px.
+
+            The landing navbar keeps 28: there the logo IS the statement, and
+            there is no sidebar for it to harmonise with.
+          */}
           <div className="flex items-center gap-2.5">
-            <Logo size={36} />
+            <Logo size={24} />
           </div>
         </div>
 
@@ -4132,7 +4169,7 @@ export default function App() {
               "Get Pro — ₹399" and the profile menu has its own row. Asking
               three times in one viewport reads as pressure, not an offer. */}
           {user?.isPro && (
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-[11px] font-extrabold tracking-wide">
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-700 dark:text-violet-300 text-[11px] font-extrabold tracking-wide">
               <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
               <span>PRO</span>
             </div>
@@ -4598,7 +4635,7 @@ export default function App() {
                         disabled={accounts.length === 0 || isMentorReadOnlyMode}
                         data-tour="add-trade"
                         title={isMentorReadOnlyMode ? 'Adding trades disabled in Mentor Read-Only Mode' : accounts.length === 0 ? 'Connect a portfolio account first' : 'Log a new trade'}
-                        className="group relative overflow-hidden bg-gradient-to-b from-violet-400 to-violet-500 hover:brightness-110 active:translate-y-px text-white font-bold text-xs rounded-lg py-2.5 sm:py-2 px-5 transition-all duration-200 flex items-center justify-center gap-1.5 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed border border-violet-300/50 shadow-[0_10px_26px_-14px_rgba(139,92,246,.95),inset_0_1px_0_rgba(255,255,255,.26)]"
+                        className="group relative overflow-hidden bg-gradient-to-b from-violet-600 to-violet-700 hover:brightness-110 active:translate-y-px text-white font-bold text-xs rounded-lg py-2.5 sm:py-2 px-5 transition-all duration-200 flex items-center justify-center gap-1.5 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed border border-violet-400/50 shadow-[0_10px_26px_-14px_rgba(139,92,246,.95),inset_0_1px_0_rgba(255,255,255,.26)]"
                       >
                         <div className="absolute inset-0 bg-white/20 -translate-x-[150%] skew-x-[-25deg] group-hover:animate-[shine_1.5s_ease-in-out]"></div>
                         <Plus className="h-4 w-4 relative z-10 group-hover:rotate-90 transition-transform duration-300" />
@@ -6447,7 +6484,15 @@ export default function App() {
 
                   {/* Settings Inner Tabs Navigation */}
                   {/* Settings Inner Tabs Navigation */}
-                  <aside className="lg:col-span-1">
+                  {/* settings-aside: `.dark aside` in index.css puts a
+                      backdrop-filter on every <aside>, for the dashboard's glassy
+                      nav rail. A backdrop-filter establishes a stacking context
+                      and a containing block, which trapped this column's section
+                      dropdown inside it — the menu could not paint over the panel
+                      beside it, so the two rendered through each other and both
+                      were unreadable. The class exists only to switch that blur
+                      off here. */}
+                  <aside className="settings-aside lg:col-span-1">
                     {/* Mobile Dropdown Navigation */}
                     <div className="lg:hidden relative mb-4">
                       <button
@@ -7062,7 +7107,13 @@ export default function App() {
                                         ? `Cancelled. Pro stays active until ${renewalDate || 'the end of your paid period'}.`
                                         : renewalDate
                                           ? `Renews automatically on ${renewalDate}.`
-                                          : 'Your Pro subscription is active.'
+                                          // No subscription row means Pro was bought
+                                          // as a one-time 30-day order, so calling it
+                                          // a "subscription" promises a renewal that
+                                          // will not happen.
+                                          : proUntilLabel
+                                            ? `Pro is active until ${proUntilLabel}.`
+                                            : 'Pro is active.'
                                       : 'One trading account, manual trade logging, full analytics, calendar, FX news, live charts and the calculators.'}
                                   </p>
                                 </div>
@@ -7070,7 +7121,9 @@ export default function App() {
                                   <div className="text-3xl font-black text-slate-900 dark:text-white font-display tracking-tight tabular-nums">
                                     {isProActive ? '₹499' : '₹0'}
                                   </div>
-                                  <div className="text-xs text-slate-500 dark:text-slate-400">/month</div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                                    {isProActive && !subscription?.id ? '/ 30 days' : '/month'}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -7079,8 +7132,14 @@ export default function App() {
                             {!isProActive && (
                               <div className="bg-white dark:bg-white/[0.03] border border-slate-100 dark:border-white/[0.07] rounded-2xl p-6">
                                 <h4 className="text-sm font-bold text-slate-900 dark:text-white">Upgrade to Pro</h4>
+                                {/*
+                                  There is nothing to cancel: checkout is a
+                                  one-time order granting 30 days, not a
+                                  subscription, so this promised a control that
+                                  does not exist.
+                                */}
                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                  ₹499/month. Cancel anytime — you keep access until the period you have paid for ends.
+                                  ₹499 for 30 days. One-time payment — it does not auto-renew, so nothing is charged again unless you choose to.
                                 </p>
 
                                 <ul className="mt-5 grid sm:grid-cols-2 gap-x-6 gap-y-2.5">
@@ -7108,8 +7167,16 @@ export default function App() {
                               </div>
                             )}
 
-                            {/* Manage an active subscription */}
-                            {isProActive && !subscription?.cancelAtPeriodEnd && (
+                            {/* Manage an active subscription — only when one exists.
+                                The condition was `isProActive` alone, but Pro is
+                                normally bought as a one-time 30-day order, which
+                                creates no subscription row. So this card offered
+                                "Cancelling stops the next charge" and a Cancel
+                                button to users with nothing recurring: the server
+                                answered 404 "No active subscription to cancel.",
+                                which the client then displayed under the heading
+                                "Subscription Cancelled". */}
+                            {isProActive && subscription?.id && !subscription?.cancelAtPeriodEnd && (
                               <div className="bg-white dark:bg-white/[0.03] border border-slate-100 dark:border-white/[0.07] rounded-2xl p-6">
                                 <h4 className="text-sm font-bold text-slate-900 dark:text-white">Manage subscription</h4>
                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -7122,6 +7189,19 @@ export default function App() {
                                 >
                                   Cancel subscription
                                 </button>
+                              </div>
+                            )}
+
+                            {/* One-time Pro: there is nothing to cancel, so say when
+                                access ends and how to extend it. */}
+                            {isProActive && !subscription?.id && (
+                              <div className="bg-white dark:bg-white/[0.03] border border-slate-100 dark:border-white/[0.07] rounded-2xl p-6">
+                                <h4 className="text-sm font-bold text-slate-900 dark:text-white">Your Pro access</h4>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                  {proUntilLabel
+                                    ? `Paid up to ${proUntilLabel}. Nothing renews automatically — buy another 30 days whenever you want to carry on.`
+                                    : 'Bought as a one-time payment, so nothing renews automatically and there is nothing to cancel.'}
+                                </p>
                               </div>
                             )}
 
@@ -7430,25 +7510,6 @@ export default function App() {
                               </div>
                             </div>
 
-                            <div className="bg-gradient-to-br from-sky-50 to-blue-50 dark:from-sky-500/10 dark:to-blue-500/5 border border-sky-100 dark:border-sky-500/20 rounded-xl p-5 space-y-3 md:col-span-2">
-                              <div className="flex items-start gap-3">
-                                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white flex items-center justify-center shrink-0">
-                                  <Terminal className="h-5 w-5" />
-                                </div>
-                                <div className="flex-1">
-                                  <strong className="text-sm font-black text-slate-900 dark:text-white block">MT5 Sync Tour</strong>
-                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                                    Replay the tour that walks you through the MT5 Sync window and automatic trade syncing.
-                                  </p>
-                                </div>
-                                <button
-                                  onClick={startMT5Tour}
-                                  className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 px-3 rounded-lg transition flex items-center justify-center gap-1.5"
-                                >
-                                  <RefreshCw className="h-3.5 w-3.5" /> Show MT5 Sync Tour
-                                </button>
-                              </div>
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -7845,7 +7906,7 @@ export default function App() {
             )}
 
             {/* Bottom Tab Bar */}
-            <div className={`md:hidden fixed bottom-0 left-0 right-0 z-[60] transition-all duration-300 ease-in-out ${(showTradeModal || showAccountModal || showEditAccountModal || showTicketModal || showExportModal || showPasteModal || showSignOutModal || deleteConfirmTradeId !== null || showGuidedTour || showMT5Tour)
+            <div className={`md:hidden fixed bottom-0 left-0 right-0 z-[60] transition-all duration-300 ease-in-out ${(showTradeModal || showAccountModal || showEditAccountModal || showTicketModal || showExportModal || showPasteModal || showSignOutModal || deleteConfirmTradeId !== null || showGuidedTour)
               ? 'translate-y-full opacity-0 pointer-events-none'
               : 'translate-y-0 opacity-100'
               }`}>
@@ -7885,7 +7946,7 @@ export default function App() {
                           <item.icon
                             className={`h-[21px] w-[21px] transition-colors duration-200 ${isActive
                                 ? 'text-violet-700 dark:text-violet-300'
-                                : 'text-slate-400 dark:text-slate-500'
+                                : 'text-slate-600 dark:text-slate-400'
                               }`}
                             strokeWidth={isActive ? 2.4 : 1.8}
                           />
@@ -7896,9 +7957,13 @@ export default function App() {
                           )}
                         </span>
 
+                        {/* slate-600/slate-400, not slate-400/slate-500: at 10px
+                            slate-400 on the light nav bar measured 2.56:1, well
+                            under the 4.5 minimum, and the icon beside it failed
+                            even the 3:1 needed for a non-text graphic. */}
                         <span className={`text-[10px] leading-none transition-colors duration-200 ${isActive
                             ? 'font-bold text-violet-700 dark:text-violet-300'
-                            : 'font-semibold text-slate-400 dark:text-slate-500'
+                            : 'font-semibold text-slate-600 dark:text-slate-400'
                           }`}>
                           {item.label}
                         </span>
@@ -7920,7 +7985,7 @@ export default function App() {
                   handleOpenTradeModal();
                 }}
                 disabled={isMentorReadOnlyMode}
-                className="md:hidden fixed right-4 bottom-[76px] z-[59] h-14 w-14 rounded-full bg-gradient-to-br from-violet-500 to-violet-700 text-white shadow-[0_8px_28px_rgba(109,40,217,0.55)] flex items-center justify-center transition-all duration-200 active:scale-90 hover:brightness-110 disabled:opacity-50 border border-violet-400/40"
+                className="md:hidden fixed right-4 bottom-[100px] z-[59] h-14 w-14 rounded-full bg-gradient-to-br from-violet-500 to-violet-700 text-white shadow-[0_8px_28px_rgba(109,40,217,0.55)] flex items-center justify-center transition-all duration-200 active:scale-90 hover:brightness-110 disabled:opacity-50 border border-violet-400/40"
                 aria-label="Add new trade"
               >
                 <Plus className="h-7 w-7" strokeWidth={2.5} />
@@ -8477,8 +8542,11 @@ export default function App() {
 
             <form onSubmit={handleSaveTrade} className="p-4 sm:p-5 space-y-5 overflow-y-auto flex-1 overscroll-contain">
 
-              {/* Date & Time */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Date & Time
+                  Stacked below 420px: side by side, each datetime-local field
+                  had 99px of inner width for a value that renders at 125px, so
+                  the date was visibly cut off mid-digit on a phone. */}
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1.5">Entry Time</label>
                   <div className="relative">
@@ -8738,19 +8806,27 @@ export default function App() {
               {/* Optional extras — horizontal chip row */}
               <div className="space-y-3">
 
-                {/* Toggle chips row */}
-                <div className="flex items-center gap-2 flex-wrap">
+                {/* Toggle chips row
+                    gap-1.5 and the tighter chip padding below sm keep all three
+                    on one line at 375px: with the type icons added they came to
+                    301px of chips plus 16px of gaps in a 308px container, so
+                    Image wrapped on its own. */}
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
 
                   {/* + Note */}
                   <button
                     type="button"
                     onClick={() => setShowNoteField(prev => !prev)}
-                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all duration-200 ${showNoteField
+                    className={`inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border transition-all duration-200 ${showNoteField
                       ? 'bg-indigo-600 border-indigo-600 text-white'
                       : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400 hover:text-indigo-600'
                       }`}
                   >
+                    {/* A type icon beside the Plus, so the three chips are
+                        distinguishable at a glance instead of reading as three
+                        identical "+ word" pills. */}
                     <Plus className={`h-3 w-3 transition-transform duration-200 ${showNoteField ? 'rotate-45' : ''}`} />
+                    <FileText className="h-3.5 w-3.5" />
                     Note
                   </button>
 
@@ -8758,12 +8834,13 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setShowEmotionField(prev => !prev)}
-                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all duration-200 ${showEmotionField
+                    className={`inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border transition-all duration-200 ${showEmotionField
                       ? 'bg-indigo-600 border-indigo-600 text-white'
                       : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400 hover:text-indigo-600'
                       }`}
                   >
                     <Plus className={`h-3 w-3 transition-transform duration-200 ${showEmotionField ? 'rotate-45' : ''}`} />
+                    <Heart className="h-3.5 w-3.5" />
                     Emotion
                     {showEmotionField && <span className="opacity-70 font-normal">· {tradeEmotion}</span>}
                   </button>
@@ -8772,12 +8849,13 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setShowChartField(prev => !prev)}
-                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all duration-200 ${showChartField
+                    className={`inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border transition-all duration-200 ${showChartField
                       ? 'bg-indigo-600 border-indigo-600 text-white'
                       : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400 hover:text-indigo-600'
                       }`}
                   >
                     <Plus className={`h-3 w-3 transition-transform duration-200 ${showChartField ? 'rotate-45' : ''}`} />
+                    <ImageIcon className="h-3.5 w-3.5" />
                     Image
                     {tradeScreenshot && <span className="opacity-70 font-normal">· 1</span>}
                   </button>

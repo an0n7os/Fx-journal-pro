@@ -309,7 +309,7 @@ export default function FXNewsPreview() {
                   key={curr}
                   type="button"
                   onClick={() => setSelectedCurrency(curr)}
-                  className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full transition-all shrink-0 ${active
+                  className={`fx-news-currency-chip text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full transition-all shrink-0 ${active
                     ? 'bg-violet-600/30 text-violet-200 border border-violet-500/40 shadow-sm'
                     : 'text-slate-400 hover:text-white bg-white/[0.03] border border-white/[0.06]'
                     }`}

@@ -5,7 +5,7 @@
 // Needs a server started with ALLOW_TEST_BILLING=true (dev only) so the plan
 // can be flipped without a real payment. Without it the suite reports the
 // skip rather than passing silently.
-const BASE = 'http://localhost:3000';
+const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const ok = (n, p, d = '') => out.push({ n, p, d });
 const section = (t) => out.push({ section: t });

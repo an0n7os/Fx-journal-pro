@@ -463,6 +463,24 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
   const isProgrammaticScrollRef = useRef(false);
   const scrollTimeoutRef = useRef<any>(null);
 
+  /**
+   * Releases the scroll-spy guard, and nothing else owns this timer.
+   *
+   * It used to be cleared by the scroll-spy effect's cleanup. handleNavClick
+   * sets the guard, starts this timer, then calls navigate(path) — which
+   * changes location.pathname, which is the scroll-spy effect's only
+   * dependency, so the effect tore down and its cleanup cancelled the timer
+   * that would have released the guard. The guard therefore stayed true for
+   * the rest of the page's life and the spy returned early on every scroll
+   * event: after one nav click the highlight and the URL froze on that link,
+   * all the way down to the contact section.
+   *
+   * Clearing on unmount only, so a re-subscribe cannot cancel it again.
+   */
+  useEffect(() => () => {
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+  }, []);
+
   const handleNavClick = (e: React.MouseEvent, path: string, sectionId?: string) => {
     e.preventDefault();
     (e.currentTarget as HTMLElement)?.blur();
@@ -611,9 +629,11 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     };
 
     window.addEventListener('scroll', onScrollSpy, { passive: true });
+    // Only the listener is torn down here. scrollTimeoutRef belongs to
+    // handleNavClick and is cleared on unmount above — clearing it here
+    // cancelled the guard's own release on every navigate().
     return () => {
       window.removeEventListener('scroll', onScrollSpy);
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     };
   }, [location.pathname]);
 
@@ -873,8 +893,14 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
       {/* ── Navbar ── */}
       <header className="lp-nav fixed top-0 inset-x-0 z-50" data-scrolled={navScrolled}>
         <div className="lp-navbar max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[68px] flex items-center justify-between gap-4">
-          <a href="/" onClick={(e) => handleNavClick(e, '/', 'top')} className="flex items-center gap-2.5 shrink-0 group">
-            <Logo size={36} />
+          {/*
+            min-w-0 rather than shrink-0: at 375px the three items in this row
+            added up to 411px, and because the page clips overflow-x the
+            hamburger sat past the right edge with no way to reach it. The
+            wordmark is the one item that can give way.
+          */}
+          <a href="/" onClick={(e) => handleNavClick(e, '/', 'top')} className="flex items-center gap-2.5 min-w-0 group">
+            <Logo size={28} />
           </a>
           <nav className="lp-navgroup hidden lg:flex">
             {navLinks.map((l) => {
@@ -959,11 +985,15 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
               {/* "Know Your Trades" leads. The keyword phrase moves to the
                 sub-line: it appeared three times on this page and reads as
-                stuffing when it is also the headline. */}
-              <h2 className="font-display text-[38px] sm:text-[48px] xl:text-[60px] font-bold text-white leading-[1.02] tracking-[-0.035em] text-balance">
+                stuffing when it is also the headline.
+
+                h1, not h2: the whole marketing page had no h1 at all — 13 h2s
+                and 34 h3s under nothing — so neither search engines nor a
+                screen reader's heading list had a page title to anchor on. */}
+              <h1 className="font-display text-[38px] sm:text-[48px] xl:text-[60px] font-bold text-white leading-[1.02] tracking-[-0.035em] text-balance">
                 Know Your
                 <span className="block bg-gradient-to-r from-violet-300 via-violet-400 to-indigo-300 bg-clip-text text-transparent">Trades.</span>
-              </h2>
+              </h1>
 
               <p className="mt-5 font-display text-lg sm:text-xl font-semibold text-slate-200 tracking-[-0.01em]">
                 The trading journal for forex &amp; prop firm traders.
@@ -1470,10 +1500,20 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               <p className="lp-eyebrow">Pro</p>
               <div className="flex items-baseline gap-2 mt-3">
                 <p className="font-display text-[40px] font-bold text-white leading-none tracking-[-0.03em] lp-num">{PRO_PRICE_INR}</p>
-                <span className="text-sm text-slate-300">/month</span>
+                <span className="text-sm text-slate-300">/ 30 days</span>
               </div>
+              {/*
+                "/month ... Cancel anytime" described a subscription that does
+                not exist. Checkout calls /api/payments/order — a one-time
+                Razorpay order that grants exactly 30 days — and never
+                /api/payments/subscribe, so there is nothing recurring and
+                nothing to cancel. A customer reading "cancel anytime" would
+                expect auto-renewal and a cancel button; access simply lapses
+                instead. No auto-renewal is the honest wording, and the better
+                selling point.
+              */}
               <p className="text-[13px] text-slate-300/90 mt-2">
-                {PRO_PRICE_USD}/month billed internationally. Cancel anytime.
+                {PRO_PRICE_USD} billed internationally. One-time payment, no auto-renewal.
               </p>
               <ul className="mt-6 space-y-2.5 flex-1">
                 {['Unlimited trading accounts', 'MT5 automatic sync', 'AI Mentor on your own history', 'Export your full trade history'].map((f) => (
@@ -1487,7 +1527,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 onClick={() => openAuthModal('register')}
                 className="lp-btn-primary mt-7 w-full font-semibold rounded-full px-6 py-3 text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-violet-900/30"
               >
-                <span>Go Pro — {PRO_PRICE_INR}/mo</span>
+                <span>Go Pro — {PRO_PRICE_INR}</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
@@ -1557,7 +1597,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               </a>
               <a
                 href={`mailto:${CONTACT_EMAIL}`}
-                className="text-center font-mono text-[12px] text-slate-300 hover:text-white transition-colors break-all"
+                className="text-center font-mono text-[12px] text-slate-300 hover:text-white transition-colors break-all min-h-[24px] flex items-center justify-center"
               >
                 {CONTACT_EMAIL}
               </a>
@@ -1734,6 +1774,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                     <input
                       type="email"
                       required
+                      aria-label="Email address for the newsletter"
                       placeholder="trader@email.com"
                       value={newsletterEmail}
                       onChange={(e) => setNewsletterEmail(e.target.value)}
@@ -1840,10 +1881,14 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           ) : isResetOtpMode ? (
             <form onSubmit={handleResetPassword} className="space-y-3">
               <p className="text-sm text-slate-400 text-center">Code sent to <strong className="text-white">{resetEmail}</strong></p>
+              {/* aria-label, because these two have no visible label and a
+                  placeholder of "------" names nothing. */}
               <input type="text" required maxLength={6} value={resetOtpCode}
+                aria-label="6-digit verification code"
                 onChange={(e) => setResetOtpCode(e.target.value.replace(/\D/g, ''))}
                 className={inputClass} placeholder="------" />
               <input type="password" required minLength={6} value={newPassword}
+                aria-label="New password"
                 onChange={(e) => setNewPassword(e.target.value)}
                 className={inputClass} placeholder="New password" />
               {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
@@ -1856,8 +1901,8 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           ) : (
             <form onSubmit={handleForgotPassword} className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Email address</label>
-                <input type="email" required value={resetEmail} onChange={(e) => setResetEmail(e.target.value)}
+                <label htmlFor="reset-email" className="block text-sm font-medium text-slate-300 mb-1.5">Email address</label>
+                <input id="reset-email" type="email" required value={resetEmail} onChange={(e) => setResetEmail(e.target.value)}
                   className={inputClass} placeholder="Email address" />
               </div>
               {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
@@ -1872,6 +1917,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           <form onSubmit={handleVerifyOtp} className="space-y-3">
             <p className="text-sm text-slate-400 text-center">Code sent to <strong className="text-white">{authEmail}</strong></p>
             <input type="text" required maxLength={6} value={otpCode}
+              aria-label="6-digit verification code"
               onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
               className={inputClass + ' text-center tracking-[0.5em] font-mono text-lg'} placeholder="------" />
             {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
@@ -1897,19 +1943,26 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Full name</label>
-              <input type="text" required value={authName} onChange={(e) => setAuthName(e.target.value)} className={inputClass} placeholder="Full name" />
+              <label htmlFor="register-name" className="block text-sm font-medium text-slate-300 mb-1.5">Full name</label>
+              <input id="register-name" type="text" required value={authName} onChange={(e) => setAuthName(e.target.value)} className={inputClass} placeholder="Full name" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Email address</label>
-              <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className={inputClass} placeholder="Email address" />
+              <label htmlFor="register-email" className="block text-sm font-medium text-slate-300 mb-1.5">Email address</label>
+              <input id="register-email" type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className={inputClass} placeholder="Email address" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Password</label>
+              <label htmlFor="register-password" className="block text-sm font-medium text-slate-300 mb-1.5">Password</label>
               <div className="relative">
-                <input type={showPassword ? "text" : "password"} required value={authPassword}
+                <input id="register-password" type={showPassword ? "text" : "password"} required value={authPassword}
                   onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-11'} placeholder="Password" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-3 text-slate-400 hover:text-white transition-colors">
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  /* p-2 keeps the icon where it looks right while giving the hit
+                     area the 24px WCAG 2.2 minimum; the bare icon was 16x16. */
+                  className="absolute right-2 top-1.5 p-2 text-slate-400 hover:text-white transition-colors"
+                >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
@@ -1949,18 +2002,23 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
         ) : (
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Email address</label>
-              <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className={inputClass} placeholder="trader@example.com" />
+              <label htmlFor="login-email" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Email address</label>
+              <input id="login-email" type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className={inputClass} placeholder="trader@example.com" />
             </div>
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Password</label>
+                <label htmlFor="login-password" className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Password</label>
                 <button type="button" onClick={() => setIsForgotPassword(true)} className="text-xs text-violet-300 hover:text-violet-200 font-medium transition-colors cursor-pointer">Forgot password?</button>
               </div>
               <div className="relative">
-                <input type={showPassword ? "text" : "password"} required value={authPassword}
+                <input id="login-password" type={showPassword ? "text" : "password"} required value={authPassword}
                   onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-11'} placeholder="••••••••••••" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-3.5 text-slate-400 hover:text-white transition-colors cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-2 top-2 p-2 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>

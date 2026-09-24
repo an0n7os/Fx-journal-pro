@@ -22,3 +22,5 @@ screenshot.png
 # AI Studio project metadata (not part of the codebase).
 metadata.json
 assets/.aistudio/
+*.sqlite
+*.sqlite-*

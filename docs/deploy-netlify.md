@@ -30,11 +30,19 @@ without them means silent data loss or a signup flow nobody can complete.
 | `PUBLIC_APP_URL` | yes | The site's own URL, used for referral and reset links |
 | `RAZORPAY_KEY_ID` | for Pro | `rzp_live_...` for real payments, `rzp_test_...` for testing |
 | `RAZORPAY_KEY_SECRET` | for Pro | Verifies the payment signature; never exposed to the browser |
-| `RAZORPAY_PLAN_ID` | for Pro | The ₹399/month plan |
+| `RAZORPAY_PLAN_ID` | only for subscriptions | The ₹499/month plan. The app charges through one-time orders (`/api/payments/order`), so Pro works without this; only `/api/payments/subscribe` needs it |
 | `RAZORPAY_WEBHOOK_SECRET` | recommended | Not required — `/api/payments/verify` grants Pro from the HMAC. The webhook is the recovery path for a user who closes the tab mid-payment |
-| `ALPHA_VANTAGE_API_KEY` | for FX News | |
+| `RESEND_FROM_EMAIL` | with Resend | A verified sender, the counterpart to `SENDGRID_FROM_EMAIL` |
+| `MT5_CREDENTIAL_MASTER_KEY` | for MT5 cloud sync | 64 hex characters. There is a built-in development key, but it is a literal in this public repository, so the server refuses to use it in production: without this variable the cloud-sync route answers `CLOUD_NOT_CONFIGURED` and no investor password is stored |
+| `GEMINI_API_KEY` | for the AI mentor | A headline Pro feature. Without it the mentor endpoints report that it is unavailable, so Pro subscribers pay for something that does not answer |
+| `ALPHA_VANTAGE_API_KEY` | for FX News | Without it `/api/fx-news` answers 503 `NOT_CONFIGURED` while FX News is still in the navigation |
+| `FINNHUB_API_KEY` / `FMP_API_KEY` | for the economic calendar | Which one is used depends on `ECONOMIC_CALENDAR_PROVIDER` |
 
-`NODE_ENV=production` is set in `netlify.toml`, so it does not need adding.
+`NODE_ENV=production` is set in `netlify.toml`, so it does not need adding —
+but note that `[build.environment]` reaches only the build, not the function
+runtime. The server therefore treats any serverless platform as production on
+its own (`IS_SERVERLESS`), which is what closes the development back doors
+whether or not `NODE_ENV` arrives.
 
 ## 3. Database
 

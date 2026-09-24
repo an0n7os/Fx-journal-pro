@@ -16,3 +16,10 @@ DO $$ BEGIN
     ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'email';
   END IF;
 END $$;
+
+-- preferences: small per-user UI settings, e.g. skipDeleteConfirm ("don't ask
+-- again" on a trade delete). PATCH /api/auth/preferences answered "Preferences
+-- saved" and saveDatabase then dropped the field, because there was no column
+-- to drop it into — so the setting never survived a cold start and the app kept
+-- asking. JSONB so new settings need no further migration.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}'::jsonb;

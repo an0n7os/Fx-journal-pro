@@ -1,6 +1,6 @@
 // Pre-launch sweep: exercises every user-facing API path and reports what
 // actually works, not what is supposed to.
-const BASE = 'http://localhost:3000';
+const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const ok = (n, p, d = '') => out.push({ n, p, d });
 

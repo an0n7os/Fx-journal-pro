@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
+    "auth:migrate": "node --input-type=module -e \"import { autoMigrateBetterAuth } from './auth.ts'; await autoMigrateBetterAuth();\"",
     "dev:testbilling": "tsx --env-file=.env.testbilling server.ts",
-    "seed:demo": "node --env-file=.env.testbilling scripts/seed-subadmin-demo.mjs",
     "razorpay:check": "node scripts/razorpay-check.mjs",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "vercel-build": "vite build",
@@ -24,22 +24,25 @@
     "test:subadmin": "node --env-file-if-exists=.env tests/subadmin.test.mjs",
     "test:pro": "node --env-file-if-exists=.env tests/pro-unlock.test.mjs",
     "test:partner": "node --env-file-if-exists=.env tests/partner.test.mjs",
-    "test:plan": "node --env-file-if-exists=.env tests/plan-gates.test.mjs"
+    "test:plan": "node --env-file-if-exists=.env tests/plan-gates.test.mjs",
+    "test:payments": "node --env-file-if-exists=.env tests/payment-replay.test.mjs"
   },
   "dependencies": {
+    "@better-auth/infra": "^0.4.11",
     "@google/genai": "^2.4.0",
     "@marsidev/react-turnstile": "^1.5.4",
     "@supabase/supabase-js": "^2.110.5",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "bcryptjs": "^3.0.3",
+    "better-auth": "^1.7.5",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "express-rate-limit": "^8.6.0",
     "fflate": "^0.8.3",
-    "jspdf": "^3.0.3",
+    "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lightweight-charts": "^5.2.1",
     "lucide-react": "^0.546.0",
@@ -53,6 +56,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@better-auth/cli": "^1.4.22",
     "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^4.17.21",

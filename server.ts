@@ -25,6 +25,11 @@ import MetaApiModule from 'metaapi.cloud-sdk/dist/index';
 // The SDK ships as CommonJS; keep this resilient to both esbuild/tsx interop
 // styles (__esModule true => the class is the default export).
 const MetaApi: any = (MetaApiModule as any).default || MetaApiModule;
+import { toNodeHandler, fromNodeHeaders } from 'better-auth/node';
+import { auth as betterAuthInstance, autoMigrateBetterAuth } from './auth.js';
+
+// Run Better Auth auto-migrations on boot
+autoMigrateBetterAuth().catch((err) => console.error('[Better Auth] Auto-migrate failed:', err?.message || err));
 
 /**
  * True when this process is one invocation of a serverless function rather than
@@ -47,7 +52,7 @@ const IS_SERVERLESS = !!(
  *
  * Every convenience that must never reach users hangs off this: signing in
  * with an unknown email creates the account, Turnstile is skipped, OTP codes
- * come back in the response, and admin@axyfx.com is a SUPER_ADMIN back door.
+ * come back in the response, and DEV_ACCOUNT_EMAIL is a SUPER_ADMIN.
  *
  * These used to test NODE_ENV alone. A Netlify deploy where NODE_ENV was not
  * set in the site's own variables — netlify.toml's [build.environment] does
@@ -69,6 +74,31 @@ const IS_DEV = !IS_SERVERLESS && process.env.NODE_ENV !== 'production';
  * would disappear with no error anywhere.
  */
 const IS_PRODUCTION_LIKE = IS_SERVERLESS || process.env.NODE_ENV === 'production';
+
+/**
+ * The single developer account, for local work and the test suite.
+ *
+ * This replaces the demo identities that used to be scattered across the
+ * codebase: a hardcoded SUPER_ADMIN on admin@axyfx.com and demo@axyfx.com, a
+ * real person's address seeded with their trades, a sub-admin seed script and
+ * two seed SQL files carrying ten more. Anything that mints a privileged
+ * account from a name the caller controls is a back door wherever it is
+ * reachable, and sample rows in source become someone's revenue figures.
+ *
+ * Nothing here exists in production: IS_DEV gates the hash, so the account
+ * cannot be signed into on a live deployment even if the email is guessed.
+ * Set DEV_ADMIN_PASSWORD to choose the password; without it there is no
+ * developer account at all.
+ */
+const DEV_ACCOUNT_ID = 'user_dev';
+const DEV_ACCOUNT_EMAIL = IS_DEV
+  ? (process.env.DEV_ACCOUNT_EMAIL?.trim().toLowerCase() || 'dev@localhost')
+  : '';
+const DEV_ADMIN_PASSWORD_HASH = (() => {
+  const custom = process.env.DEV_ADMIN_PASSWORD?.trim();
+  if (!IS_DEV || !custom) return '';
+  return bcrypt.hashSync(custom, 10);
+})();
 
 // Absolute file paths for database persistence
 const DB_FILE = path.join(process.cwd(), 'db.json');
@@ -200,13 +230,25 @@ try {
 
 // Helper to load database from local file (always self-healing and bulletproof)
 function loadDatabaseFromFile() {
-  const initialDB = {
-    users: [
+  // A brand-new local store: the developer account and nothing else.
+  //
+  // This used to seed a demo SUPER_ADMIN, a named real person's email with
+  // their account and eleven of their trades, plus announcements. That is
+  // sample data living in application source — a real address in a public
+  // repository, and rows that show up as revenue and activity on the admin
+  // dashboard of any deployment that ever falls back to the file store.
+  //
+  // The developer account is created only outside production, from
+  // DEV_ACCOUNT_EMAIL / DEV_ADMIN_PASSWORD, so there is no identity here that
+  // a live site could be signed into.
+  // `any[]`, matching createEmptyUserDb below: the User type has no `role`,
+  // and the seed needs one to make the developer account a SUPER_ADMIN.
+  const devUsers: any[] = DEV_ACCOUNT_EMAIL && DEV_ADMIN_PASSWORD_HASH ? [
       {
-        id: 'user_admin',
-        email: 'admin@axyfx.com',
-        name: 'AxyFx Admin',
-        password: "$2b$10$yS0ToL0ISPD7iltFnLSXZeJqGRu4pFwPWlg9a6xo0UP1lATaAAlfS",
+        id: DEV_ACCOUNT_ID,
+        email: DEV_ACCOUNT_EMAIL,
+        name: 'Developer',
+        password: DEV_ADMIN_PASSWORD_HASH,
         role: 'SUPER_ADMIN',
         status: 'ACTIVE',
         isEmailVerified: true,
@@ -214,187 +256,17 @@ function loadDatabaseFromFile() {
         tradingStyle: 'Day Trading',
         mainMarkets: ['Forex', 'Gold'],
         onboardingCompleted: true,
-        isPro: true
+        isPro: true,
       },
-      {
-        id: 'user_akshay',
-        email: 'akshayrajpanamthode@gmail.com',
-        name: 'Akshay Raj',
-        experience: 'Intermediate',
-        tradingStyle: 'Day Trading',
-        mainMarkets: ['Forex', 'Gold', 'Indices'],
-        onboardingCompleted: true,
-        isPro: false
-      }
-    ] as User[],
-    accounts: [
-      {
-        id: 'acc_1',
-        userId: 'user_akshay',
-        name: 'My Primary Live',
-        broker: 'IC Markets',
-        platform: 'MT5',
-        accountType: 'Live',
-        currency: 'USD',
-        startingBalance: 10000,
-        currentBalance: 11420,
-        equity: 11420,
-        status: 'Active'
-      }
-    ] as TradingAccount[],
-    trades: [
-      {
-        id: 't_1',
-        accountId: 'acc_1',
-        date: '2026-07-01T14:30:00Z',
-        symbol: 'EURUSD',
-        type: 'Buy',
-        lotSize: 1.0,
-        entryPrice: 1.08500,
-        exitPrice: 1.09200,
-        stopLoss: 1.08200,
-        takeProfit: 1.09500,
-        profit: 700,
-        commission: -7,
-        swap: -1.5,
-        riskPercentage: 1.5,
-        strategy: 'Order Block Rejection',
-        emotion: 'Calm',
-        notes: 'Standard buy at support levels. Perfect execution.',
-        tags: ['Scalping', 'Breakout']
-      },
-      {
-        id: 't_2',
-        accountId: 'acc_1',
-        date: '2026-07-02T09:15:00Z',
-        symbol: 'XAUUSD',
-        type: 'Sell',
-        lotSize: 0.5,
-        entryPrice: 2320.00,
-        exitPrice: 2312.00,
-        stopLoss: 2325.00,
-        takeProfit: 2300.00,
-        profit: 400,
-        commission: -3.5,
-        swap: 0,
-        riskPercentage: 1.0,
-        strategy: 'Daily Pivot Reversal',
-        emotion: 'Calm',
-        notes: 'Gold rejected daily highs, targets reached quickly.',
-        tags: ['Breakout']
-      },
-      {
-        id: 't_3',
-        accountId: 'acc_1',
-        date: '2026-07-03T16:00:00Z',
-        symbol: 'GBPUSD',
-        type: 'Buy',
-        lotSize: 1.5,
-        entryPrice: 1.26400,
-        exitPrice: 1.26150,
-        stopLoss: 1.26200,
-        takeProfit: 1.27200,
-        profit: -375,
-        commission: -10.5,
-        swap: -4,
-        riskPercentage: 2.0,
-        strategy: 'EMA Cross',
-        emotion: 'Anxious',
-        notes: 'Violated risk parameters slightly, got stopped out early.',
-        tags: ['FOMO', 'Revenge Trade']
-      },
-      {
-        id: 't_4',
-        accountId: 'acc_1',
-        date: '2026-07-05T11:45:00Z',
-        symbol: 'EURUSD',
-        type: 'Sell',
-        lotSize: 2.0,
-        entryPrice: 1.09100,
-        exitPrice: 1.09450,
-        stopLoss: 1.09300,
-        takeProfit: 1.08200,
-        profit: -700,
-        commission: -14,
-        swap: 0,
-        riskPercentage: 3.0,
-        strategy: 'Order Block Rejection',
-        emotion: 'Revenge',
-        notes: 'Entered in anger after losing trade, completely broke rules.',
-        tags: ['Revenge Trade', 'FOMO']
-      },
-      {
-        id: 't_5',
-        accountId: 'acc_1',
-        date: '2026-07-07T13:00:00Z',
-        symbol: 'USDJPY',
-        type: 'Buy',
-        lotSize: 1.2,
-        entryPrice: 156.20,
-        exitPrice: 157.40,
-        stopLoss: 155.80,
-        takeProfit: 158.00,
-        profit: 910,
-        commission: -8.4,
-        swap: 1.2,
-        riskPercentage: 1.5,
-        strategy: 'Trend Continuation',
-        emotion: 'Calm',
-        notes: 'Strong daily trend buy, excellent profit run.',
-        tags: ['Breakout']
-      },
-      {
-        id: 't_6',
-        accountId: 'acc_1',
-        date: '2026-07-09T18:30:00Z',
-        symbol: 'XAUUSD',
-        type: 'Buy',
-        lotSize: 0.8,
-        entryPrice: 2345.00,
-        exitPrice: 2351.50,
-        stopLoss: 2340.00,
-        takeProfit: 2365.00,
-        profit: 520,
-        commission: -5.6,
-        swap: 0,
-        riskPercentage: 1.2,
-        strategy: 'Daily Pivot Reversal',
-        emotion: 'Excited',
-        notes: 'Gold bounce on London-New York overlap.',
-        tags: ['News Trade']
-      }
-    ] as Trade[],
-    riskSettings: [
-      {
-        id: 'r_1',
-        accountId: 'acc_1',
-        riskPerTradeLimit: 2.0,
-        dailyLossLimit: 500,
-        weeklyLossLimit: 1500,
-        maxDrawdownLimit: 10.0,
-        disciplineEnabled: true
-      }
-    ] as RiskSettings[],
-    supportTickets: [
-      {
-        id: 'ticket_1',
-        userId: 'user_akshay',
-        userEmail: 'akshayrajpanamthode@gmail.com',
-        title: 'Welcome query',
-        description: 'How do I log my first trade?',
-        status: 'Open',
-        category: 'Support',
-        date: '2026-07-10T12:00:00Z'
-      }
-    ] as SupportTicket[],
-    announcements: [
-      {
-        id: 'ann_1',
-        title: 'Welcome to FX Journal Pro V2.5',
-        content: 'Start by creating a portfolio account and logging your first trade. Track your equity curve, win rate, and risk habits to improve your trading performance.',
-        date: '2026-07-11T10:00:00Z'
-      }
-    ] as Announcement[],
+    ] : [];
+
+  const initialDB = {
+    users: devUsers as User[],
+    accounts: [] as TradingAccount[],
+    trades: [] as Trade[],
+    riskSettings: [] as RiskSettings[],
+    supportTickets: [] as SupportTicket[],
+    announcements: [] as Announcement[],
     mt5Deals: [],
     payments: [] as PaymentHistory[]
   };
@@ -538,52 +410,40 @@ async function sendOtpEmail(email, otp, subject = 'Your FX Journal Pro Verificat
   return { success: false, provider: 'None', otp: otp };
 }
 
-/**
- * Password for the local demo accounts (admin@axyfx.com / demo@axyfx.com).
- *
- * The old hardcoded hash had no recorded password, so nobody could actually
- * sign in as the local admin to try the console. Set DEV_ADMIN_PASSWORD to
- * choose one; without it the original hash stays, and neither is reachable
- * in production — see the isDemo guard below.
- */
-const DEV_DEMO_PASSWORD_HASH = (() => {
-  const custom = process.env.DEV_ADMIN_PASSWORD?.trim();
-  if (custom && IS_DEV) return bcrypt.hashSync(custom, 10);
-  return '$2b$10$yS0ToL0ISPD7iltFnLSXZeJqGRu4pFwPWlg9a6xo0UP1lATaAAlfS';
-})();
-
 function createEmptyUserDb(userId?: string, email?: string, injectDummyUser = false) {
   const cleanUserId = userId?.trim() || `user_${Date.now()}`;
   const cleanEmail = email ? email.toLowerCase().trim() : '';
-  // These two addresses mint a SUPER_ADMIN account with a hardcoded password
-  // hash. That is a convenience for local development and a back door
-  // anywhere else, so it is confined to non-production. It is only reachable
-  // at all when Supabase is unavailable, which in production means an
-  // outage — exactly when a free admin login would do the most damage.
-  const isDemo = IS_DEV
-    && (cleanEmail === 'admin@axyfx.com' || cleanEmail === 'demo@axyfx.com');
+  // One address, set by the developer, and only outside production. This used
+  // to accept admin@axyfx.com or demo@axyfx.com and mint a SUPER_ADMIN from a
+  // hardcoded hash — two guessable names that granted full admin wherever the
+  // guard did not hold. It also needs DEV_ADMIN_PASSWORD to be set, so an
+  // unconfigured checkout has no privileged account at all.
+  const isDev = IS_DEV
+    && !!DEV_ACCOUNT_EMAIL
+    && !!DEV_ADMIN_PASSWORD_HASH
+    && cleanEmail === DEV_ACCOUNT_EMAIL;
 
   const users = [];
-  if (injectDummyUser || isDemo) {
+  if (injectDummyUser || isDev) {
     users.push({
       id: cleanUserId,
       email: cleanEmail,
-      name: cleanEmail ? cleanEmail.split('@')[0] : 'Trader',
-      password: DEV_DEMO_PASSWORD_HASH,
-      role: cleanEmail === 'admin@axyfx.com' ? 'SUPER_ADMIN' : 'USER',
+      name: isDev ? 'Developer' : (cleanEmail ? cleanEmail.split('@')[0] : 'Trader'),
+      password: isDev ? DEV_ADMIN_PASSWORD_HASH : undefined,
+      role: isDev ? 'SUPER_ADMIN' : 'USER',
       status: 'ACTIVE',
       experience: 'Intermediate',
       tradingStyle: 'Day Trading',
       mainMarkets: ['Forex', 'Gold'],
-      onboardingCompleted: isDemo ? true : false,
-      isPro: isDemo ? true : false,
+      onboardingCompleted: isDev ? true : false,
+      isPro: isDev ? true : false,
       isEmailVerified: true
     });
   }
 
   return {
     users: users,
-    accounts: isDemo ? [
+    accounts: isDev ? [
       {
         id: 'acc_demo_1',
         userId: cleanUserId,
@@ -674,6 +534,31 @@ const TRADE_TYPES = new Set(['Buy', 'Sell', 'Deposit', 'Withdrawal']);
 const MAX_MONEY = 1_000_000_000;  // guards against typo'd 1e20 wrecking totals
 const MAX_LOT = 10_000;
 
+/**
+ * A balance write that refuses to store a broken total.
+ *
+ * Every site that moves an account balance goes through here. A single NaN or
+ * Infinity written to currentBalance is unrecoverable from the UI — the figure
+ * is the account's own running total, not a derived stat — and the terms come
+ * from several sources (a client payload, an EA import, a trade row written
+ * before these validations existed), so one guard at the write is worth more
+ * than a guard at each source. Returns false when it refused.
+ */
+function applyBalanceDelta(account: any, delta: number): boolean {
+  const next = parseFloat((Number(account?.currentBalance) + Number(delta)).toFixed(2));
+  if (!Number.isFinite(next)) {
+    console.error('[balance] refusing a non-finite balance', {
+      accountId: account?.id,
+      currentBalance: account?.currentBalance,
+      delta,
+    });
+    return false;
+  }
+  account.currentBalance = next;
+  account.equity = next;
+  return true;
+}
+
 function validateTradeNumbers(input: {
   lotSize?: any; entryPrice?: any; exitPrice?: any; profit?: any;
   commission?: any; swap?: any; riskPercentage?: any; type?: any;
@@ -697,9 +582,20 @@ function validateTradeNumbers(input: {
     if (v > max) return `${label} is unrealistically large.`;
   }
 
-  // These may legitimately be negative (a loss, a fee, a negative swap).
+  // Profit is required, and null is not "absent" for it — the balance is
+  // computed from it. Skipping null here is what let `profit: null` through to
+  // `currentBalance + NaN`, which wrote NaN into the account total and
+  // serialised as null. JSON.stringify turns Infinity into null, so any client
+  // sending an overflowing number arrives here as null, not as a big value.
+  if (input.profit !== undefined) {
+    if (input.profit === null || input.profit === '') return 'Profit must be a number.';
+    const v = num(input.profit);
+    if (!Number.isFinite(v)) return 'Profit must be a number.';
+    if (Math.abs(v) > MAX_MONEY) return 'Profit is unrealistically large.';
+  }
+
+  // Commission and swap are genuinely optional, and may be negative.
   const signed: [string, any][] = [
-    ['Profit', input.profit],
     ['Commission', input.commission],
     ['Swap', input.swap],
   ];
@@ -1058,9 +954,40 @@ function addEaDeal(db: any, account: any, deal: any, userId: string | undefined)
 // Everything is packed into `investorPasswordEnc` so the schema's three
 // columns remain sufficient.
 
+/**
+ * The master key the per-credential DEKs are wrapped with.
+ *
+ * The fallback below is a literal in this file, and this repository is public,
+ * so in production it is no key at all: anyone could unwrap every stored
+ * investor password with a string they can read on GitHub. It is kept for a
+ * local dev box, where the alternative is that nothing in the MT5 cloud path
+ * runs without a hand-set variable, and refused everywhere real users reach —
+ * the same shape as the SESSION_SECRET and Supabase guards.
+ *
+ * Returning null (rather than throwing) is what the callers already handle:
+ * encryptInvestorPassword returns null and the route reports that the cloud
+ * bridge is unavailable, instead of storing a password nobody can protect.
+ */
+const DEV_CLOUD_MASTER_KEY = 'journalpro-default-mt5-secret-key-32bytes-long';
+let warnedAboutCloudMasterKey = false;
+
 function cloudMasterKey(): Buffer | null {
-  const raw = process.env.MT5_CREDENTIAL_MASTER_KEY?.trim() || 'journalpro-default-mt5-secret-key-32bytes-long';
-  if (!raw) return null;
+  const raw = process.env.MT5_CREDENTIAL_MASTER_KEY?.trim();
+  if (!raw) {
+    if (IS_PRODUCTION_LIKE) {
+      if (!warnedAboutCloudMasterKey) {
+        warnedAboutCloudMasterKey = true;
+        console.error(
+          '[MT5] MT5_CREDENTIAL_MASTER_KEY is not set. Refusing to encrypt investor ' +
+          'passwords under the built-in development key, which is a literal in a public ' +
+          'repository. Set MT5_CREDENTIAL_MASTER_KEY to 64 hex characters.'
+        );
+      }
+      return null;
+    }
+    const devHex = sha256Hex(DEV_CLOUD_MASTER_KEY);
+    return Buffer.from(devHex, 'hex');
+  }
   const hex = raw.length === 64 ? raw : sha256Hex(raw);
   return Buffer.from(hex, 'hex');
 }
@@ -2151,11 +2078,30 @@ async function saveDatabase(
   try {
     // Upsert users
     if (data.users && data.users.length > 0) {
+      // Every real column on `users`. The list had fallen behind the schema by
+      // eleven columns, and anything missing from it is dropped silently — the
+      // upsert succeeds, the field never lands.
+      //
+      // That cost onboarding_completed, whose only writer is
+      // /api/auth/onboarding via this function. The flag was set in the cached
+      // copy and lost on the way to the database, so the wizard came back on
+      // the next cold start: on a serverless platform, for every customer,
+      // every time. The others (role, status, pro_until, plan, referred_by,
+      // mentor_access, allow_partner_trade_view, last_login) happen to have
+      // dedicated update paths, so they were saved despite this, not because
+      // of it.
+      //
+      // Widening it is safe: no route copies request-body keys onto a user row
+      // — update-profile takes `name` alone and preferences are confined to
+      // their own object — so a client cannot reach role or is_pro through it.
       const validUserCols = new Set([
         'id', 'email', 'name', 'password', 'experience', 'trading_style',
-        'main_markets', 'is_pro', 'is_email_verified', 'created_at', 'updated_at',
+        'main_markets', 'is_pro', 'is_email_verified', 'created_at',
         'email_otp', 'otp_expires_at', 'otp_attempts', 'otp_sent_at',
-        'reset_otp', 'reset_otp_expires_at'
+        'reset_otp', 'reset_otp_expires_at',
+        'onboarding_completed', 'preferences', 'auth_provider', 'last_login',
+        'role', 'status', 'plan', 'pro_until',
+        'referred_by', 'referred_at', 'allow_partner_trade_view', 'mentor_access',
       ]);
       const sanitizedUsers = toSnake(data.users).map((u: any) => {
         const clean: any = {};
@@ -2611,16 +2557,6 @@ const eaIpLimiter = rateLimit({
 });
 const eaProtection = [eaAccountLimiter, eaTokenLimiter, eaIpLimiter];
 
-// Middleware
-app.use(cookieParser());
-app.use(express.json({
-  limit: '15mb',
-  // Capture the raw request body for HMAC signature verification
-  verify: (req: any, _res: any, buf: Buffer) => {
-    req.rawBody = buf.toString('utf8');
-  }
-}));
-
 // CORS middleware — allow browser requests from authorized origins
 app.use((req, res, next) => {
   const allowedOrigins = [
@@ -2653,6 +2589,40 @@ app.use((req, res, next) => {
   next();
 });
 
+// Middleware
+app.use(cookieParser());
+
+// Better Auth Route Handler (mounted before express.json to preserve request body stream)
+const betterAuthNodeHandler = toNodeHandler(betterAuthInstance);
+const LEGACY_AUTH_ROUTES = new Set([
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/verify-otp',
+  '/api/auth/resend-otp',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+  '/api/auth/me',
+  '/api/auth/logout',
+  '/api/auth/onboarding',
+  '/api/auth/preferences',
+  '/api/auth/update-profile'
+]);
+
+app.all('/api/auth/*', (req, res, next) => {
+  if (LEGACY_AUTH_ROUTES.has(req.path)) {
+    return next();
+  }
+  return betterAuthNodeHandler(req, res);
+});
+
+app.use(express.json({
+  limit: '15mb',
+  // Capture the raw request body for HMAC signature verification
+  verify: (req: any, _res: any, buf: Buffer) => {
+    req.rawBody = buf.toString('utf8');
+  }
+}));
+
 // Disable browser caching on all API routes so fresh data is always returned
 app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -2678,10 +2648,24 @@ const IDENTITY_ONLY_ROUTES = new Set([
 // Global middleware to load database and set local user context
 app.use(async (req, res, next) => {
   try {
+    let authUserId: string | undefined;
+    let authEmail: string | undefined;
+
+    // 0. Identity from Better Auth session
+    try {
+      const betterSession = await betterAuthInstance.api.getSession({ headers: fromNodeHeaders(req.headers) });
+      if (betterSession?.user) {
+        authUserId = betterSession.user.id;
+        authEmail = betterSession.user.email;
+      }
+    } catch (_) {}
+
     // 1. Identity from signed session cookie
-    const session = verifySessionValue(req.cookies?.[SESSION_COOKIE]);
-    let authUserId = session?.userId?.trim();
-    let authEmail = session?.email?.trim();
+    if (!authUserId && !authEmail) {
+      const session = verifySessionValue(req.cookies?.[SESSION_COOKIE]);
+      authUserId = session?.userId?.trim();
+      authEmail = session?.email?.trim();
+    }
 
     // 2. Identity from Authorization Bearer token or X-Session-Token
     if (!authUserId && !authEmail) {
@@ -3842,9 +3826,23 @@ app.put('/api/accounts/:id', async (req, res) => {
     if (broker) db.accounts[accIdx].broker = broker;
     if (status) db.accounts[accIdx].status = status;
     if (currency) db.accounts[accIdx].currency = currency;
-    if (startingBalance !== undefined) db.accounts[accIdx].startingBalance = parseFloat(startingBalance);
-    if (currentBalance !== undefined) db.accounts[accIdx].currentBalance = parseFloat(currentBalance);
-    if (equity !== undefined) db.accounts[accIdx].equity = parseFloat(equity);
+    // parseFloat straight from the body wrote NaN into the account totals for
+    // any non-numeric value — "abc", "", a stray comma — and the balance is
+    // the account's own running total, so there is no way back from the UI.
+    const money = (raw: any): number | null => {
+      const v = typeof raw === 'number' ? raw : parseFloat(String(raw));
+      if (!Number.isFinite(v)) return null;
+      if (Math.abs(v) > MAX_MONEY) return null;
+      return v;
+    };
+    for (const [label, raw] of [['Starting balance', startingBalance], ['Current balance', currentBalance], ['Equity', equity]] as [string, any][]) {
+      if (raw !== undefined && money(raw) === null) {
+        return res.status(400).json({ error: `${label} must be a number.` });
+      }
+    }
+    if (startingBalance !== undefined) db.accounts[accIdx].startingBalance = money(startingBalance);
+    if (currentBalance !== undefined) db.accounts[accIdx].currentBalance = money(currentBalance);
+    if (equity !== undefined) db.accounts[accIdx].equity = money(equity);
 
     await saveDatabase(db, authEmail);
     res.json({ message: 'Account updated successfully', account: db.accounts[accIdx] });
@@ -4091,7 +4089,8 @@ app.post('/api/trades', async (req, res) => {
     tags
   } = req.body;
 
-  if (!symbol || !type || !lotSize || !entryPrice || !exitPrice || profit === undefined) {
+  if (!symbol || !type || !lotSize || !entryPrice || !exitPrice
+    || profit === undefined || profit === null || profit === '') {
     return res.status(400).json({ error: 'Missing required trade parameters' });
   }
 
@@ -4230,12 +4229,16 @@ app.post('/api/trades', async (req, res) => {
     tags: tags || []
   };
 
-  db.trades.push(newTrade);
-
-  // Update account current balance
+  // Balance first, and only then store the trade: refusing after the push
+  // would leave the trade saved with the account total not moved for it, which
+  // is a worse state than rejecting the request outright. `profit: null`
+  // reached this arithmetic before the validation above was tightened.
   const netProfit = newTrade.profit + newTrade.commission + newTrade.swap;
-  db.accounts[accountIdx].currentBalance = parseFloat((db.accounts[accountIdx].currentBalance + netProfit).toFixed(2));
-  db.accounts[accountIdx].equity = db.accounts[accountIdx].currentBalance;
+  if (!applyBalanceDelta(db.accounts[accountIdx], netProfit)) {
+    return res.status(400).json({ error: 'Those numbers do not add up to a valid balance.' });
+  }
+
+  db.trades.push(newTrade);
 
   await saveDatabase(db, authEmail);
   console.log('[POST /api/trades] newTrade.exitTime =', newTrade.exitTime);
@@ -4334,8 +4337,7 @@ app.post('/api/trades/batch', async (req, res) => {
   }
 
   if (saved.length > 0) {
-    account.currentBalance = parseFloat((account.currentBalance + balanceAdjustment).toFixed(2));
-    account.equity = account.currentBalance;
+    applyBalanceDelta(account, balanceAdjustment);
     await saveDatabase(db, authEmail);
   }
 
@@ -4404,9 +4406,11 @@ app.put('/api/trades/:id', async (req, res) => {
   const diff = newNet - oldNet;
 
   const accIdx = db.accounts.findIndex((acc: any) => acc.id === trade.accountId);
-  if (accIdx !== -1 && diff !== 0) {
-    db.accounts[accIdx].currentBalance = parseFloat((db.accounts[accIdx].currentBalance + diff).toFixed(2));
-    db.accounts[accIdx].equity = db.accounts[accIdx].currentBalance;
+  // Number.isFinite, not `diff !== 0`: NaN !== 0 is true, so a trade stored
+  // with a non-finite profit would have carried its NaN into the account total
+  // on the next edit.
+  if (accIdx !== -1 && Number.isFinite(diff) && diff !== 0) {
+    applyBalanceDelta(db.accounts[accIdx], diff);
   }
 
   await saveDatabase(db, authEmail);
@@ -4430,10 +4434,11 @@ app.delete('/api/trades/:id', async (req, res) => {
   if (accIdx === -1) return res.status(404).json({ error: 'Associated account not found' });
   if (db.accounts[accIdx].userId !== currentUser.id) return res.status(403).json({ error: 'You can only delete your own trades.' });
 
-  // Reverse trade impact from balance
-  const netProfit = trade.profit + (trade.commission || 0) + (trade.swap || 0);
-  db.accounts[accIdx].currentBalance = parseFloat((db.accounts[accIdx].currentBalance - netProfit).toFixed(2));
-  db.accounts[accIdx].equity = db.accounts[accIdx].currentBalance;
+  // Reverse trade impact from balance. `|| 0` on profit too: a row stored
+  // before the validations above could hold a non-finite one, and reversing it
+  // would leave the account total broken with the trade already gone.
+  const netProfit = (Number(trade.profit) || 0) + (trade.commission || 0) + (trade.swap || 0);
+  applyBalanceDelta(db.accounts[accIdx], -netProfit);
 
   db.trades.splice(tradeIdx, 1);
 
@@ -5678,6 +5683,85 @@ const readProUntil = async (userId: string): Promise<number | null> => {
   }
 };
 
+/**
+ * Claims a provider payment id, so one payment can be credited exactly once.
+ *
+ * /api/payments/verify checked the HMAC and then extended Pro by 30 days from
+ * the current expiry. The signature is valid for as long as the order exists,
+ * and nothing recorded that this payment had already been credited — so
+ * replaying one successful verify call granted another 30 days each time. Pay
+ * ₹499 once, resend the same request twenty-four times, hold Pro for two
+ * years. The payments upsert deduped the row but ran after the grant.
+ *
+ * The insert is the claim, not a check-then-act: payments.provider_payment_id
+ * is UNIQUE, so two concurrent replays cannot both succeed. A duplicate-key
+ * error means somebody already credited this payment and the caller must not
+ * grant anything further.
+ *
+ * Returns true when this call owns the payment.
+ */
+const claimPayment = async (opts: {
+  providerPaymentId: string;
+  userId: string;
+  userEmail?: string;
+  amountRupees: number;
+  plan?: string;
+}): Promise<boolean> => {
+  const { providerPaymentId, userId, userEmail, amountRupees, plan = 'pro' } = opts;
+  if (!providerPaymentId) return false;
+
+  if (useSupabase) {
+    const { error } = await supabase.from('payments').insert({
+      id: `pay_${crypto.randomUUID()}`,
+      user_id: userId,
+      provider: 'razorpay',
+      provider_payment_id: providerPaymentId,
+      amount: amountRupees,
+      currency: 'INR',
+      plan,
+      status: 'captured',
+      paid_at: new Date().toISOString(),
+    });
+    if (!error) return true;
+    // 23505 = unique_violation: already credited.
+    if ((error as any)?.code === '23505') {
+      console.warn('[claimPayment] replay refused for', providerPaymentId);
+      return false;
+    }
+    console.error('[claimPayment] insert failed:', error);
+    return false;
+  }
+
+  // Local mode: the same check across the file and every cached database.
+  const seen = localAllPayments().some(
+    (row: any) => (row?.providerPaymentId || row?.provider_payment_id) === providerPaymentId
+  );
+  if (seen) {
+    console.warn('[claimPayment] replay refused for', providerPaymentId);
+    return false;
+  }
+  try {
+    const fileDb = loadDatabaseFromFile();
+    fileDb.payments = fileDb.payments || [];
+    fileDb.payments.unshift({
+      id: `pay_${crypto.randomUUID()}`,
+      userId,
+      userEmail: userEmail || null,
+      provider: 'razorpay',
+      providerPaymentId,
+      amount: amountRupees,
+      currency: 'INR',
+      plan,
+      status: 'captured',
+      paidAt: new Date().toISOString(),
+    });
+    fs.writeFileSync(DB_FILE, JSON.stringify(fileDb, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[claimPayment] local write failed:', err);
+  }
+  return true;
+};
+
 const applyProState = async (userId: string, proUntil: Date | null) => {
   const isPro = !!proUntil && proUntil.getTime() > Date.now();
   if (useSupabase) {
@@ -6156,6 +6240,25 @@ app.post('/api/payments/verify', async (req, res) => {
       return res.status(400).json({ error: 'Payment verification failed.' });
     }
 
+    // Claim the payment BEFORE granting anything: a valid signature stays
+    // valid, so without this the same confirmation could be replayed for
+    // another 30 days each time.
+    const claimed = await claimPayment({
+      providerPaymentId: String(razorpay_payment_id),
+      userId: currentUser.id,
+      userEmail: currentUser.email,
+      amountRupees: PRO_PLAN_AMOUNT_PAISE / 100,
+    });
+    if (!claimed) {
+      return res.json({
+        success: true,
+        active: !!currentUser.isPro,
+        proUntil: currentUser.proUntil || null,
+        alreadyApplied: true,
+        message: 'This payment was already applied to your account.',
+      });
+    }
+
     // Pro is granted for 30 days. If currently active, extend from existing expiry date.
     const currentProUntil = currentUser.proUntil ? new Date(currentUser.proUntil).getTime() : 0;
     const baseTime = currentProUntil > Date.now() ? currentProUntil : Date.now();
@@ -6163,39 +6266,15 @@ app.post('/api/payments/verify', async (req, res) => {
 
     await applyProState(currentUser.id, proUntil);
 
-    if (useSupabase) {
-      await supabase.from('payments').upsert({
-        id: `pay_${crypto.randomUUID()}`,
-        user_id: currentUser.id,
-        provider: 'razorpay',
-        provider_payment_id: razorpay_payment_id,
-        amount: PRO_PLAN_AMOUNT_PAISE / 100,
-        currency: 'INR',
-        plan: 'pro',
-        status: 'captured',
-        paid_at: new Date().toISOString(),
-      }, { onConflict: 'provider_payment_id' });
-    }
-
+    // The payment row was written by claimPayment; only the cached user needs
+    // updating here. Pushing it again produced a duplicate line in the
+    // customer's payment history on every replay.
     const db = (req as any).userDb;
     if (db && Array.isArray(db.users)) {
       const u = db.users.find((x: any) => x.id === currentUser.id);
       if (u) {
         u.isPro = true;
         u.proUntil = proUntil.toISOString();
-        db.payments = db.payments || [];
-        db.payments.unshift({
-          id: `pay_${Date.now()}`,
-          userId: currentUser.id,
-          userEmail: currentUser.email,
-          provider: 'razorpay',
-          providerPaymentId: razorpay_payment_id,
-          amount: PRO_PLAN_AMOUNT_PAISE / 100,
-          currency: 'INR',
-          plan: 'pro',
-          status: 'captured',
-          paidAt: new Date().toISOString(),
-        });
         await saveDatabase(db);
       }
     }
@@ -6219,6 +6298,24 @@ app.post('/api/payments/verify', async (req, res) => {
     return res.status(400).json({ error: 'Payment verification failed.' });
   }
 
+  // Same replay guard as the one-time branch: claim the payment id first, and
+  // grant nothing if it has already been credited.
+  const subClaimed = await claimPayment({
+    providerPaymentId: String(razorpay_payment_id),
+    userId: currentUser.id,
+    userEmail: currentUser.email,
+    amountRupees: PRO_PLAN_AMOUNT_PAISE / 100,
+  });
+  if (!subClaimed) {
+    return res.json({
+      success: true,
+      active: !!currentUser.isPro,
+      proUntil: currentUser.proUntil || null,
+      alreadyApplied: true,
+      message: 'This payment was already applied to your account.',
+    });
+  }
+
   // Immediate Pro activation upon verified signature
   const proUntil = new Date(Date.now() + 31 * 86400000);
   await applyProState(currentUser.id, proUntil);
@@ -6230,18 +6327,6 @@ app.post('/api/payments/verify', async (req, res) => {
       current_period_end: proUntil.toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('provider_subscription_id', razorpay_subscription_id);
-
-    await supabase.from('payments').upsert({
-      id: `pay_${crypto.randomUUID()}`,
-      user_id: currentUser.id,
-      provider: 'razorpay',
-      provider_payment_id: razorpay_payment_id,
-      amount: PRO_PLAN_AMOUNT_PAISE / 100,
-      currency: 'INR',
-      plan: 'pro',
-      status: 'captured',
-      paid_at: new Date().toISOString(),
-    }, { onConflict: 'provider_payment_id' });
   }
 
   const db = (req as any).userDb;
@@ -6427,20 +6512,11 @@ const requirePermission = async (
   return { role, user };
 };
 
-const inMemoryAuditLogs: any[] = [
-  {
-    id: 'audit_init_01',
-    actor_id: 'user_admin',
-    actor_email: 'admin@axyfx.com',
-    actor_role: 'SUPER_ADMIN',
-    action: 'system.startup',
-    target_type: 'system',
-    target_id: 'ops_console',
-    detail: { status: 'Operational', mode: 'High-Availability' },
-    ip: '127.0.0.1',
-    created_at: new Date(Date.now() - 3600000).toISOString()
-  }
-];
+// Empty: this held one fabricated "system.startup" entry attributed to
+// admin@axyfx.com, an hour before whenever the process happened to boot. An
+// audit trail whose first row is invented is worse than an empty one — it is
+// the record used to answer who changed a role or blocked an account.
+const inMemoryAuditLogs: any[] = [];
 
 /**
  * Records an admin action. The admin_audit_logs table has existed since the
@@ -7333,6 +7409,37 @@ const localAllPayments = (): any[] => {
     for (const p of cached?.payments || []) if (p?.id && !byId.has(p.id)) byId.set(p.id, p);
   }
   return [...byId.values()];
+};
+
+/**
+ * Referral earnings per referrer, from captured payments.
+ *
+ * Every screen that showed this used `referralCount * 300` — a flat ₹300 for
+ * each signup, paid or not — which meant the user registry and the partner
+ * roster reported different earnings for the same partner. Earnings are what
+ * the Partner Portal states: (amount - PARTNER_PLATFORM_FLOOR_INR) per
+ * captured payment, never below zero.
+ *
+ * `referredBy` holds either the referrer's id or their referral code
+ * depending on how the signup arrived, so the map is keyed by whatever it
+ * holds and callers look up both.
+ */
+const referralEarningsByReferrer = (
+  users: { id: string; referredBy?: string | null }[],
+  payments: any[],
+): Record<string, number> => {
+  const referrerOf: Record<string, string> = {};
+  for (const u of users || []) {
+    if (u?.referredBy && u.id) referrerOf[u.id] = u.referredBy;
+  }
+  const earned: Record<string, number> = {};
+  for (const pay of payments || []) {
+    if (String(pay?.status || '').toLowerCase() !== 'captured') continue;
+    const key = referrerOf[pay.userId || pay.user_id];
+    if (!key) continue;
+    earned[key] = (earned[key] || 0) + Math.max(0, (Number(pay.amount) || 0) - PARTNER_PLATFORM_FLOOR_INR);
+  }
+  return earned;
 };
 
 /** Every local copy of one user row: the file's, and each cached database's. */
@@ -8327,6 +8434,13 @@ app.get('/api/admin/users', async (req, res) => {
     if (scope !== null) allUsers = (allUsers || []).filter((u: any) => scope.includes(u.id));
     const { data: allAccounts } = await supabase.from('trading_accounts').select('*');
     const { data: allTrades } = await supabase.from('trades').select('id, user_id, account_id');
+    const { data: allPays } = await supabase.from('payments').select('user_id, amount, status');
+    // referred_by holds either the referrer's id or their referral code, so the
+    // earnings are keyed by whatever it holds and both are looked up below.
+    const earnedByReferrer = referralEarningsByReferrer(
+      (allUsers || []).map((u: any) => ({ id: u.id, referredBy: u.referred_by })),
+      allPays || [],
+    );
 
     const usersWithStats = (allUsers || []).map((u: any) => {
       const uAccounts = (allAccounts || []).filter((acc: any) => acc.user_id === u.id);
@@ -8343,24 +8457,29 @@ app.get('/api/admin/users', async (req, res) => {
         tradesCount: uTrades.length,
         referralCode: refCode,
         referralCount: directReferrals,
-        referralIncome: directReferrals * 300,
+        referralIncome: (earnedByReferrer[u.id] || 0) + (earnedByReferrer[refCode] || 0),
         isPro: !!u.is_pro
       };
     });
     return res.json({ users: usersWithStats });
   }
 
-  // The registry is a view over everyone, so it reads the shared file rather
-  // than req.userDb, which in local mode holds only the caller. Without this a
-  // sub-admin's registry was empty while their console showed three users.
+  // The registry is a view over everyone, so it reads neither req.userDb —
+  // which in local mode holds only the caller — nor the shared file alone. A
+  // fresh signup lives in its own in-memory database until something flushes
+  // it, so a file-only read left brand-new users out of the registry
+  // altogether while /api/admin/partners, which spans both, counted them.
+  // localAllUsers is the union.
   db = loadDatabaseFromFile();
-  const visibleUsers = scope === null ? (db.users || []) : (db.users || []).filter((u: any) => scope.includes(u.id));
+  const everyone = localAllUsers();
+  const visibleUsers = scope === null ? everyone : everyone.filter((u: any) => scope.includes(u.id));
+  const earnedByReferrer = referralEarningsByReferrer(everyone, localAllPayments());
   const usersWithStats = visibleUsers.map((u: any) => {
     const uAccounts = (db.accounts || []).filter((acc: any) => acc.userId === u.id);
     const accIds = uAccounts.map((a: any) => a.id);
     const uTrades = (db.trades || []).filter((t: any) => accIds.includes(t.accountId) || t.userId === u.id);
     const refCode = u.referralCode || ('FX-' + (u.id || '').replace(/\D/g, '').slice(-4).padStart(4, '8') || 'FX-100');
-    const directReferrals = (db.users || []).filter((other: any) =>
+    const directReferrals = everyone.filter((other: any) =>
       other.referredBy && (other.referredBy === u.id || other.referredBy === refCode)
     ).length;
 
@@ -8370,7 +8489,7 @@ app.get('/api/admin/users', async (req, res) => {
       tradesCount: uTrades.length,
       referralCode: refCode,
       referralCount: directReferrals,
-      referralIncome: directReferrals * 300,
+      referralIncome: (earnedByReferrer[u.id] || 0) + (earnedByReferrer[refCode] || 0),
       isPro: !!u.isPro
     };
   });
@@ -8565,6 +8684,59 @@ app.post('/api/admin/block-user', async (req, res) => {
   }
 });
 
+/**
+ * Money totals for the admin dashboard, read off captured payments.
+ *
+ * These were `paidUsers * 399` and `totalReferrals * 300`. Both multiplied a
+ * head count by a guessed price, and both were wrong:
+ *  - 399 stopped being the Pro price when it became ₹499
+ *    (PRO_PLAN_AMOUNT_PAISE), and a user who had renewed six times still
+ *    counted once, so revenue was understated twice over.
+ *  - every referred signup was credited ₹300 whether they ever paid or not,
+ *    which also put this figure in open disagreement with the one
+ *    /api/admin/partners reports for the very same partners.
+ *
+ * `amount` is stored in rupees (the payment rows divide by 100 on the way in),
+ * which is the same unit PARTNER_PLATFORM_FLOOR_INR is in.
+ */
+/**
+ * Captured revenue, in rupees.
+ *
+ * The callers used to guess: `p.amount > 1000 ? p.amount / 100 : p.amount`,
+ * which silently divided any genuine payment over ₹1,000 by a hundred, and
+ * `|| 399` for a missing amount, which invented money. Rows are stored in
+ * rupees, so there is nothing to infer — a row without a usable amount
+ * contributes nothing rather than a guess.
+ */
+const capturedRevenue = (payments: any[]): number => {
+  let total = 0;
+  for (const p of payments || []) {
+    if (String(p?.status || '').toLowerCase() !== 'captured') continue;
+    total += Number(p.amount) || 0;
+  }
+  return total;
+};
+
+const summarisePaymentTotals = (
+  payments: any[],
+  referrerOf: Record<string, string>,
+): { totalRevenue: number; referralIncome: number; paidReferrals: number } => {
+  let totalRevenue = 0;
+  let referralIncome = 0;
+  let paidReferrals = 0;
+  for (const pay of payments || []) {
+    if (String(pay?.status || '').toLowerCase() !== 'captured') continue;
+    const amount = Number(pay.amount) || 0;
+    totalRevenue += amount;
+    const userId = pay.userId || pay.user_id;
+    if (userId && referrerOf[userId]) {
+      referralIncome += Math.max(0, amount - PARTNER_PLATFORM_FLOOR_INR);
+      paidReferrals += 1;
+    }
+  }
+  return { totalRevenue, referralIncome, paidReferrals };
+};
+
 app.get('/api/admin/dashboard', async (req, res) => {
   const ctx = await requirePermission(req, res, 'dashboard.read');
   if (!ctx) return;
@@ -8572,10 +8744,11 @@ app.get('/api/admin/dashboard', async (req, res) => {
   // dashboard is computed over that subset rather than the whole product.
   const scope = await scopeUserIds(ctx.role, ctx.user?.id || null);
   if (useSupabase) {
-    const [{ data: rawUsers }, { data: rawTrades }, { data: allTickets }] = await Promise.all([
+    const [{ data: rawUsers }, { data: rawTrades }, { data: allTickets }, { data: rawPayments }] = await Promise.all([
       supabase.from('users').select('id, status, created_at, is_pro, referral_code, referred_by'),
       supabase.from('trades').select('id, user_id'),
-      supabase.from('support_tickets').select('id, status')
+      supabase.from('support_tickets').select('id, status'),
+      supabase.from('payments').select('user_id, amount, status'),
     ]);
     const allUsers = scope === null ? rawUsers : (rawUsers || []).filter((u: any) => scope.includes(u.id));
     const allTrades = scope === null ? rawTrades : (rawTrades || []).filter((t: any) => scope.includes(t.user_id));
@@ -8586,8 +8759,15 @@ app.get('/api/admin/dashboard', async (req, res) => {
     const totalTrades = allTrades?.length || 0;
     const pendingTickets = (allTickets || []).filter((t: any) => t.status === 'Open' || t.status === 'In Progress').length;
     const totalReferrals = (allUsers || []).filter((u: any) => !!u.referred_by).length;
-    const referralIncome = totalReferrals * 300;
-    const totalRevenue = paidUsers * 399;
+    const referrerOf: Record<string, string> = {};
+    for (const u of allUsers || []) {
+      if ((u as any).referred_by) referrerOf[(u as any).id] = (u as any).referred_by;
+    }
+    const scopedPayments = scope === null
+      ? (rawPayments || [])
+      : (rawPayments || []).filter((p: any) => scope.includes(p.user_id));
+    const { totalRevenue, referralIncome, paidReferrals } =
+      summarisePaymentTotals(scopedPayments, referrerOf);
 
     // Build user growth by day
     const dayBuckets: Record<string, number> = {};
@@ -8616,6 +8796,8 @@ app.get('/api/admin/dashboard', async (req, res) => {
       paidUsers,
       freeUsers,
       referralIncome,
+      paidReferrals,
+      totalReferrals,
       totalTrades,
       totalRevenue,
       pendingTickets,
@@ -8623,10 +8805,12 @@ app.get('/api/admin/dashboard', async (req, res) => {
     });
   }
   // fallback to per-user db
-  // Shared file, not req.userDb: these are platform-wide counters, and in
-  // local mode req.userDb holds only the caller, so every number came out 0.
+  // localAllUsers, not req.userDb and not the file alone: these are
+  // platform-wide counters. req.userDb holds only the caller, so every number
+  // came out 0; the file alone misses signups that are still only in their own
+  // in-memory database, so the user count trailed reality.
   const db = loadDatabaseFromFile();
-  const allLocalUsers = db?.users || [];
+  const allLocalUsers = localAllUsers();
   const usersList = scope === null ? allLocalUsers : allLocalUsers.filter((u: any) => scope.includes(u.id));
   const totalUsers = usersList.length;
   const activeUsers = usersList.filter((u: any) => u.status === 'ACTIVE' || !u.status).length;
@@ -8636,8 +8820,15 @@ app.get('/api/admin/dashboard', async (req, res) => {
     ? (db?.trades || [])
     : (db?.trades || []).filter((t: any) => scope.includes(t.userId))).length;
   const totalReferrals = usersList.filter((u: any) => !!u.referredBy).length;
-  const referralIncome = totalReferrals * 300;
-  const totalRevenue = paidUsers * 399;
+  const localReferrerOf: Record<string, string> = {};
+  for (const u of usersList) {
+    if (u.referredBy) localReferrerOf[u.id] = u.referredBy;
+  }
+  const localPayments = scope === null
+    ? localAllPayments()
+    : localAllPayments().filter((p: any) => scope.includes(p.userId || p.user_id));
+  const { totalRevenue, referralIncome, paidReferrals } =
+    summarisePaymentTotals(localPayments, localReferrerOf);
 
   res.json({
     totalUsers,
@@ -8645,6 +8836,8 @@ app.get('/api/admin/dashboard', async (req, res) => {
     paidUsers,
     freeUsers,
     referralIncome,
+    paidReferrals,
+    totalReferrals,
     totalTrades,
     totalRevenue,
     pendingTickets: db?.supportTickets?.filter((t: any) => t.status === 'Open').length || 0,
@@ -8869,12 +9062,14 @@ app.get('/api/admin/billing', async (req, res) => {
   const ctx = await requirePermission(req, res, 'billing.read');
   if (!ctx) return;
   if (!useSupabase) {
-    const db = (req as any).userDb;
-    const allUsers = db?.users || [];
+    // localAllUsers, not req.userDb: this is a platform-wide view, and in
+    // local mode req.userDb holds only the caller, so the leaderboard and the
+    // user counts were computed over one row.
+    const allUsers = localAllUsers();
     const paidUsers = allUsers.filter((u: any) => !!u.isPro);
     const freeUsers = Math.max(0, allUsers.length - paidUsers.length);
-    
-    // Referral calculation
+
+    const earnedByReferrer = referralEarningsByReferrer(allUsers, localAllPayments());
     const referralLeaderboard = allUsers.map((u: any) => {
       const refCode = u.referralCode || ('FX-' + (u.id || '').replace(/\D/g, '').slice(-4).padStart(4, '8') || 'FX-100');
       const directRefs = allUsers.filter((o: any) => o.referredBy && (o.referredBy === u.id || o.referredBy === refCode));
@@ -8886,46 +9081,26 @@ app.get('/api/admin/billing', async (req, res) => {
         referralCode: refCode,
         referralsCount: directRefs.length,
         paidReferralsCount: paidRefs,
-        referralIncome: directRefs.length * 300
+        referralIncome: (earnedByReferrer[u.id] || 0) + (earnedByReferrer[refCode] || 0)
       };
     }).filter((r: any) => r.referralsCount > 0).sort((a: any, b: any) => b.referralsCount - a.referralsCount);
 
     const totalReferralIncome = referralLeaderboard.reduce((acc: number, r: any) => acc + r.referralIncome, 0);
 
-    const payments = (db?.payments || []).length > 0 ? db.payments : [
-      {
-        id: 'pay_demo_01',
-        userEmail: 'trader.sam@gmail.com',
-        amount: 399,
-        currency: 'INR',
-        status: 'captured',
-        method: 'card',
-        paidAt: new Date(Date.now() - 2 * 86400000).toISOString()
-      },
-      {
-        id: 'pay_demo_02',
-        userEmail: 'alex.fx@proton.me',
-        amount: 399,
-        currency: 'INR',
-        status: 'captured',
-        method: 'upi',
-        paidAt: new Date(Date.now() - 5 * 86400000).toISOString()
-      }
-    ];
-
-    const totalRev = payments.reduce((acc: number, p: any) => {
-      const amt = p.amount ? (p.amount > 1000 ? p.amount / 100 : p.amount) : 399;
-      return acc + amt;
-    }, 0) || (Math.max(paidUsers.length, 2) * 399);
+    // Real payments only. This used to fall back to two invented transactions
+    // from two invented customers whenever there were none, and to floor the
+    // subscriber count and MRR at 2 — so a deployment that had never sold
+    // anything reported ₹798 of monthly recurring revenue from "trader.sam".
+    const payments = localAllPayments();
 
     return res.json({
       payments,
       subscriptions: [],
-      activeCount: Math.max(paidUsers.length, 2),
+      activeCount: paidUsers.length,
       freeCount: freeUsers,
-      totalUsers: allUsers.length || 2,
-      mrr: Math.max(paidUsers.length, 2) * 399,
-      totalRevenue: totalRev,
+      totalUsers: allUsers.length,
+      mrr: paidUsers.length * (PRO_PLAN_AMOUNT_PAISE / 100),
+      totalRevenue: capturedRevenue(payments),
       currency: 'INR',
       totalReferralIncome,
       referralLeaderboard
@@ -8943,7 +9118,10 @@ app.get('/api/admin/billing', async (req, res) => {
     const u = userMap.get(p.user_id);
     return {
       ...toCamel(p),
-      userEmail: u?.email || p.user_email || 'subscriber@axyfx.com',
+      // No invented address: this defaulted to 'subscriber@axyfx.com', so a
+      // payment whose user row had been deleted was attributed to an account
+      // that does not exist.
+      userEmail: u?.email || p.user_email || null,
       userName: u?.name || 'Trader'
     };
   });
@@ -8952,6 +9130,10 @@ app.get('/api/admin/billing', async (req, res) => {
   const paidUsersCount = (users || []).filter((u: any) => !!u.is_pro).length;
   const freeUsersCount = Math.max(0, (users?.length || 0) - paidUsersCount);
 
+  const earnedByReferrer = referralEarningsByReferrer(
+    (users || []).map((u: any) => ({ id: u.id, referredBy: u.referred_by })),
+    payments || [],
+  );
   const referralLeaderboard = (users || []).map((u: any) => {
     const refCode = u.referral_code || ('FX-' + (u.id || '').replace(/\D/g, '').slice(-4).padStart(4, '8') || 'FX-100');
     const directRefs = (users || []).filter((o: any) => o.referred_by && (o.referred_by === u.id || o.referred_by === refCode));
@@ -8963,15 +9145,14 @@ app.get('/api/admin/billing', async (req, res) => {
       referralCode: refCode,
       referralsCount: directRefs.length,
       paidReferralsCount: paidRefs,
-      referralIncome: directRefs.length * 300
+      referralIncome: (earnedByReferrer[u.id] || 0) + (earnedByReferrer[refCode] || 0)
     };
   }).filter((r: any) => r.referralsCount > 0).sort((a: any, b: any) => b.referralsCount - a.referralsCount);
 
   const totalReferralIncome = referralLeaderboard.reduce((acc: number, r: any) => acc + r.referralIncome, 0);
-  const totalRev = enrichedPayments.reduce((acc: number, p: any) => {
-    const amt = p.amount ? (p.amount > 1000 ? p.amount / 100 : p.amount) : 399;
-    return acc + amt;
-  }, 0) || (paidUsersCount * 399);
+  // The `|| paidUsersCount * 399` tail meant a platform with no payments still
+  // reported revenue, at a price that has not applied since Pro became ₹499.
+  const totalRev = capturedRevenue(payments || []);
 
   res.json({
     payments: enrichedPayments,
@@ -8991,7 +9172,13 @@ app.get('/api/admin/billing', async (req, res) => {
 app.post('/api/admin/payments/record', async (req, res) => {
   const ctx = await requirePermission(req, res, 'users.manage');
   if (!ctx) return;
-  const { userEmail, userId, amount = 399, method = 'upi', notes = '', plan = 'pro', days = 30 } = req.body || {};
+  // Defaulting to the current list price, not the 399 it charged before Pro
+  // became ₹499 — an admin who recorded an offline payment without an amount
+  // was under-recording it by ₹100.
+  const {
+    userEmail, userId, amount = PRO_PLAN_AMOUNT_PAISE / 100,
+    method = 'upi', notes = '', plan = 'pro', days = 30,
+  } = req.body || {};
   if (!userEmail && !userId) {
     return res.status(400).json({ error: 'User email or user ID is required' });
   }
@@ -9004,9 +9191,13 @@ app.post('/api/admin/payments/record', async (req, res) => {
     const { data } = await query;
     targetUser = data;
   } else {
-    const db = (req as any).userDb;
-    targetUser = (db?.users || []).find((u: any) => 
-      (userId && u.id === userId) || (userEmail && u.email?.toLowerCase() === userEmail.trim().toLowerCase())
+    // localFindUser, not req.userDb: in local mode req.userDb holds only the
+    // caller, so this could only ever find the admin's own row — recording an
+    // offline payment for any other trader answered 404 Trader account not
+    // found, which made the whole feature unusable.
+    const wanted = userEmail ? userEmail.trim().toLowerCase() : '';
+    targetUser = localFindUser((u: any) =>
+      (userId && u.id === userId) || (!!wanted && u.email?.toLowerCase() === wanted)
     );
   }
 
@@ -9037,10 +9228,22 @@ app.post('/api/admin/payments/record', async (req, res) => {
   if (useSupabase) {
     await supabase.from('payments').insert(paymentRecord);
   } else {
+    // The shared file, so the row belongs to the platform rather than to
+    // whichever admin happened to record it, and survives cache eviction.
+    const row = { ...toCamel(paymentRecord), userEmail: targetUser.email };
+    try {
+      const fileDb = loadDatabaseFromFile();
+      fileDb.payments = fileDb.payments || [];
+      fileDb.payments.unshift(row);
+      fs.writeFileSync(DB_FILE, JSON.stringify(fileDb, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('[payments/record] file write failed:', err);
+    }
     const db = (req as any).userDb;
-    db.payments = db.payments || [];
-    db.payments.unshift(toCamel(paymentRecord));
-    await saveDatabase(db);
+    if (db) {
+      db.payments = db.payments || [];
+      if (!db.payments.some((p: any) => p.id === row.id)) db.payments.unshift(row);
+    }
   }
 
   await writeAuditLog(req, ctx, 'payment.manual_record', 'payment', paymentId, {
@@ -9732,7 +9935,13 @@ app.get('/api/economic-calendar', async (req, res) => {
 /**
  * In-memory store for WhatsApp reminders (Dev/Demo).
  * In production, these should be stored in the DB and dispatched by a cron.
+ *
+ * Neither exists yet, so the POST below refuses rather than reporting success.
+ * Set ALLOW_UNSENT_WHATSAPP_REMINDERS=true to exercise the flow locally while
+ * building the sender.
  */
+const ALLOW_UNSENT_WHATSAPP_REMINDERS = process.env.ALLOW_UNSENT_WHATSAPP_REMINDERS === 'true';
+
 const whatsappReminders: Array<{
   id: string;
   userId: string;
@@ -9753,6 +9962,19 @@ app.post('/api/reminders/whatsapp', async (req, res) => {
     if (!currentUser) return res.status(401).json({ error: 'Not authenticated.' });
     if (!currentUser.isPro) {
       return res.status(403).json({ error: 'WhatsApp reminders are a Pro feature. Please upgrade to access this.' });
+    }
+
+    // Nothing dispatches these. The store below is a module-level array with
+    // no sender, no cron and no WhatsApp provider behind it, so a Pro user who
+    // set a reminder was answered `success: true` for a message that could
+    // never arrive — and on a serverless platform the array is gone before the
+    // next request anyway. Refusing plainly is the honest answer until a
+    // sender exists; the validation below is kept for when one does.
+    if (!ALLOW_UNSENT_WHATSAPP_REMINDERS) {
+      return res.status(503).json({
+        error: 'WhatsApp reminders are not available yet. Nothing would be sent, so nothing is saved.',
+        code: 'NOT_IMPLEMENTED',
+      });
     }
 
     const { eventId, eventName, eventDate, currency, impact, phone, minutesBefore } = req.body;

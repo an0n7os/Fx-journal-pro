@@ -1,6 +1,6 @@
 // Verifies normal app behaviour still works after the auth rework, and that
 // cross-user isolation holds.
-const BASE = 'http://localhost:3000';
+const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const check = (n, p, d = '') => out.push({ n, p, d });
 
