@@ -16,7 +16,7 @@ const IS_SERVERLESS = !!(
 );
 
 const DB_PATH = path.join(process.cwd(), 'auth.sqlite');
-const apiKey = process.env.BETTER_AUTH_API_KEY?.trim() || 'ba_rs9gaykgnuy6wgkas9by6j52g6034k2h';
+const apiKey = process.env.BETTER_AUTH_API_KEY?.trim() || 'ba_ukalull2qb70grj4r6a9ovq28blovydi';
 
 function getDatabaseAdapter(): any {
   // If PostgreSQL / Supabase connection string is configured
