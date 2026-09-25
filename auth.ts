@@ -50,6 +50,130 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: false,
     autoSignIn: true,
+    sendResetPassword: async ({ user, url }: { user: any; url: string }) => {
+      const resendKey = process.env.RESEND_API_KEY?.trim();
+      if (!resendKey || resendKey === 'YOUR_RESEND_API_KEY') {
+        console.log(`[Better Auth] Reset Password URL for ${user.email}: ${url}`);
+        return;
+      }
+      const configuredFrom = process.env.RESEND_FROM_EMAIL?.trim();
+      const resendFrom = configuredFrom
+        ? (configuredFrom.includes('<') ? configuredFrom : `FX Journal Pro <${configuredFrom}>`)
+        : 'FX Journal Pro <onboarding@resend.dev>';
+
+      try {
+        console.log(`[Better Auth] Sending password reset email via Resend to ${user.email}...`);
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + resendKey,
+          },
+          body: JSON.stringify({
+            from: resendFrom,
+            to: user.email,
+            subject: 'Reset your password - FX Journal Pro',
+            html: `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; padding: 32px 24px; background: #0f172a; color: #f8fafc; border-radius: 12px; border: 1px solid #1e293b;">
+                <div style="text-align: center; margin-bottom: 24px;">
+                  <h1 style="color: #6366f1; font-size: 24px; margin: 0; font-weight: 800; letter-spacing: -0.5px;">FX Journal Pro</h1>
+                  <p style="color: #94a3b8; font-size: 14px; margin-top: 6px;">Professional Trading Performance & Journaling</p>
+                </div>
+                <div style="background: #1e293b; padding: 24px; border-radius: 8px; border: 1px solid #334155;">
+                  <h2 style="font-size: 18px; margin: 0 0 12px; color: #f1f5f9;">Reset your password</h2>
+                  <p style="font-size: 14px; line-height: 1.6; color: #cbd5e1; margin: 0 0 20px;">
+                    Hi ${user.name || 'Trader'}, we received a request to reset your password. Click the button below to choose a new password.
+                  </p>
+                  <div style="text-align: center; margin: 28px 0;">
+                    <a href="${url}" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #ffffff; text-decoration: none; padding: 13px 32px; border-radius: 6px; font-weight: 600; font-size: 15px; display: inline-block;">
+                      Reset Password
+                    </a>
+                  </div>
+                  <p style="font-size: 12px; color: #94a3b8; margin: 20px 0 0; word-break: break-all;">
+                    Or copy and paste this link: <a href="${url}" style="color: #818cf8;">${url}</a>
+                  </p>
+                </div>
+                <p style="text-align: center; font-size: 12px; color: #64748b; margin-top: 24px;">
+                  If you did not request a password reset, you can safely ignore this email.
+                </p>
+              </div>
+            `,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          console.error('[Better Auth Resend Reset Error]', data);
+        } else {
+          console.log(`[Better Auth] Reset email sent to ${user.email} (id: ${data.id})`);
+        }
+      } catch (err: any) {
+        console.error('[Better Auth Resend Reset Exception]', err?.message || err);
+      }
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }: { user: any; url: string }) => {
+      const resendKey = process.env.RESEND_API_KEY?.trim();
+      if (!resendKey || resendKey === 'YOUR_RESEND_API_KEY') {
+        console.log(`[Better Auth] Verification URL for ${user.email}: ${url}`);
+        return;
+      }
+      const configuredFrom = process.env.RESEND_FROM_EMAIL?.trim();
+      const resendFrom = configuredFrom
+        ? (configuredFrom.includes('<') ? configuredFrom : `FX Journal Pro <${configuredFrom}>`)
+        : 'FX Journal Pro <onboarding@resend.dev>';
+
+      try {
+        console.log(`[Better Auth] Sending verification email via Resend to ${user.email}...`);
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + resendKey,
+          },
+          body: JSON.stringify({
+            from: resendFrom,
+            to: user.email,
+            subject: 'Verify your email - FX Journal Pro',
+            html: `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; padding: 32px 24px; background: #0f172a; color: #f8fafc; border-radius: 12px; border: 1px solid #1e293b;">
+                <div style="text-align: center; margin-bottom: 24px;">
+                  <h1 style="color: #6366f1; font-size: 24px; margin: 0; font-weight: 800; letter-spacing: -0.5px;">FX Journal Pro</h1>
+                  <p style="color: #94a3b8; font-size: 14px; margin-top: 6px;">Professional Trading Performance & Journaling</p>
+                </div>
+                <div style="background: #1e293b; padding: 24px; border-radius: 8px; border: 1px solid #334155;">
+                  <h2 style="font-size: 18px; margin: 0 0 12px; color: #f1f5f9;">Confirm your email address</h2>
+                  <p style="font-size: 14px; line-height: 1.6; color: #cbd5e1; margin: 0 0 20px;">
+                    Hi ${user.name || 'Trader'}, thank you for signing up. Please verify your email to unlock all trading features and protect your account.
+                  </p>
+                  <div style="text-align: center; margin: 28px 0;">
+                    <a href="${url}" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #ffffff; text-decoration: none; padding: 13px 32px; border-radius: 6px; font-weight: 600; font-size: 15px; display: inline-block;">
+                      Verify My Email
+                    </a>
+                  </div>
+                  <p style="font-size: 12px; color: #94a3b8; margin: 20px 0 0; word-break: break-all;">
+                    Or copy and paste this link: <a href="${url}" style="color: #818cf8;">${url}</a>
+                  </p>
+                </div>
+                <p style="text-align: center; font-size: 12px; color: #64748b; margin-top: 24px;">
+                  If you didn't create an account, you can safely ignore this email.
+                </p>
+              </div>
+            `,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          console.error('[Better Auth Resend Error]', data);
+        } else {
+          console.log(`[Better Auth] Verification email sent successfully to ${user.email} (id: ${data.id})`);
+        }
+      } catch (err: any) {
+        console.error('[Better Auth Resend Exception]', err?.message || err);
+      }
+    },
   },
   user: {
     additionalFields: {

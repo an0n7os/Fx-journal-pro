@@ -11,6 +11,8 @@
 
 html,
 body {
+  background-color: #060913;
+  color: #f8fafc;
   scroll-behavior: smooth;
   overscroll-behavior-x: none;
 }

@@ -370,7 +370,7 @@ async function sendOtpEmail(email, otp, subject = 'Your FX Journal Pro Verificat
     // Verify your own domain (SPF + DKIM) and set RESEND_FROM_EMAIL.
     const configuredFrom = process.env.RESEND_FROM_EMAIL?.trim();
     const resendFrom = configuredFrom
-      ? `FX Journal Pro <${configuredFrom}>`
+      ? (configuredFrom.includes('<') ? configuredFrom : `FX Journal Pro <${configuredFrom}>`)
       : 'FX Journal Pro <onboarding@resend.dev>';
     if (!configuredFrom && IS_PRODUCTION_LIKE) {
       console.warn('[Resend] RESEND_FROM_EMAIL is not set — sending from the shared sandbox domain. Expect codes to land in spam.');
@@ -750,6 +750,10 @@ function issueSession(res: any, user: { id: string; email: string }): string {
 
 function clearSession(res: any) {
   res.clearCookie(SESSION_COOKIE, sessionCookieOptions());
+  res.clearCookie('better-auth.session_token', { path: '/' });
+  res.clearCookie('__Secure-better-auth.session_token', { path: '/' });
+  res.clearCookie('better-auth.state', { path: '/' });
+  res.clearCookie('__Secure-better-auth.state', { path: '/' });
 }
 
 // Strip every secret before a user object crosses the network. Applied to EVERY
@@ -766,6 +770,12 @@ function sanitizeUser<T>(user: T): T {
     'eaToken', 'ea_token',
   ]) {
     delete clone[key];
+  }
+  if (clone.onboardingCompleted !== undefined && clone.onboarding_completed === undefined) {
+    clone.onboarding_completed = clone.onboardingCompleted;
+  }
+  if (clone.onboarding_completed !== undefined && clone.onboardingCompleted === undefined) {
+    clone.onboardingCompleted = clone.onboarding_completed;
   }
   return clone;
 }
@@ -2659,22 +2669,11 @@ app.use(async (req, res, next) => {
     let authUserId: string | undefined;
     let authEmail: string | undefined;
 
-    // 0. Identity from Better Auth session
-    let betterUser: any = null;
-    try {
-      const betterSession = await betterAuthInstance.api.getSession({ headers: fromNodeHeaders(req.headers) });
-      if (betterSession?.user) {
-        betterUser = betterSession.user;
-        authUserId = betterSession.user.id;
-        authEmail = betterSession.user.email;
-      }
-    } catch (_) {}
-
-    // 1. Identity from signed session cookie
-    if (!authUserId && !authEmail) {
-      const session = verifySessionValue(req.cookies?.[SESSION_COOKIE]);
-      authUserId = session?.userId?.trim();
-      authEmail = session?.email?.trim();
+    // 1. Identity from signed session cookie (fx_auth_session)
+    const session = verifySessionValue(req.cookies?.[SESSION_COOKIE]);
+    if (session?.userId || session?.email) {
+      authUserId = session.userId?.trim();
+      authEmail = session.email?.trim();
     }
 
     // 2. Identity from Authorization Bearer token or X-Session-Token
@@ -2686,7 +2685,7 @@ app.use(async (req, res, next) => {
 
       if (token) {
         const bearerSession = verifySessionValue(token);
-        if (bearerSession) {
+        if (bearerSession?.userId || bearerSession?.email) {
           authUserId = bearerSession.userId?.trim();
           authEmail = bearerSession.email?.trim();
         } else if (useSupabase) {
@@ -2699,6 +2698,19 @@ app.use(async (req, res, next) => {
           } catch (_) {}
         }
       }
+    }
+
+    // 3. Identity from Better Auth session (Google OAuth etc.)
+    let betterUser: any = null;
+    if (!authUserId && !authEmail) {
+      try {
+        const betterSession = await betterAuthInstance.api.getSession({ headers: fromNodeHeaders(req.headers) });
+        if (betterSession?.user) {
+          betterUser = betterSession.user;
+          authUserId = betterSession.user.id;
+          authEmail = betterSession.user.email;
+        }
+      } catch (_) {}
     }
 
     // 3. There is deliberately no third path.
@@ -2933,13 +2945,27 @@ app.get('/api/auth/me', async (req, res) => {
   return res.json({ user: sanitizeUser(currentUser), sessionToken: token });
 });
 
-app.post('/api/auth/logout', (req, res) => {
-  const session = verifySessionValue(req.cookies?.[SESSION_COOKIE]);
-  if (session) {
-    revokeSessionsFor(session.userId);
-    revokeSessionsFor(session.email);
-  }
-  clearSession(res);
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const session = verifySessionValue(req.cookies?.[SESSION_COOKIE]);
+    if (session) {
+      revokeSessionsFor(session.userId);
+      revokeSessionsFor(session.email);
+    }
+    clearSession(res);
+  } catch (_) {}
+
+  try {
+    await betterAuthInstance.api.signOut({ headers: fromNodeHeaders(req.headers) });
+  } catch (_) {}
+
+  res.clearCookie('better-auth.session_token', { path: '/' });
+  res.clearCookie('__Secure-better-auth.session_token', { path: '/' });
+  res.clearCookie('better-auth.session_data', { path: '/' });
+  res.clearCookie('__Secure-better-auth.session_data', { path: '/' });
+  res.clearCookie('better-auth.state', { path: '/' });
+  res.clearCookie('__Secure-better-auth.state', { path: '/' });
+  res.clearCookie('fx_auth_session', { path: '/' });
   res.json({ message: 'Logged out successfully' });
 });
 
@@ -3575,14 +3601,28 @@ app.post('/api/auth/onboarding', async (req, res) => {
     db.users[userIdx].tradingStyle = tradingStyle;
     db.users[userIdx].mainMarkets = markets;
     db.users[userIdx].onboardingCompleted = true;
+    db.users[userIdx].onboarding_completed = true;
     db.users[userIdx].onboardingData = { experience, tradingStyle, markets };
+
+    if (useSupabase && currentUser?.id) {
+      try {
+        await supabase.from('users').update({
+          experience,
+          trading_style: tradingStyle,
+          main_markets: markets,
+          onboarding_completed: true
+        }).eq('id', currentUser.id);
+      } catch (sbErr) {
+        console.warn('[Onboarding] Supabase direct update warning:', sbErr);
+      }
+    }
 
     // Auto-create a default portfolio account for new users if none exists yet
     await ensureDefaultPortfolioAccount(db, currentUser.id, authEmail);
 
     await saveDatabase(db, authEmail);
     currentUser = db.users[userIdx];
-    res.json({ message: 'Onboarding completed successfully', user: currentUser });
+    res.json({ message: 'Onboarding completed successfully', user: sanitizeUser(currentUser) });
   } else {
     res.status(404).json({ error: 'User not found' });
   }

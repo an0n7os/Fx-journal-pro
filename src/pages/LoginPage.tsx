@@ -708,7 +708,8 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           console.warn('[AxyFx] Supabase login warning, falling back to backend:', sErr);
         }
       }
-      persistAuthSession(sessionStorage.getItem('auth_user_id') || '', authEmail);
+      sessionStorage.removeItem('auth_user_id');
+      localStorage.removeItem('auth_user_id');
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         credentials: 'include',

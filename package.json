@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "node --max-old-space-size=4096 ./node_modules/tsx/dist/cli.mjs server.ts",
     "auth:migrate": "node --input-type=module -e \"import { autoMigrateBetterAuth } from './auth.ts'; await autoMigrateBetterAuth();\"",
     "dev:testbilling": "tsx --env-file=.env.testbilling server.ts",
     "razorpay:check": "node scripts/razorpay-check.mjs",

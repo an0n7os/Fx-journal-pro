@@ -35,6 +35,7 @@ import LoginPage from './pages/LoginPage';
 import ProUpgradeModal from './components/ProUpgradeModal';
 import ProFeaturePanel from './components/ProFeaturePanel';
 import CustomAlertModal from './components/CustomAlertModal';
+import OnboardingWizardModal from './components/OnboardingWizardModal';
 
 // Screens that only ever render behind an activeTab check. Splitting them out
 // keeps the admin panel, the MT5 console and lightweight-charts out of the
@@ -722,7 +723,8 @@ export default function App() {
           // Keep sessionStorage in sync with the server's canonical user id
           persistAuthSession(data.user.id || userId, data.user.email || email, data.sessionToken);
           setUser(data.user);
-          setShowOnboardingWizard(false);
+          const isCompleted = !!(data.user.onboardingCompleted || (data.user as any).onboarding_completed);
+          setShowOnboardingWizard(!isCompleted);
           await fetchAccountData();
           // Check admin status directly after login
           try {
@@ -756,7 +758,7 @@ export default function App() {
       isPro: false,
     });
 
-    setShowOnboardingWizard(false);
+    setShowOnboardingWizard(true);
     await fetchAccountData();
     setLoading(false);
   };
@@ -887,10 +889,21 @@ export default function App() {
 
   // First-time onboarding wizard: trigger if registration completed but onboarding not completed
   useEffect(() => {
-    if (user && !user.onboardingCompleted && accounts.length === 0 && !loading) {
+    if (!user || loading) return;
+    const isCompleted = !!(user.onboardingCompleted || (user as any).onboarding_completed);
+    if (!isCompleted) {
       setShowOnboardingWizard(true);
     }
-  }, [user, loading, accounts.length]);
+  }, [user, loading]);
+
+  // Pre-populate onboarding form states if user already has preferences
+  useEffect(() => {
+    if (user?.experience) setObExperience(user.experience as any);
+    if (user?.tradingStyle) setObStyle(user.tradingStyle as any);
+    if (user?.mainMarkets && Array.isArray(user.mainMarkets) && user.mainMarkets.length > 0) {
+      setObMarkets(user.mainMarkets as string[]);
+    }
+  }, [user]);
 
   // Guided tour: show for first-time users.
   //
@@ -907,27 +920,19 @@ export default function App() {
     }
   }, [user, loading, trades]);
 
-  // Auto-advance from "Create Portfolio" to "Add First Trade" once a portfolio exists
+  // Synchronize activeTab with guidedTourStep so the targeted spotlight element is always mounted
   useEffect(() => {
-    if (showGuidedTour && guidedTourStep === 2 && accounts.length > 0) {
-      setGuidedTourStep(3);
+    if (!showGuidedTour) return;
+    if (guidedTourStep === 2) {
+      setActiveTab('accounts');
+    } else if (guidedTourStep === 3 || guidedTourStep === 1) {
+      setActiveTab('dashboard');
     }
-  }, [showGuidedTour, guidedTourStep, accounts]);
-
-  // One-time MT5 Sync announcement.
-  //
-  // This is a changelog for people who were already using the product — it
-  // opens with "we've fixed and improved MT5 syncing", which reads to a brand
-  // new customer as "this used to be broken". It also points at a Pro feature.
-  // So: existing users only (they have trades), and Pro only.
-  // The MT5 Sync Tour was removed: the state and handlers existed but no
-  // component ever rendered it, so setting the flag showed nothing — and
-  // because the bottom tab bar hid itself whenever a tour was "open", the
-  // mobile navigation disappeared permanently for every Pro user with trades.
-  // Nothing could clear it, since completeMT5Tour had no UI to be called from.
-
+  }, [showGuidedTour, guidedTourStep]);
 
   const startGuidedTour = () => {
+    localStorage.removeItem('journal_tutorial_done');
+    setActiveTab('dashboard');
     setGuidedTourStep(1);
     setShowGuidedTour(true);
   };
@@ -1052,7 +1057,8 @@ export default function App() {
             // before we call fetchAccountData so authFetch has them available.
             persistAuthSession(data.user.id, data.user.email, data.sessionToken);
             setUser(data.user);
-            setShowOnboardingWizard(false);
+            const isCompleted = !!(data.user.onboardingCompleted || (data.user as any).onboarding_completed);
+            setShowOnboardingWizard(!isCompleted);
             await fetchAccountData();
             // Check admin status after session restore
             try {
@@ -1269,7 +1275,8 @@ export default function App() {
       if (data.user) {
         persistAuthSession(data.user.id, data.user.email || authEmail, data.sessionToken);
         setUser(data.user);
-        setShowOnboardingWizard(false);
+        const isCompleted = !!(data.user.onboardingCompleted || (data.user as any).onboarding_completed);
+        setShowOnboardingWizard(!isCompleted);
         await fetchAccountData();
       }
     } catch (err: any) {
@@ -1557,6 +1564,11 @@ export default function App() {
         setUser(data.user);
         setShowOnboardingWizard(false);
         fetchAccountData();
+        // Immediately start the guided tour right after the onboarding wizard completes!
+        localStorage.removeItem('journal_tutorial_done');
+        setActiveTab('dashboard');
+        setGuidedTourStep(1);
+        setShowGuidedTour(true);
       }
     } catch (err) {
       console.error('Onboarding exception:', err);
@@ -3971,85 +3983,24 @@ export default function App() {
     );
   }
 
-  // Onboarding Wizard (if registration completes but not onboarding completed)
-  if (showOnboardingWizard && !user.onboardingCompleted) {
+  // Onboarding Wizard (shown if new user has not completed onboarding, or if reopened)
+  const isUserOnboardingDone = !!(user?.onboardingCompleted || (user as any)?.onboarding_completed);
+  if (showOnboardingWizard) {
     return (
-      <div className="lp min-h-screen flex items-center justify-center p-4 font-sans antialiased text-slate-200 relative overflow-hidden">
-        <div className="lp-aura" />
-        <div className="lp-card w-full max-w-lg p-8 space-y-6 relative overflow-hidden z-10">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-indigo-400"></div>
-          <div className="flex items-center justify-between">
-            <span className="lp-eyebrow">Onboarding Wizard</span>
-            <span className="lp-eyebrow lp-num">Step {onboardingStep} of 2</span>
-          </div>
-          {onboardingStep === 1 ? (
-            <div className="space-y-5">
-              <div className="space-y-1">
-                <h2 className="text-lg font-bold text-white font-display">Personalize your trading dashboard</h2>
-                <p className="text-xs text-slate-400">Configure your parameters to unlock a custom experience matching your style.</p>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">What is your Trading Experience?</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {['Beginner', 'Intermediate', 'Professional'].map((exp) => (
-                      <button key={exp} type="button" onClick={() => setObExperience(exp as any)}
-                        className={`p-3 border rounded-lg text-xs font-semibold text-center transition ${obExperience === exp ? 'border-violet-500/50 bg-violet-500/15 text-violet-200' : 'border-white/[0.08] bg-white/[0.03] hover:border-white/20 text-slate-400'}`}>
-                        {exp}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">Primary Trading Style</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {['Scalping', 'Day Trading', 'Swing Trading'].map((style) => (
-                      <button key={style} type="button" onClick={() => setObStyle(style as any)}
-                        className={`p-3 border rounded-lg text-xs font-semibold text-center transition ${obStyle === style ? 'border-violet-500/50 bg-violet-500/15 text-violet-200' : 'border-white/[0.08] bg-white/[0.03] hover:border-white/20 text-slate-400'}`}>
-                        {style}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <button type="button" onClick={() => setOnboardingStep(2)}
-                className="lp-btn-primary w-full font-semibold text-xs rounded-lg p-3 flex items-center justify-center gap-1.5">
-                Continue Setup <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              <div className="space-y-1">
-                <h2 className="text-lg font-bold text-white font-display">Select Target Markets</h2>
-                <p className="text-xs text-slate-400">Pick instruments you analyze daily to configure trackers.</p>
-              </div>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {['Forex', 'Gold', 'Crypto', 'Indices'].map((market) => {
-                    const active = obMarkets.includes(market);
-                    return (
-                      <button key={market} type="button"
-                        onClick={() => { if (active) setObMarkets(obMarkets.filter(m => m !== market)); else setObMarkets([...obMarkets, market]); }}
-                        className={`p-4 border rounded-lg text-xs font-semibold text-left transition flex items-center justify-between ${active ? 'border-violet-500/50 bg-violet-500/15 text-violet-200' : 'border-white/[0.08] bg-white/[0.03] hover:border-white/20 text-slate-400'}`}>
-                        {market}
-                        <CheckCircle2 className={`h-4 w-4 ${active ? 'text-violet-600' : 'text-slate-300'}`} />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setOnboardingStep(1)}
-                  className="lp-btn-ghost w-1/3 font-semibold text-xs rounded-lg p-3">Back</button>
-                <button type="button" disabled={actionLoading} onClick={submitOnboarding}
-                  className="lp-btn-primary w-2/3 font-semibold text-xs rounded-lg p-3 flex items-center justify-center gap-1.5 disabled:opacity-50">
-                  {actionLoading ? 'Initializing Platform...' : 'Complete & Launch'} <Check className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <OnboardingWizardModal
+        onboardingStep={onboardingStep}
+        setOnboardingStep={setOnboardingStep}
+        obExperience={obExperience}
+        setObExperience={setObExperience}
+        obStyle={obStyle}
+        setObStyle={setObStyle}
+        obMarkets={obMarkets}
+        setObMarkets={setObMarkets}
+        actionLoading={actionLoading}
+        onSubmit={submitOnboarding}
+        canDismiss={isUserOnboardingDone}
+        onClose={() => setShowOnboardingWizard(false)}
+      />
     );
   }
 
@@ -7479,7 +7430,28 @@ export default function App() {
                             </span>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-500/10 dark:to-purple-500/5 border border-violet-100 dark:border-violet-500/20 rounded-xl p-5 space-y-3">
+                              <div className="h-10 w-10 rounded-xl bg-violet-600 text-white flex items-center justify-center">
+                                <Sparkles className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <strong className="text-sm font-black text-slate-900 dark:text-white block">Trading Setup Wizard</strong>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                  Reconfigure your trading style, experience level, and preferred market trackers.
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setOnboardingStep(1);
+                                  setShowOnboardingWizard(true);
+                                }}
+                                className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs py-2.5 px-3 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                              >
+                                <Sparkles className="h-3.5 w-3.5" /> Launch Setup Wizard
+                              </button>
+                            </div>
+
                             <div className="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-500/10 dark:to-blue-500/5 border border-indigo-100 dark:border-indigo-500/20 rounded-xl p-5 space-y-3">
                               <div className="h-10 w-10 rounded-xl bg-indigo-500 text-white flex items-center justify-center">
                                 <Compass className="h-5 w-5" />
@@ -7494,7 +7466,7 @@ export default function App() {
                                 onClick={startGuidedTour}
                                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 px-3 rounded-lg transition flex items-center justify-center gap-1.5"
                               >
-                                <RefreshCw className="h-3.5 w-3.5" /> Restart Onboarding
+                                <RefreshCw className="h-3.5 w-3.5" /> Restart Tour
                               </button>
                             </div>
 
