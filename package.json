@@ -35,7 +35,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.7.5",
+    "better-auth": "^1.7.6",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",

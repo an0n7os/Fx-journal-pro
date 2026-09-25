@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import { betterAuth } from 'better-auth';
 import { twoFactor, bearer, admin } from 'better-auth/plugins';
-import { dash, sentinel } from '@better-auth/infra';
 import { getMigrations } from 'better-auth/db/migration';
 import { memoryAdapter } from '@better-auth/memory-adapter';
 import { createRequire } from 'node:module';
@@ -110,6 +109,15 @@ export const auth = betterAuth({
         }
       : {}),
   },
+  trustedOrigins: [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://fxjournalp.netlify.app',
+    'https://fxjournalpro.com',
+  ],
+  advanced: {
+    useSecureCookies: (process.env.BETTER_AUTH_URL || '').startsWith('https://'),
+  },
   plugins: [
     bearer(),
     twoFactor({
@@ -119,8 +127,6 @@ export const auth = betterAuth({
       defaultRole: 'user',
       adminRole: ['admin', 'SUPER_ADMIN', 'ADMIN'],
     }),
-    dash(apiKey ? { apiKey } : undefined),
-    sentinel(apiKey ? { apiKey } : undefined),
   ],
 });
 

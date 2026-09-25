@@ -2660,9 +2660,11 @@ app.use(async (req, res, next) => {
     let authEmail: string | undefined;
 
     // 0. Identity from Better Auth session
+    let betterUser: any = null;
     try {
       const betterSession = await betterAuthInstance.api.getSession({ headers: fromNodeHeaders(req.headers) });
       if (betterSession?.user) {
+        betterUser = betterSession.user;
         authUserId = betterSession.user.id;
         authEmail = betterSession.user.email;
       }
@@ -2701,50 +2703,111 @@ app.use(async (req, res, next) => {
 
     // 3. There is deliberately no third path.
     //
-    // This used to accept identity from x-auth-email / x-auth-user-id whenever
-    // the cookie and the bearer token were both absent, with no signature and
-    // no other proof:
-    //
-    //   curl https://<site>/api/auth/me -H 'x-auth-email: someone@example.com'
-    //
-    // answered with that account's row. For the routes that are not in
-    // IDENTITY_ONLY_ROUTES it went further and loaded their whole database, so
-    // their trades could be read and written too. A complete authentication
-    // bypass, in production as well — the comment claimed it was for "Netlify
-    // Functions / cross-origin deployments", which is exactly where it was
-    // most reachable.
-    //
-    // It also explains an intermittent security test: A2 only failed when the
-    // victim's scoped database happened to be warm in the in-memory cache, so
-    // the same attack passed or failed run to run.
-    //
-    // Nothing needed it. The frontend sends these headers, but it sends them
-    // on same-origin fetches that carry the signed cookie anyway, and the EA
-    // authenticates with its own token and HMAC. Identity now comes only from
-    // something the server signed.
+    // Identity now comes only from something the server signed or verified.
 
     if (authUserId || authEmail) {
-      const email = authEmail ? authEmail.toLowerCase() : '';
-      const userId = authUserId || (email ? `user_${email}` : '');
+      const email = authEmail ? authEmail.toLowerCase().trim() : '';
+      let userId = authUserId || (email ? `user_${email}` : '');
 
-      // ensureUserDbLoaded pulls users + accounts + trades + risk settings +
-      // tickets + deals — six queries, and the whole trade history — on EVERY
-      // request. Routes that only need to know WHO is calling get a single
-      // row instead; the rest still load the full set.
       let db: any = null;
       let dbUser: any = null;
 
-      if (useSupabase && IDENTITY_ONLY_ROUTES.has(req.path)) {
-        const query = authUserId
-          ? supabase.from('users').select('*').eq('id', authUserId).maybeSingle()
-          : supabase.from('users').select('*').eq('email', email).maybeSingle();
-        const { data } = await query;
-        dbUser = data ? toCamel(data) : null;
+      if (useSupabase) {
+        let existingUserRow: any = null;
+        if (email) {
+          const { data } = await supabase.from('users').select('*').eq('email', email).maybeSingle();
+          existingUserRow = data;
+        }
+        if (!existingUserRow && authUserId) {
+          const { data } = await supabase.from('users').select('*').eq('id', authUserId).maybeSingle();
+          existingUserRow = data;
+        }
+
+        if (existingUserRow) {
+          dbUser = toCamel(existingUserRow);
+          userId = existingUserRow.id;
+          authUserId = existingUserRow.id;
+        } else if (betterUser && email) {
+          // User logged in with Better Auth / Google OAuth for the first time -> auto-provision in Supabase
+          const canonicalId = authUserId || `user_${Date.now()}`;
+          const newRecord: any = {
+            id: canonicalId,
+            email: email,
+            name: betterUser.name || email.split('@')[0],
+            password: '',
+            role: 'USER',
+            status: 'ACTIVE',
+            experience: 'Intermediate',
+            trading_style: 'Day Trading',
+            main_markets: ['Forex', 'Gold'],
+            onboarding_completed: false,
+            is_pro: false,
+            is_email_verified: true,
+            auth_provider: 'google',
+            last_login: new Date().toISOString(),
+          };
+          try {
+            await supabase.from('users').upsert(newRecord, { onConflict: 'id' });
+            const defaultAcc = {
+              id: `acc_${Date.now()}`,
+              user_id: canonicalId,
+              name: 'Main Trading Account',
+              broker: 'Demo Broker',
+              platform: 'MT5',
+              account_type: 'DEMO',
+              currency: 'USD',
+              starting_balance: 10000,
+              current_balance: 10000,
+              equity: 10000,
+              status: 'ACTIVE',
+              is_mt5_sync: false,
+            };
+            await supabase.from('trading_accounts').upsert([defaultAcc], { onConflict: 'id' });
+          } catch (createErr) {
+            console.error('[Better Auth Sync] Failed to upsert new user to Supabase:', createErr);
+          }
+          dbUser = toCamel(newRecord);
+          userId = canonicalId;
+          authUserId = canonicalId;
+        }
+
+        if (!IDENTITY_ONLY_ROUTES.has(req.path)) {
+          db = await ensureUserDbLoaded(userId, email);
+          if (db?.users?.[0]) dbUser = db.users[0];
+        }
       } else {
         db = await ensureUserDbLoaded(userId, email);
-        // Use the user already resolved by ensureUserDbLoaded (by email lookup)
-        // Never mutate the canonical user ID with a temporary session ID
         dbUser = db.users[0] || null;
+        if (!dbUser && betterUser && email) {
+          const canonicalId = authUserId || `user_${Date.now()}`;
+          const newRecord: any = {
+            id: canonicalId,
+            email: email,
+            name: betterUser.name || email.split('@')[0],
+            password: '',
+            role: 'USER',
+            status: 'ACTIVE',
+            experience: 'Intermediate',
+            tradingStyle: 'Day Trading',
+            mainMarkets: ['Forex', 'Gold'],
+            onboardingCompleted: false,
+            isPro: false,
+            isEmailVerified: true,
+            authProvider: 'google',
+            lastLogin: new Date().toISOString(),
+          };
+          dbUser = newRecord;
+          db.users.push(newRecord);
+        }
+      }
+
+      // If user came via Better Auth (Google), their email is verified by Google
+      if (betterUser && dbUser) {
+        dbUser.isEmailVerified = true;
+        dbUser.is_email_verified = true;
+        if (!req.cookies?.[SESSION_COOKIE]) {
+          issueSession(res, { id: dbUser.id, email: dbUser.email });
+        }
       }
 
       // Security: accounts that explicitly have NOT completed email/OTP verification
@@ -2863,7 +2926,11 @@ app.get('/api/auth/me', async (req, res) => {
   } catch (err) {
     console.warn('[auth/me] last_login update failed:', err);
   }
-  return res.json({ user: sanitizeUser(currentUser) });
+  const existingCookie = req.cookies?.[SESSION_COOKIE];
+  const token = (existingCookie && verifySessionValue(existingCookie))
+    ? existingCookie
+    : issueSession(res, currentUser);
+  return res.json({ user: sanitizeUser(currentUser), sessionToken: token });
 });
 
 app.post('/api/auth/logout', (req, res) => {
