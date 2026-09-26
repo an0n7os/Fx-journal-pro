@@ -610,14 +610,14 @@ export default function ProUpgradeModal({
         </div>
 
         {/* Footer */}
-        <div className="px-7 py-4 bg-black/30 border-t border-white/[0.06] flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-slate-500">
-          <span className="flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400/80 shrink-0" />
-            Payment handled by Razorpay — we never see your card
-          </span>
-          {/* Matches the refund policy in Legal: 7 days, if Pro does not work
-              as described. "100% money-back satisfaction" promised more. */}
-          <span className="sm:ml-auto">7-day refund if Pro doesn't work as described</span>
+        <div className="px-6 py-3.5 bg-black/40 border-t border-white/[0.06] flex flex-col items-center justify-center text-center gap-1 text-[11.5px] text-slate-400">
+          <div className="flex items-center justify-center gap-1.5 text-slate-300">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+            <span>Payment handled by Razorpay — we never see your card</span>
+          </div>
+          <div className="text-slate-500 text-[11px]">
+            7-day refund if Pro doesn't work as described
+          </div>
         </div>
       </div>
     </div>
