@@ -17,6 +17,22 @@ const IS_SERVERLESS = !!(
 
 const DB_PATH = path.join(process.cwd(), 'auth.sqlite');
 
+function createMemoryStore(): Record<string, any[]> {
+  return {
+    user: [],
+    session: [],
+    account: [],
+    verification: [],
+    rateLimit: [],
+    jwks: [],
+    twoFactor: [],
+    passkey: [],
+    invitation: [],
+    organization: [],
+    member: [],
+  };
+}
+
 function getDatabaseAdapter(): any {
   // If PostgreSQL / Supabase connection string is configured
   if (process.env.DATABASE_URL) {
@@ -29,7 +45,7 @@ function getDatabaseAdapter(): any {
 
   // On Serverless (Netlify Functions / Vercel), local SQLite disk is read-only and missing native bindings
   if (IS_SERVERLESS) {
-    return memoryAdapter({});
+    return memoryAdapter(createMemoryStore());
   }
 
   // Local development: load SQLite dynamically so serverless bundlers never fail
@@ -38,7 +54,7 @@ function getDatabaseAdapter(): any {
     return new sqliteModule.DatabaseSync(DB_PATH);
   } catch (e) {
     console.warn('[Better Auth] Could not load SQLite, falling back to in-memory adapter:', e);
-    return memoryAdapter({});
+    return memoryAdapter(createMemoryStore());
   }
 }
 
