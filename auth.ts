@@ -266,6 +266,10 @@ export const auth = betterAuth({
   ],
   account: {
     storeStateStrategy: 'cookie',
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ['google'],
+    },
   },
   advanced: {
     useSecureCookies: (process.env.BETTER_AUTH_URL || '').startsWith('https://'),
