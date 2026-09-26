@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@better-auth/infra": "^0.4.11",
+    "@better-auth/memory-adapter": "^1.7.6",
     "@google/genai": "^2.4.0",
     "@marsidev/react-turnstile": "^1.5.4",
     "@supabase/supabase-js": "^2.110.5",

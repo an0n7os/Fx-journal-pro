@@ -244,16 +244,16 @@ export const auth = betterAuth({
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ? {
           google: {
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            clientId: process.env.GOOGLE_CLIENT_ID.trim(),
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET.trim(),
           },
         }
       : {}),
     ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
       ? {
           github: {
-            clientId: process.env.GITHUB_CLIENT_ID,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET,
+            clientId: process.env.GITHUB_CLIENT_ID.trim(),
+            clientSecret: process.env.GITHUB_CLIENT_SECRET.trim(),
           },
         }
       : {}),
@@ -274,15 +274,13 @@ export const auth = betterAuth({
       secure: (process.env.BETTER_AUTH_URL || '').startsWith('https://'),
     },
   },
+  onAPIError: {
+    onError: (error, ctx) => {
+      console.error('[Better Auth API Error]', error?.message || error, ctx?.path);
+    },
+  },
   plugins: [
     bearer(),
-    twoFactor({
-      issuer: 'Fx Journal Pro',
-    }),
-    admin({
-      defaultRole: 'user',
-      adminRole: ['admin', 'SUPER_ADMIN', 'ADMIN'],
-    }),
   ],
 });
 
