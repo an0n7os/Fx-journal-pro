@@ -4,9 +4,9 @@ import {
   ArrowRight, ArrowUpRight, Ban, BarChart3, BookOpen, Bot, Brain, CalendarDays, Check, CheckCircle2,
   ChevronDown, Clock, Compass, Cpu, Database, Eye, EyeOff,
   Flag, FileText, Gift, Globe, GraduationCap, Instagram, KeyRound, Layers, LineChart, Linkedin, Lock,
-  Menu, MessageSquare, MoonStar, MousePointerClick, Newspaper, PieChart, RefreshCw, Send, Shield,
+  Menu, MessageSquare, MoonStar, MousePointerClick, Newspaper, Phone, PieChart, RefreshCw, Send, Shield,
   ShieldCheck, Sparkles, Star, Sun, Tags, Target, TrendingDown,
-  Trophy, Twitter, Wallet, Wrench, X, Youtube, Zap
+  Trophy, Twitter, Wallet, Wrench, X, Youtube, Zap, MapPin, Mail
 } from 'lucide-react';
 import Logo from '../components/Logo';
 import FXNewsPreview from '../components/FXNewsPreview';
@@ -399,6 +399,40 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
+
+  // Contact Form State
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactSubject, setContactSubject] = useState('General Inquiry');
+  const [contactMessage, setContactMessage] = useState('');
+  const [contactSubmitted, setContactSubmitted] = useState(false);
+  const [contactLoading, setContactLoading] = useState(false);
+
+  const handleContactSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactName.trim() || !contactEmail.trim() || !contactMessage.trim()) return;
+
+    setContactLoading(true);
+
+    setTimeout(() => {
+      const subject = `[${contactSubject}] Inquiry from ${contactName.trim()}`;
+      const body = `Name: ${contactName.trim()}\nEmail: ${contactEmail.trim()}\nDepartment: ${contactSubject}\n\nMessage:\n${contactMessage.trim()}\n\n---\nSent via FX Journal Pro Support Form`;
+      const mailtoUrl = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+      try {
+        const link = document.createElement('a');
+        link.href = mailtoUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.click();
+      } catch {
+        window.location.href = mailtoUrl;
+      }
+
+      setContactLoading(false);
+      setContactSubmitted(true);
+    }, 450);
+  };
 
   const openAuthModal = (mode: 'login' | 'register') => {
     setIsRegistering(mode === 'register');
@@ -1573,36 +1607,252 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
       </section>
 
       {/* ── Contact ── */}
-      <section id="contact" className="relative scroll-mt-20 py-14 md:py-20 lp-rule">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="lp-card lp-card-accent p-7 sm:p-10 grid lg:grid-cols-[1fr_auto] gap-8 lg:gap-12 lg:items-center" data-reveal="up">
-            <div>
-              <span className="lp-pill mb-5">
-                <MessageSquare className="h-3.5 w-3.5 text-violet-200" />
-                <span className="lp-eyebrow">Contact</span>
-              </span>
-              <h2 className="font-display text-2xl sm:text-[32px] font-bold text-white tracking-[-0.025em] text-balance">
-                Questions, bugs, or a feature you need?
-              </h2>
-              <p className="mt-4 text-[15px] text-slate-300/90 leading-relaxed max-w-xl">
-                Write to us directly — a real person reads every message. Already have an account? Raise a support
-                ticket from inside the app and we can see your setup while we answer.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 lg:min-w-[230px]">
-              <a
-                href={`mailto:${CONTACT_EMAIL}`}
-                className="lp-btn-primary inline-flex items-center justify-center gap-2 font-semibold rounded-full px-6 py-3.5 text-sm"
-              >
-                <MessageSquare className="h-4 w-4" />
-                Email us
-              </a>
-              <a
-                href={`mailto:${CONTACT_EMAIL}`}
-                className="text-center font-mono text-[12px] text-slate-300 hover:text-white transition-colors break-all min-h-[24px] flex items-center justify-center"
-              >
-                {CONTACT_EMAIL}
-              </a>
+      <section id="contact" className="relative scroll-mt-20 py-16 md:py-24 lp-rule">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Centered Section Header to match FAQ, Pricing and Features */}
+          <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12" data-reveal="up">
+            <span className="lp-pill mb-4">
+              <MessageSquare className="h-3.5 w-3.5 text-violet-300" />
+              <span className="lp-eyebrow">Customer Support &amp; Care</span>
+            </span>
+            <h2 className="font-display text-3xl sm:text-[38px] font-bold text-white tracking-[-0.025em] text-balance">
+              Get in Touch with FX Journal Pro
+            </h2>
+            <p className="mt-3 text-sm text-slate-400 max-w-lg mx-auto">
+              Have questions about platform features, MT5 syncing, subscriptions, or prop firms? We're here to help.
+            </p>
+          </div>
+
+          <div className="relative rounded-3xl border border-white/[0.08] bg-gradient-to-b from-[#0a0d17]/95 via-[#070a12]/95 to-[#04060a]/95 backdrop-blur-2xl p-6 sm:p-10 shadow-[0_24px_80px_rgba(0,0,0,0.85)] overflow-hidden" data-reveal="up">
+            {/* Top ambient glow & lighting */}
+            <div className="absolute top-0 left-16 right-16 h-px bg-gradient-to-r from-transparent via-violet-500/60 to-transparent shadow-[0_0_15px_#8b5cf6]" />
+            <div className="absolute -top-32 -left-32 w-80 h-80 bg-violet-600/[0.08] rounded-full blur-[120px] pointer-events-none" />
+            <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-emerald-500/[0.05] rounded-full blur-[120px] pointer-events-none" />
+
+            <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch">
+              {/* Left Column: Direct Support Channels */}
+              <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
+                <div className="flex items-center justify-between pb-3.5 border-b border-white/[0.06]">
+                  <div>
+                    <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                      Direct Support Channels
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Official verified trader desk</p>
+                  </div>
+                </div>
+
+                {/* Clean, Borderless Support Channels (No individual boxes) */}
+                <div className="space-y-4 py-1">
+                  {/* Email */}
+                  <div className="flex items-start gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 group-hover:bg-violet-500/20 transition-all">
+                      <Mail className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block">
+                        Support Email
+                      </span>
+                      <a
+                        href={`mailto:${CONTACT_EMAIL}`}
+                        className="text-sm font-semibold text-white hover:text-violet-300 transition-colors block truncate"
+                        title={CONTACT_EMAIL}
+                      >
+                        {CONTACT_EMAIL}
+                      </a>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Response guaranteed within 24 hours</p>
+                    </div>
+                  </div>
+
+                  {/* Phone */}
+                  <div className="flex items-start gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 group-hover:bg-emerald-500/20 transition-all">
+                      <Phone className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
+                          Phone Support
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full border border-emerald-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Active
+                        </span>
+                      </div>
+                      <a
+                        href="tel:+918136802573"
+                        className="text-sm font-semibold text-white hover:text-emerald-400 transition-colors block"
+                      >
+                        +91 81368 02573
+                      </a>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Voice call &amp; instant WhatsApp chat</p>
+                    </div>
+                  </div>
+
+                  {/* Hours */}
+                  <div className="flex items-start gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 group-hover:bg-sky-500/20 transition-all">
+                      <Clock className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block">
+                        Working Hours
+                      </span>
+                      <p className="text-sm font-semibold text-white">
+                        9:00 AM – 6:00 PM IST
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Monday to Saturday</p>
+                    </div>
+                  </div>
+
+                  {/* Address */}
+                  <div className="flex items-start gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 group-hover:bg-indigo-500/20 transition-all">
+                      <MapPin className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block">
+                        Operating Address
+                      </span>
+                      <p className="text-sm font-semibold text-white">
+                        Kasaragod, Kerala, India
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Registered Entity Address</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
+                    <span className="text-[11px] font-medium text-slate-300">Razorpay Verified Merchant</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono">Encrypted Dispatch</span>
+                </div>
+              </div>
+
+              {/* Right Column: Perfectly Aligned Contact Form */}
+              <div className="lg:col-span-7 lg:border-l lg:border-white/[0.07] lg:pl-10 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between pb-3.5 border-b border-white/[0.06] mb-5">
+                    <div>
+                      <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                        <Send className="h-4 w-4 text-violet-400" />
+                        Send Us a Direct Message
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        We get back directly to your email inbox promptly
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-300 font-mono shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Live Desk
+                    </div>
+                  </div>
+
+                  {contactSubmitted ? (
+                    <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-8 text-center space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                        <CheckCircle2 className="h-6 w-6" />
+                      </div>
+                      <h4 className="text-base font-bold text-white">Thank You, {contactName || 'Trader'}!</h4>
+                      <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
+                        Your message has been initiated. If your mail client did not open automatically, you can also write directly to{' '}
+                        <a href={`mailto:${CONTACT_EMAIL}`} className="text-emerald-400 font-semibold underline underline-offset-2">
+                          {CONTACT_EMAIL}
+                        </a>
+                        . Our team will respond within 24 hours.
+                      </p>
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setContactSubmitted(false);
+                            setContactName('');
+                            setContactEmail('');
+                            setContactMessage('');
+                          }}
+                          className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white transition-colors cursor-pointer"
+                        >
+                          Send Another Message
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleContactSubmit} className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-slate-300 block">
+                            Your Name <span className="text-rose-400">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={contactName}
+                            onChange={(e) => setContactName(e.target.value)}
+                            placeholder="e.g. John Doe"
+                            className="w-full bg-white/[0.03] hover:bg-white/[0.05] focus:bg-white/[0.05] border border-white/[0.09] focus:border-violet-500/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all shadow-inner"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-slate-300 block">
+                            Email Address <span className="text-rose-400">*</span>
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            value={contactEmail}
+                            onChange={(e) => setContactEmail(e.target.value)}
+                            placeholder="you@example.com"
+                            className="w-full bg-white/[0.03] hover:bg-white/[0.05] focus:bg-white/[0.05] border border-white/[0.09] focus:border-violet-500/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all shadow-inner"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-slate-300 block">
+                          Message <span className="text-rose-400">*</span>
+                        </label>
+                        <textarea
+                          required
+                          rows={4}
+                          value={contactMessage}
+                          onChange={(e) => setContactMessage(e.target.value)}
+                          placeholder="How can we help you? Write your questions or requirements here..."
+                          className="w-full bg-white/[0.03] hover:bg-white/[0.05] focus:bg-white/[0.05] border border-white/[0.09] focus:border-violet-500/80 rounded-xl p-3.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all resize-y min-h-[96px] shadow-inner"
+                        />
+                      </div>
+
+                      <div className="pt-1">
+                        <button
+                          type="submit"
+                          disabled={contactLoading}
+                          className="w-full lp-btn-primary inline-flex items-center justify-center gap-2 font-bold rounded-xl py-3 px-6 text-sm shadow-[0_10px_30px_rgba(124,58,237,0.4)] hover:shadow-[0_14px_45px_rgba(124,58,237,0.6)] transition-all duration-200 hover:scale-[1.005] active:scale-[0.99] cursor-pointer"
+                        >
+                          {contactLoading ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                              <span>Sending message...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send className="h-4 w-4" />
+                              <span>Send Message</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-white/[0.06] mt-4 flex items-center justify-center text-xs text-slate-400">
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                    <span>🔒</span> Direct dispatch to <span className="text-slate-300 font-mono font-medium">{CONTACT_EMAIL}</span>
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1727,12 +1977,12 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             <div className="lg:col-span-2">
               <h3 className="text-xs font-mono uppercase tracking-wider font-bold text-white mb-4">Legal &amp; Trust</h3>
               <ul className="space-y-2.5 text-xs">
-                {(['risk', 'terms', 'refunds', 'privacy'] as const).map((key) => (
+                {(['terms', 'privacy', 'refunds', 'shipping', 'contact', 'risk'] as const).map((key) => (
                   <li key={key}>
                     <button
                       type="button"
                       onClick={() => setLegalDoc(key)}
-                      className="text-slate-400 hover:text-white transition text-left"
+                      className="text-slate-400 hover:text-white transition text-left cursor-pointer"
                     >
                       {LEGAL_DOCS[key].title}
                     </button>
@@ -1799,9 +2049,20 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
           {/* Bottom Copyright & Sessions Bar */}
           <div className="border-t border-white/[0.06] pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-            <p>&copy; {new Date().getFullYear()} FX Journal Pro. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} FX Journal Pro. Operated by Akshayraj (FX Journal Pro). All rights reserved.</p>
             <div className="flex items-center gap-4 text-[11px] font-mono">
-              <span className="text-slate-400">Made with obsession for traders.</span>
+              <span className="text-slate-400">
+                Built by{' '}
+                <a
+                  href="https://brandliftonline.in"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-violet-400 hover:text-violet-300 font-semibold underline decoration-violet-500/40 hover:decoration-violet-400 transition-colors inline-flex items-center gap-0.5"
+                >
+                  Brandlift
+                  <ArrowUpRight className="h-3 w-3" />
+                </a>
+              </span>
             </div>
           </div>
 

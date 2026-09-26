@@ -25,7 +25,9 @@
     "test:pro": "node --env-file-if-exists=.env tests/pro-unlock.test.mjs",
     "test:partner": "node --env-file-if-exists=.env tests/partner.test.mjs",
     "test:plan": "node --env-file-if-exists=.env tests/plan-gates.test.mjs",
-    "test:payments": "node --env-file-if-exists=.env tests/payment-replay.test.mjs"
+    "test:payments": "node --env-file-if-exists=.env tests/payment-replay.test.mjs",
+    "test:concurrency": "node --env-file-if-exists=.env tests/concurrency.test.mjs",
+    "test:subadmin-scope": "node --env-file-if-exists=.env tests/subadmin-scope.test.mjs"
   },
   "dependencies": {
     "@better-auth/infra": "^0.4.11",

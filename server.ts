@@ -411,7 +411,7 @@ async function sendOtpEmail(email, otp, subject = 'Your FX Journal Pro Verificat
 }
 
 function createEmptyUserDb(userId?: string, email?: string, injectDummyUser = false) {
-  const cleanUserId = userId?.trim() || `user_${Date.now()}`;
+  const cleanUserId = userId?.trim() || `user_${crypto.randomUUID()}`;
   const cleanEmail = email ? email.toLowerCase().trim() : '';
   // One address, set by the developer, and only outside production. This used
   // to accept admin@axyfx.com or demo@axyfx.com and mint a SUPER_ADMIN from a
@@ -2064,7 +2064,7 @@ async function saveDatabase(
   overrideUserId?: string,
   overrideEmail?: string,
   previousAliases?: { userId?: string; email?: string }
-): Promise<{ accountsError?: any }> {
+): Promise<{ accountsError?: any; usersError?: any; tradesError?: any }> {
   if (!data) return {};
   const usersToSync = Array.isArray(data.users) ? data.users : [];
   if (usersToSync.length === 0) return {};
@@ -2123,7 +2123,12 @@ async function saveDatabase(
         return clean;
       });
       const { error: err1 } = await supabase.from('users').upsert(sanitizedUsers, { onConflict: 'id' });
-      if (err1) console.error('[saveDatabase] users upsert error:', err1);
+      if (err1) {
+        // Reported, not just logged. Supabase being unreachable used to leave
+        // the customer with a success response and nothing saved.
+        console.error('[saveDatabase] users upsert error:', err1);
+        return { usersError: err1 };
+      }
     }
     // Upsert accounts
     if (data.accounts && data.accounts.length > 0) {
@@ -2157,12 +2162,33 @@ async function saveDatabase(
       }
     }
     // Upsert trades
+    //
+    // Whitelisted like users and accounts above. Without it, any property the
+    // app hangs on a trade that is not a column fails the WHOLE batch —
+    // PostgREST rejects the request, not the row — so one imported trade
+    // carrying a broker `ticket` silently took every other trade in the same
+    // save down with it, and the caller was still told it worked.
     if (data.trades && data.trades.length > 0) {
-      const trds = toSnake(data.trades).map((t: any) => ({ ...t, user_id: t.user_id || uid }));
-      console.log('--- UPSERTING TRADES ---', JSON.stringify(trds[trds.length - 1], null, 2));
+      const validTradeCols = new Set([
+        'id', 'account_id', 'user_id', 'date', 'symbol', 'type', 'lot_size',
+        'entry_price', 'exit_price', 'exit_time', 'stop_loss', 'take_profit',
+        'profit', 'commission', 'swap', 'risk_percentage', 'strategy',
+        'emotion', 'notes', 'screenshot', 'tags', 'is_mt5_sync',
+        'ea_deal_id', 'ea_position_id', 'ticket', 'created_at',
+      ]);
+      const trds = toSnake(data.trades).map((t: any) => {
+        const clean: any = {};
+        for (const key of Object.keys(t)) {
+          if (validTradeCols.has(key)) clean[key] = t[key];
+        }
+        clean.user_id = clean.user_id || uid;
+        return clean;
+      });
       const { error: err3 } = await supabase.from('trades').upsert(trds, { onConflict: 'id' });
-      console.log('--- UPSERT ERROR ---', err3);
-      if (err3) console.error('[saveDatabase] trades upsert error:', err3);
+      if (err3) {
+        console.error('[saveDatabase] trades upsert error:', err3);
+        return { tradesError: err3 };
+      }
     }
     // Upsert risk settings
     if (data.riskSettings && data.riskSettings.length > 0) {
@@ -2364,7 +2390,7 @@ async function ensureDefaultPortfolioAccount(
 
     // Add a starter risk setting for the default account
     const newRisk: RiskSettings = {
-      id: `r_${Date.now()}`,
+      id: `r_${crypto.randomUUID()}`,
       accountId: newAcc.id,
       riskPerTradeLimit: 2.0,
       dailyLossLimit: 500,
@@ -2741,7 +2767,7 @@ app.use(async (req, res, next) => {
           authUserId = existingUserRow.id;
         } else if (betterUser && email) {
           // User logged in with Better Auth / Google OAuth for the first time -> auto-provision in Supabase
-          const canonicalId = authUserId || `user_${Date.now()}`;
+          const canonicalId = authUserId || `user_${crypto.randomUUID()}`;
           const newRecord: any = {
             id: canonicalId,
             email: email,
@@ -2761,7 +2787,7 @@ app.use(async (req, res, next) => {
           try {
             await supabase.from('users').upsert(newRecord, { onConflict: 'id' });
             const defaultAcc = {
-              id: `acc_${Date.now()}`,
+              id: `acc_${crypto.randomUUID()}`,
               user_id: canonicalId,
               name: 'Main Trading Account',
               broker: 'Demo Broker',
@@ -2791,7 +2817,7 @@ app.use(async (req, res, next) => {
         db = await ensureUserDbLoaded(userId, email);
         dbUser = db.users[0] || null;
         if (!dbUser && betterUser && email) {
-          const canonicalId = authUserId || `user_${Date.now()}`;
+          const canonicalId = authUserId || `user_${crypto.randomUUID()}`;
           const newRecord: any = {
             id: canonicalId,
             email: email,
@@ -3042,7 +3068,7 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
     if (isSso) {
       // Verified SSO path. The password column is carried over untouched — a
       // federated sign-in must never be able to set or replace it.
-      const uid = existingUserRow?.id || authUserId || `user_${Date.now()}`;
+      const uid = existingUserRow?.id || authUserId || `user_${crypto.randomUUID()}`;
       const userRecord = {
         id: uid,
         email: normalizedEmail,
@@ -3111,7 +3137,7 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
     }
 
     // Standard registration path — generate OTP and save to Supabase
-    const uid = existingUserRow?.id || authUserId || `user_${Date.now()}`;
+    const uid = existingUserRow?.id || authUserId || `user_${crypto.randomUUID()}`;
     const hashedPassword = password ? await bcrypt.hash(password, 10) : (existingUserRow?.password || '');
 
     const userRecord = {
@@ -3226,7 +3252,7 @@ app.post('/api/auth/login', authIpBackstopLimiter, authRateLimiter, async (req, 
 
     // In development, auto-create user if missing
     if (!user && isDev) {
-      const uid = `user_dev_${Date.now()}`;
+      const uid = `user_dev_${crypto.randomUUID()}`;
       const hashedPassword = password ? await bcrypt.hash(password, 10) : '';
       const devUser = {
         id: uid,
@@ -3902,7 +3928,7 @@ app.post('/api/accounts', async (req, res) => {
   // Create default risk settings
   const riskBase = startBal || 10000;
   const newRisk: RiskSettings = {
-    id: `r_${Date.now()}`,
+    id: `r_${crypto.randomUUID()}`,
     accountId: newAcc.id,
     riskPerTradeLimit: 2.0,
     dailyLossLimit: riskBase * 0.05,
@@ -4355,8 +4381,21 @@ app.post('/api/trades', async (req, res) => {
 
   db.trades.push(newTrade);
 
-  await saveDatabase(db, authEmail);
-  console.log('[POST /api/trades] newTrade.exitTime =', newTrade.exitTime);
+  // "Trade logged successfully" is a promise about the database, not about the
+  // in-memory copy. saveDatabase used to log a failed upsert and return, so a
+  // Supabase outage or a schema mismatch answered 200 and the trade was gone
+  // on the next request — with the balance already moved for it. Undo the
+  // balance and say what happened instead.
+  const saved = await saveDatabase(db, authEmail);
+  if (saved?.tradesError || saved?.usersError || saved?.accountsError) {
+    applyBalanceDelta(db.accounts[accountIdx], -netProfit);
+    const idx = db.trades.findIndex((t: any) => t.id === newTrade.id);
+    if (idx !== -1) db.trades.splice(idx, 1);
+    return res.status(502).json({
+      error: 'Your trade could not be saved. Nothing was changed — please try again.',
+    });
+  }
+
   res.json({ message: 'Trade logged successfully', trade: newTrade, updatedAccount: db.accounts[accountIdx] });
 });
 
@@ -4453,7 +4492,19 @@ app.post('/api/trades/batch', async (req, res) => {
 
   if (saved.length > 0) {
     applyBalanceDelta(account, balanceAdjustment);
-    await saveDatabase(db, authEmail);
+    // Same promise as the single-trade route: reporting "42 trades imported"
+    // for rows that never reached the database is the worst outcome here,
+    // because the customer will re-import and the duplicate check — which
+    // reads the saved rows — has nothing to compare against.
+    const savedResult = await saveDatabase(db, authEmail);
+    if (savedResult?.tradesError || savedResult?.usersError || savedResult?.accountsError) {
+      applyBalanceDelta(account, -balanceAdjustment);
+      const savedIds = new Set(saved.map((t: any) => t.id));
+      db.trades = (db.trades || []).filter((t: any) => !savedIds.has(t.id));
+      return res.status(502).json({
+        error: 'The import could not be saved. Nothing was changed — please try again.',
+      });
+    }
   }
 
   res.json({
@@ -4584,7 +4635,7 @@ app.get('/api/risk-settings/:accountId', async (req, res) => {
   if (!settings) {
     // Return default
     const defaultSettings: RiskSettings = {
-      id: `r_${Date.now()}`,
+      id: `r_${crypto.randomUUID()}`,
       accountId,
       riskPerTradeLimit: 2.0,
       dailyLossLimit: 500,
@@ -4630,7 +4681,7 @@ app.put('/api/risk-settings/:accountId', async (req, res) => {
     res.json({ message: 'Risk parameters saved', riskSettings: existing });
   } else {
     const newRisk: RiskSettings = {
-      id: `r_${Date.now()}`,
+      id: `r_${crypto.randomUUID()}`,
       accountId,
       riskPerTradeLimit: !isNaN(parseFloat(riskPerTradeLimit)) ? parseFloat(riskPerTradeLimit) : 2.0,
       dailyLossLimit: !isNaN(parseFloat(dailyLossLimit)) ? parseFloat(dailyLossLimit) : 500,
@@ -5967,7 +6018,7 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
     return res.json({
       sandboxMode: true,
       keyId: 'rzp_test_sandbox',
-      orderId: `order_test_${currentUser.id.slice(-6)}_${Date.now()}`,
+      orderId: `order_test_${currentUser.id.slice(-6)}_${crypto.randomUUID()}`,
       amount: orderAmountPaise,
       amountRupees: appliedOfferPrice,
       originalPrice: 499,
@@ -6972,11 +7023,12 @@ app.get('/api/admin/assignments', async (req, res) => {
   if (!subAdminId) return res.status(400).json({ error: 'subAdminId is required' });
 
   if (!useSupabase) {
-    // req.userDb is synthetic and per-caller in local mode, so it holds only
-    // the admin themselves. The shared file is where every user actually is.
-    const db = loadDatabaseFromFile();
+    // localAllUsers, not the file alone: req.userDb is synthetic and per-caller
+    // in local mode, and a freshly registered user lives in their own in-memory
+    // database until something flushes it, so a file-only read left brand-new
+    // customers out of every assignment view.
     const ids = readAssignments().filter((a) => a.subAdminId === subAdminId).map((a) => a.userId);
-    const assigned = (db?.users || []).filter((u: any) => ids.includes(u.id)).map((u: any) => sanitizeUser(u));
+    const assigned = localAllUsers().filter((u: any) => ids.includes(u.id)).map((u: any) => sanitizeUser(u));
     return res.json({ subAdminId, assigned });
   }
 
@@ -7004,11 +7056,13 @@ app.post('/api/admin/assignments', async (req, res) => {
   if (!subAdminId || !email) return res.status(400).json({ error: 'subAdminId and userEmail are required' });
 
   if (!useSupabase) {
-    const db = loadDatabaseFromFile();
-    const subAdmin = db?.users?.find((u: any) => u.id === subAdminId);
+    // Same union as the GET above. Looking only at the file answered
+    // "Sub-admin not found." for an account that had just been promoted.
+    const everyone = localAllUsers();
+    const subAdmin = everyone.find((u: any) => u.id === subAdminId);
     if (!subAdmin) return res.status(404).json({ error: 'Sub-admin not found.' });
     if (subAdmin.role !== 'SUB_ADMIN') return res.status(400).json({ error: 'That account is not a sub-admin.' });
-    const target = db?.users?.find((u: any) => u.email?.toLowerCase() === email);
+    const target = everyone.find((u: any) => u.email?.toLowerCase() === email);
     if (!target) return res.status(404).json({ error: 'No account with that email.' });
     if (target.id === subAdminId) return res.status(400).json({ error: 'A sub-admin cannot be assigned to themselves.' });
     const rows = readAssignments();
@@ -9331,7 +9385,10 @@ app.post('/api/admin/payments/record', async (req, res) => {
     id: paymentId,
     user_id: targetUser.id,
     provider: 'manual',
-    provider_payment_id: `manual_${Date.now()}`,
+    // randomUUID, not Date.now(): provider_payment_id is UNIQUE, and it is
+    // what claimPayment dedupes on. Two offline payments recorded in the same
+    // millisecond would have collided on it.
+    provider_payment_id: `manual_${crypto.randomUUID()}`,
     amount: Number(amount),
     currency: 'INR',
     plan,

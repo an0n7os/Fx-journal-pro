@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, ArrowUpRight } from 'lucide-react';
 import { LEGAL_DOCS } from '../legalDocs';
 
 
 
 const LINKS: { key: keyof typeof LEGAL_DOCS; label: string }[] = [
-  { key: 'risk', label: 'Risk Disclosure' },
   { key: 'terms', label: 'Terms & Conditions' },
-  { key: 'refunds', label: 'Billing & Refunds' },
   { key: 'privacy', label: 'Privacy Policy' },
+  { key: 'refunds', label: 'Cancellation & Refund' },
+  { key: 'shipping', label: 'Shipping & Delivery' },
+  { key: 'contact', label: 'Contact Us' },
+  { key: 'risk', label: 'Risk Disclosure' },
 ];
 
 export default function LegalFooter() {
@@ -26,7 +28,22 @@ export default function LegalFooter() {
           not an indicator of future results.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-[10px] text-slate-400 dark:text-slate-500">&copy; {new Date().getFullYear()} FX Journal Pro. All rights reserved.</p>
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-[10px] text-slate-400 dark:text-slate-500">
+            <span>&copy; {new Date().getFullYear()} FX Journal Pro. Operated by Akshayraj (FX Journal Pro). All rights reserved.</span>
+            <span className="hidden sm:inline text-slate-600 dark:text-slate-600">•</span>
+            <span>
+              Built by{' '}
+              <a
+                href="https://brandliftonline.in"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-violet-500 hover:text-violet-400 font-semibold underline decoration-violet-500/40 hover:decoration-violet-400 transition-colors inline-flex items-center gap-0.5"
+              >
+                Brandlift
+                <ArrowUpRight className="h-2.5 w-2.5" />
+              </a>
+            </span>
+          </div>
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
             {LINKS.map((l) => (
               <button
