@@ -19,43 +19,44 @@ export default function LegalFooter() {
 
   return (
     <>
-      <footer className="border-t border-slate-200/60 dark:border-white/[0.07] pt-6 pb-1 space-y-3">
-        {/* A standing risk line. Regulators and users both expect this visible, * not buried inside a terms modal nobody opens. */}
-        <p className="text-[10px] leading-relaxed text-slate-400 dark:text-slate-500 max-w-3xl">
+      <footer className="border-t border-slate-200/60 dark:border-white/[0.07] pt-5 pb-3 space-y-3.5">
+        {/* Risk Warning Disclaimer */}
+        <p className="text-[10.5px] leading-relaxed text-slate-400 dark:text-slate-500">
           <span className="font-semibold text-slate-500 dark:text-slate-400">Risk warning:</span>{' '}
           Trading forex and CFDs carries a high risk of loss and is not suitable for everyone. FX Journal Pro is a
           journaling and analysis tool — it does not execute trades or provide investment advice. Past performance is
           not an indicator of future results.
         </p>
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-[10px] text-slate-400 dark:text-slate-500">
-            <span>&copy; {new Date().getFullYear()} FX Journal Pro. Operated by Akshayraj (FX Journal Pro). All rights reserved.</span>
-            <span className="hidden sm:inline text-slate-600 dark:text-slate-600">•</span>
-            <span>
-              Built by{' '}
-              <a
-                href="https://brandliftonline.in"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-violet-500 hover:text-violet-400 font-semibold underline decoration-violet-500/40 hover:decoration-violet-400 transition-colors inline-flex items-center gap-0.5"
-              >
-                Brandlift
-                <ArrowUpRight className="h-2.5 w-2.5" />
-              </a>
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-            {LINKS.map((l) => (
-              <button
-                key={l.key}
-                type="button"
-                onClick={() => setOpen(l.key as string)}
-                className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition"
-              >
-                {l.label}
-              </button>
-            ))}
-          </div>
+
+        {/* Legal Links Row */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] pt-0.5">
+          {LINKS.map((l) => (
+            <button
+              key={l.key}
+              type="button"
+              onClick={() => setOpen(l.key as string)}
+              className="font-medium text-slate-400 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition whitespace-nowrap"
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Copyright & Attribution Row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-white/[0.04]">
+          <span>&copy; {new Date().getFullYear()} FX Journal Pro. Operated by Akshayraj (FX Journal Pro). All rights reserved.</span>
+          <span className="inline-flex items-center gap-1 shrink-0">
+            Built by{' '}
+            <a
+              href="https://brandliftonline.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-violet-500 hover:text-violet-400 font-semibold underline decoration-violet-500/40 hover:decoration-violet-400 transition-colors inline-flex items-center gap-0.5"
+            >
+              Brandlift
+              <ArrowUpRight className="h-2.5 w-2.5" />
+            </a>
+          </span>
         </div>
       </footer>
 

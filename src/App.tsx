@@ -6954,7 +6954,7 @@ export default function App() {
                     </div>
 
                     {/* Desktop Settings Navigation Card */}
-                    <div className="hidden lg:block settings-nav-card rounded-2xl p-3 shadow-xs sticky top-4">
+                    <div className="hidden lg:block settings-nav-card rounded-2xl p-3 shadow-xs">
                       <div className="px-2.5 py-2 border-b border-slate-100 dark:border-white/[0.06] mb-3 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-lg bg-violet-600/10 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
