@@ -52,6 +52,7 @@ export const LEGAL_DOCS: Record<string, { title: string; body: string[] }> = {
       'We welcome your inquiries, feedback, and support requests. Please feel free to get in touch with our team through any of the following channels:',
       'Support Email: contact@fxjournalpro.com',
       'Official Instagram: @fx_journalpro (https://www.instagram.com/fx_journalpro/)',
+      'Official Telegram: @Contact_fxjournalpro (https://t.me/Contact_fxjournalpro)',
       'Customer Support Phone & WhatsApp: +91 81368 02573 (https://wa.me/918136802573)',
       'Operating & Registered Address: FX Journal Pro, Kasaragod, Kerala, India',
       'Customer Support Hours: Monday to Saturday: 9:00 AM – 6:00 PM IST (Closed on National Holidays)',

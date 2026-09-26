@@ -146,8 +146,8 @@ function WhatsAppIcon({ className = 'h-4 w-4' }: { className?: string }) {
 const SOCIAL_LINKS: { label: string; href: string; icon: any }[] = [
   { label: 'WhatsApp', href: 'https://wa.me/918136802573', icon: WhatsAppIcon },
   { label: 'Instagram', href: 'https://www.instagram.com/fx_journalpro/', icon: Instagram },
-  { label: 'Telegram Community', href: 'https://t.me/fxjournalpro', icon: Send },
-  { label: 'Discord Server', href: 'https://discord.gg/fxjournalpro', icon: MessageSquare },
+  { label: 'Telegram Support', href: 'https://t.me/Contact_fxjournalpro', icon: Send },
+  // { label: 'Discord Server', href: 'https://discord.gg/fxjournalpro', icon: MessageSquare },
   // { label: 'X (Twitter)', href: 'https://twitter.com/fxjournalpro', icon: Twitter },
   // { label: 'YouTube Channel', href: 'https://youtube.com/@fxjournalpro', icon: Youtube },
 ];
@@ -1706,6 +1706,27 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                         @fx_journalpro
                       </a>
                       <p className="text-[11px] text-slate-400 mt-0.5">Updates, market tips &amp; community</p>
+                    </div>
+                  </div>
+
+                  {/* Telegram Support */}
+                  <div className="flex items-start gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 group-hover:bg-sky-500/20 transition-all">
+                      <Send className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block">
+                        Official Telegram
+                      </span>
+                      <a
+                        href="https://t.me/Contact_fxjournalpro"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-semibold text-white hover:text-sky-400 transition-colors block"
+                      >
+                        @Contact_fxjournalpro
+                      </a>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Direct Telegram chat &amp; community</p>
                     </div>
                   </div>
 

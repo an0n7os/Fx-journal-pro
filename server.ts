@@ -3281,51 +3281,30 @@ app.post('/api/auth/login', authIpBackstopLimiter, authRateLimiter, async (req, 
     let db = await ensureUserDbLoaded('', normalizedEmail);
     let user = db.users.find((u: any) => u.email.toLowerCase() === normalizedEmail);
 
-    // In development, auto-create user if missing
-    if (!user && isDev) {
-      const uid = `user_dev_${crypto.randomUUID()}`;
-      const hashedPassword = password ? await bcrypt.hash(password, 10) : '';
-      const devUser = {
-        id: uid,
-        email: normalizedEmail,
-        name: normalizedEmail.split('@')[0],
-        password: hashedPassword,
-        experience: 'Intermediate',
-        trading_style: 'Day Trading',
-        main_markets: ['Forex', 'Gold'],
-        onboarding_completed: false,
-        is_pro: false,
-        is_email_verified: true,
-        auth_provider: 'email',
-        created_at: new Date().toISOString(),
-        last_login: new Date().toISOString()
-      };
-      db.users.push(devUser);
-      await saveDatabase(db);
-      console.log(`[Dev] Auto-created user: ${normalizedEmail}`);
-      // Auto-create a default portfolio account for the dev user
-      await ensureDefaultPortfolioAccount(db, uid, normalizedEmail);
-
-      const sessionToken = issueSession(res, devUser);
-
-      return res.json({ message: 'Login successful', user: sanitizeUser(devUser), sessionToken });
-    }
-
     if (!user) {
-      return res.status(404).json({ error: 'No account found with this email. Please register first.' });
+      return res.status(401).json({ error: 'Invalid email or password. Please check your credentials.' });
     }
 
     if (!user.password) {
-      return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+      return res.status(401).json({ error: 'This account was registered using Google. Please continue with Google sign-in.' });
     }
 
     if (!password) {
       return res.status(400).json({ error: 'Password is required to login.' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    let isMatch = false;
+    try {
+      isMatch = await bcrypt.compare(password, user.password);
+    } catch {
+      isMatch = false;
+    }
+    if (!isMatch && user.password === password) {
+      isMatch = true;
+    }
+
     if (!isMatch) {
-      return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+      return res.status(401).json({ error: 'Invalid email or password. Please try again.' });
     }
 
     if (String(user.status || '').toLowerCase() === 'blocked') {
