@@ -239,8 +239,15 @@ export const auth = betterAuth({
     'https://fxjournalp.netlify.app',
     'https://fxjournalpro.com',
   ],
+  account: {
+    storeStateStrategy: 'cookie',
+  },
   advanced: {
     useSecureCookies: (process.env.BETTER_AUTH_URL || '').startsWith('https://'),
+    defaultCookieAttributes: {
+      sameSite: 'lax',
+      secure: (process.env.BETTER_AUTH_URL || '').startsWith('https://'),
+    },
   },
   plugins: [
     bearer(),
