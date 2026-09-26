@@ -8,7 +8,7 @@ import {
   Clock, Heart, Edit3, Image as ImageIcon, Eye, EyeOff, RefreshCw,
   Terminal, Globe, Bell, CreditCard, Info, Activity, Sun, Moon, Brain, Upload,
   FileSpreadsheet, FileText, Mail, Wrench, X, Newspaper, Trophy, Lock, MessageSquare, MoreHorizontal, Users,
-  Settings
+  Settings, Instagram, Phone
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -6840,12 +6840,30 @@ export default function App() {
                                   <HelpCircle className="h-4 w-4" />
                                 </div>
                               </div>
-                              <a
-                                href="mailto:contact@fxjournalpro.com"
-                                className="text-xs font-bold text-slate-900 dark:text-slate-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline inline-flex items-center gap-1.5 break-all"
-                              >
-                                contact@fxjournalpro.com <Mail className="h-3 w-3 shrink-0" />
-                              </a>
+                              <div className="flex flex-col gap-1.5 pt-0.5">
+                                <a
+                                  href="mailto:contact@fxjournalpro.com"
+                                  className="text-xs font-bold text-slate-900 dark:text-slate-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline inline-flex items-center gap-1.5 break-all"
+                                >
+                                  contact@fxjournalpro.com <Mail className="h-3 w-3 shrink-0" />
+                                </a>
+                                <a
+                                  href="https://wa.me/918136802573?text=Hi%20FX%20Journal%20Pro%2C%20I%20have%20an%20inquiry"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1.5"
+                                >
+                                  WhatsApp: +91 81368 02573 <Phone className="h-3 w-3 shrink-0" />
+                                </a>
+                                <a
+                                  href="https://www.instagram.com/fx_journalpro/"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs font-bold text-pink-600 dark:text-pink-400 hover:underline inline-flex items-center gap-1.5"
+                                >
+                                  @fx_journalpro <Instagram className="h-3 w-3 shrink-0" />
+                                </a>
+                              </div>
                             </div>
                           </div>
 
