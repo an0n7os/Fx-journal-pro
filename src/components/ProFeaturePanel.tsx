@@ -1,4 +1,3 @@
-import React from 'react';
 import { Sparkles } from 'lucide-react';
 
 /**
@@ -26,7 +25,7 @@ export default function ProFeaturePanel({
   price?: number;
 }) {
   return (
-    <div className="dx-panel relative overflow-hidden p-10 text-center">
+    <div className="dx-panel relative overflow-hidden p-5 sm:p-8 md:p-10 text-center">
       {/* One ambient glow, in the product's accent. */}
       <div className="pointer-events-none absolute -top-24 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-violet-600/10 blur-3xl" />
 

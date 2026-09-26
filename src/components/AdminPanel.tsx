@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet, Filter,
+  Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet,
 } from 'lucide-react';
 import { SupportTicket, Announcement } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -69,7 +69,6 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
   // this is so the console does not offer buttons that would come back 403.
   const [myRole, setMyRole] = useState<string>(role || 'USER');
   const isSubAdmin = myRole === 'SUB_ADMIN';
-  const isAdmin = myRole === 'SUPER_ADMIN' || myRole === 'ADMIN';
   const [myPermissions, setMyPermissions] = useState<string[]>(() => {
     return DEFAULT_PERMISSIONS_BY_ROLE[role || 'USER'] || [];
   });

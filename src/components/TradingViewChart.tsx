@@ -32,7 +32,6 @@ import {
   IChartApi,
   ISeriesApi,
   CandlestickSeries,
-  SeriesMarker,
   Time,
   IPriceLine,
   createSeriesMarkers,
@@ -140,35 +139,6 @@ const CANDLE_COLORS = {
   wickUpColor: '#10b981',
   wickDownColor: '#ef4444',
 };
-
-// ─── Marker builder ───────────────────────────────────────────────────────────
-
-function buildMarkersForSymbol(filteredTrades: Trade[]): SeriesMarker<Time>[] {
-  const markers: SeriesMarker<Time>[] = [];
-
-  for (const trade of filteredTrades) {
-    if (!trade.date) continue;
-    const ts = Math.floor(new Date(trade.date).getTime() / 1000) as Time;
-    const isBuy = trade.type === 'Buy';
-
-    const profitText = trade.profit !== undefined 
-      ? `${trade.profit >= 0 ? '+' : ''}$${trade.profit.toFixed(2)}` 
-      : '';
-
-    // Main marker
-    markers.push({
-      time: ts,
-      position: isBuy ? 'belowBar' : 'aboveBar',
-      color: isBuy ? '#3b82f6' : '#ef4444',
-      shape: isBuy ? 'arrowUp' : 'arrowDown',
-      id: `entry_${trade.id}`,
-      size: 1.5,
-    } as SeriesMarker<Time>);
-  }
-
-  // Sort ascending by time (required by lightweight-charts)
-  return markers.sort((a, b) => (a.time as number) - (b.time as number));
-}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 

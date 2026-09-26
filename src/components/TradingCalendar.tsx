@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, CalendarRange, TrendingUp, TrendingDown, Clock, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Clock, Info } from 'lucide-react';
 import { Trade } from '../types';
 
 interface TradingCalendarProps {

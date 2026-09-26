@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X, Check, Star, ShieldCheck, CreditCard, Sparkles,
   Loader2, ArrowRight, Zap, RefreshCw, AlertCircle, CheckCircle2, Ticket
@@ -346,7 +346,7 @@ export default function ProUpgradeModal({
         </button>
 
         {/* Header */}
-        <div className="px-7 pt-7 pb-6 relative z-10">
+        <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-4 sm:pb-6 relative z-10">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/10 border border-violet-500/25 text-violet-300 text-[10px] font-bold uppercase tracking-[0.14em] mb-4">
             <Sparkles className="h-3 w-3" />
             Pro plan
@@ -371,7 +371,7 @@ export default function ProUpgradeModal({
           <div className="flex items-baseline flex-wrap gap-x-2.5 gap-y-1 mt-5">
             {appliedCoupon && appliedCoupon.offerPrice < 499 ? (
               <>
-                <span className="text-4xl font-black text-emerald-400 font-display tracking-tight tabular-nums">₹{appliedCoupon.offerPrice}</span>
+                <span className="text-3xl sm:text-4xl font-black text-emerald-400 font-display tracking-tight tabular-nums">₹{appliedCoupon.offerPrice}</span>
                 <span className="text-xl font-bold line-through text-slate-500 tabular-nums">₹499</span>
                 <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   Save ₹{appliedCoupon.discountAmount} ({appliedCoupon.discountPercent}% OFF)
@@ -379,13 +379,13 @@ export default function ProUpgradeModal({
               </>
             ) : appliedCoupon ? (
               <>
-                <span className="text-4xl font-black text-white font-display tracking-tight tabular-nums">₹499</span>
+                <span className="text-3xl sm:text-4xl font-black text-white font-display tracking-tight tabular-nums">₹499</span>
                 <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
                   Mentor Code Applied
                 </span>
               </>
             ) : (
-              <span className="text-4xl font-black text-white font-display tracking-tight tabular-nums">₹{amountRupees}</span>
+              <span className="text-3xl sm:text-4xl font-black text-white font-display tracking-tight tabular-nums">₹{amountRupees}</span>
             )}
             <span className="text-sm text-slate-400">
               / 30 days access <span className="text-xs text-slate-600">· about $4.90</span>
@@ -397,7 +397,7 @@ export default function ProUpgradeModal({
             items-center rather than items-start: with single-line labels the
             tick reads as centred on its text, and there is no longer a first
             line to align it to. */}
-        <div className="px-7 py-5 border-y border-white/[0.06] bg-white/[0.015] grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-3">
+        <div className="px-5 sm:px-7 py-3.5 sm:py-5 border-y border-white/[0.06] bg-white/[0.015] grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2 sm:gap-y-3">
           {PRO_BENEFITS.map((benefit) => (
             <div key={benefit} className="flex items-center gap-2.5 text-[12.5px] text-slate-300">
               <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-500/15 border border-violet-500/25">
@@ -408,7 +408,7 @@ export default function ProUpgradeModal({
           ))}
         </div>
 
-        <div className="px-7 py-6 space-y-5 relative z-10">
+        <div className="px-5 sm:px-7 py-4 sm:py-6 space-y-4 sm:space-y-5 relative z-10">
           {statusMessage && (
             <div className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 border ${statusMessage.type === 'success'
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'

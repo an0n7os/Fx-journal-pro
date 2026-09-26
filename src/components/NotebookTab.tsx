@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   FileText, Star, Archive, Trash2, Folder, Tag as TagIcon, Plus, ChevronDown,
   Search, Bold, Italic, Strikethrough, Heading1, Heading2, Heading3,
-  List, ListOrdered, CheckSquare, Quote, Code, Minus, Save, Sparkles,
-  ArrowLeft, Share2, Download, RefreshCw, X, Check, Smile, AlertCircle, Image
+  List, ListOrdered, CheckSquare, Quote, Code, Minus, Sparkles,
+  ArrowLeft, Download, X, Check, Smile, Image
 } from 'lucide-react';
 import { NotebookNote, User, TradingAccount } from '../types';
 
@@ -1177,6 +1177,23 @@ export default function NotebookTab({ user }: NotebookTabProps) {
                     >
                       <Strikethrough className="h-3.5 w-3.5" />
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      title="Attach Image"
+                    >
+                      <Image className="h-3.5 w-3.5 text-emerald-400" />
+                    </button>
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleImageUpload}
+                    />
 
                     <div className="h-4 w-px bg-slate-800 mx-1" />
 

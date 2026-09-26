@@ -1,5 +1,5 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
-import { Send, User as UserIcon, Sparkles, AlertTriangle, Zap } from 'lucide-react';
+import { Send, User as UserIcon, AlertTriangle, Zap } from 'lucide-react';
 import { User, TradingAccount } from '../types';
 import ProFeaturePanel from './ProFeaturePanel';
 

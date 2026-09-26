@@ -2174,12 +2174,15 @@ async function saveDatabase(
         'entry_price', 'exit_price', 'exit_time', 'stop_loss', 'take_profit',
         'profit', 'commission', 'swap', 'risk_percentage', 'strategy',
         'emotion', 'notes', 'screenshot', 'tags', 'is_mt5_sync',
-        'ea_deal_id', 'ea_position_id', 'ticket', 'created_at',
+        'ea_deal_id', 'ea_position_id', 'created_at',
       ]);
       const trds = toSnake(data.trades).map((t: any) => {
         const clean: any = {};
         for (const key of Object.keys(t)) {
           if (validTradeCols.has(key)) clean[key] = t[key];
+        }
+        if (clean.ea_deal_id === undefined && t.ticket !== undefined && Number.isFinite(Number(t.ticket))) {
+          clean.ea_deal_id = Number(t.ticket);
         }
         clean.user_id = clean.user_id || uid;
         return clean;
@@ -4422,14 +4425,17 @@ app.post('/api/trades/batch', async (req, res) => {
   // report does not duplicate every row (and double-count the balance).
   // Two independent keys: the MT5 ticket when present (authoritative), and the
   // value tuple as a fallback for rows imported without one.
-  const ticketKey = (t: any) => (t.ticket === undefined || t.ticket === null || t.ticket === '')
-    ? null
-    : `ticket:${String(t.ticket)}`;
+  const ticketKey = (t: any) => {
+    const raw = t.ticket ?? t.eaDealId ?? t.ea_deal_id;
+    return (raw === undefined || raw === null || raw === '')
+      ? null
+      : `ticket:${String(raw)}`;
+  };
   const valueKey = (t: any) =>
     [
       String(t.symbol || '').toUpperCase(),
       t.type || '',
-      t.date || '',
+      t.date ? (isNaN(new Date(t.date).getTime()) ? t.date : new Date(t.date).getTime()) : '',
       Number(t.entryPrice) || 0,
       Number(t.exitPrice) || 0,
       Number(t.lotSize) || 0,
@@ -8943,7 +8949,6 @@ app.get('/api/admin/dashboard', async (req, res) => {
     const sorted = (allUsers || []).filter((u: any) => u.created_at).sort((a: any, b: any) =>
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
-    let running = 0;
     for (const u of sorted) {
       const day = new Date(u.created_at).toISOString().slice(0, 10);
       dayBuckets[day] = (dayBuckets[day] || 0) + 1;

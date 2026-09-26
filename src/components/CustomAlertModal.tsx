@@ -1,4 +1,3 @@
-import React from 'react';
 import { Sparkles, AlertTriangle, CheckCircle2, Info, X, Crown, Check } from 'lucide-react';
 
 export interface CustomAlertModalProps {

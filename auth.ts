@@ -1,13 +1,13 @@
 import 'dotenv/config';
 import { betterAuth } from 'better-auth';
-import { twoFactor, bearer, admin } from 'better-auth/plugins';
+import { bearer } from 'better-auth/plugins';
 import { getMigrations } from 'better-auth/db/migration';
 import { memoryAdapter } from '@better-auth/memory-adapter';
 import { createRequire } from 'node:module';
 import path from 'path';
 import crypto from 'node:crypto';
 
-const dynamicRequire = typeof require !== 'undefined' ? require : createRequire(typeof import.meta !== 'undefined' && import.meta.url ? import.meta.url : path.join(process.cwd(), 'index.js'));
+const dynamicRequire = typeof require !== 'undefined' ? require : createRequire(path.join(process.cwd(), 'package.json'));
 
 const IS_SERVERLESS = !!(
   process.env.VERCEL ||
@@ -295,7 +295,7 @@ export const auth = betterAuth({
     },
   },
   onAPIError: {
-    onError: (error, ctx) => {
+    onError: (error: any, ctx: any) => {
       console.error('[Better Auth API Error]', error?.message || error, ctx?.path);
     },
   },

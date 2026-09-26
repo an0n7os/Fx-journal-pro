@@ -1,5 +1,4 @@
-import React from 'react';
-import { Trophy, Lock, CheckCircle2, TrendingUp, Flame, Filter } from 'lucide-react';
+import { Trophy, Lock, Flame } from 'lucide-react';
 
 export default function AchievementsTab({ user, trades }: { user?: any, trades?: any[] }) {
   // Compute start date from user creation or first trade

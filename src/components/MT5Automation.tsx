@@ -224,7 +224,6 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const [eaCopied, setEaCopied] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [status, setStatus] = useState<MT5Status | null>(null);
-  const [cloudOpen, setCloudOpen] = useState(false);
   const [cloudLogin, setCloudLogin] = useState('');
   const [cloudServer, setCloudServer] = useState('');
   const [cloudPassword, setCloudPassword] = useState('');
@@ -398,7 +397,6 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
         return;
       }
       setCloudPassword('');
-      setCloudOpen(false);
       setCloudLogin('');
       setCloudServer('');
       onRefresh();

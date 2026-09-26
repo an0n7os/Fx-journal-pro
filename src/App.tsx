@@ -3,11 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LineChart, BarChart3, BookOpen, Calendar, Shield, ShieldOff, HelpCircle, User,
   ChevronRight, ChevronLeft, Sparkles, TrendingUp, TrendingDown, Layers,
-  DollarSign, Plus, CheckCircle2, ArrowRight, ArrowLeft,
+  Plus, ArrowRight, ArrowLeft,
   LogOut, Star, Compass, Trash2, Check, Download, AlertTriangle,
-  Clock, Heart, Tag, Edit3, Image as ImageIcon, Eye, EyeOff, RefreshCw, Radio,
-  Cpu, Terminal, Globe, Bell, CreditCard, Info, Activity, Menu, Sun, Moon, Brain, Upload,
-  FileSpreadsheet, FileText, Mail, Wrench, X, Newspaper, Trophy, Lock, Flame, MessageSquare, MoreHorizontal, Users,
+  Clock, Heart, Edit3, Image as ImageIcon, Eye, EyeOff, RefreshCw,
+  Terminal, Globe, Bell, CreditCard, Info, Activity, Sun, Moon, Brain, Upload,
+  FileSpreadsheet, FileText, Mail, Wrench, X, Newspaper, Trophy, Lock, MessageSquare, MoreHorizontal, Users,
   Settings
 } from 'lucide-react';
 import {
@@ -43,7 +43,6 @@ import OnboardingWizardModal from './components/OnboardingWizardModal';
 const TradingCalendar = React.lazy(() => import('./components/TradingCalendar'));
 const TradingViewChart = React.lazy(() => import('./components/TradingViewChart'));
 const FXNews = React.lazy(() => import('./components/FXNews'));
-const MT5Automation = React.lazy(() => import('./components/MT5Automation'));
 const AIInsights = React.lazy(() => import('./components/AIInsights'));
 const AdminPanel = React.lazy(() => import('./components/AdminPanel'));
 const PartnerPortal = React.lazy(() => import('./components/PartnerPortal'));
@@ -219,22 +218,6 @@ function calculateTradeProfit(
   return parseFloat(profit.toFixed(2));
 }
 
-async function applyFreezePane(xlsxArray: Uint8Array, ySplit: number): Promise<Uint8Array> {
-  const fflate = await import('fflate');
-  const files = fflate.unzipSync(xlsxArray);
-  const key = 'xl/worksheets/sheet1.xml';
-  if (!files[key]) return xlsxArray;
-  let xml = fflate.strFromU8(files[key]);
-  const pane = `<pane xSplit="0" ySplit="${ySplit}" topLeftCell="A${ySplit + 1}" activePane="bottomLeft" state="frozen"/>`;
-  if (/<sheetView[^>]*?\/>/.test(xml)) {
-    xml = xml.replace(/<sheetView([^>]*?)\/>/, `<sheetView$1>${pane}</sheetView>`);
-  } else {
-    xml = xml.replace(/<sheetView([^>]*?)>/, `<sheetView$1>${pane}`);
-  }
-  files[key] = fflate.strToU8(xml);
-  return fflate.zipSync(files, { level: 6 });
-}
-
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -294,24 +277,10 @@ export default function App() {
 
   // Auth states
   const [user, setUser] = useState<UserType | null>(null);
-  const [authEmail, setAuthEmail] = useState('');
-  const [authName, setAuthName] = useState('Akshay Raj');
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [isForgotPassword, setIsForgotPassword] = useState(false);
-  const [authPassword, setAuthPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
 
   // OTP states
-  const [isOtpMode, setIsOtpMode] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
 
   // Forgot/Reset password states
-  const [resetEmail, setResetEmail] = useState('');
-  const [isResetOtpMode, setIsResetOtpMode] = useState(false);
-  const [resetOtpCode, setResetOtpCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [resetSuccess, setResetSuccess] = useState(false);
 
   // Navigation
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -325,7 +294,6 @@ export default function App() {
     return 'dashboard';
   });
   const [selectedChartTradeId, setSelectedChartTradeId] = useState<string | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Remembered across reloads. Someone who widens the sidebar to read the
   // labels had it snap back to the icon rail on every page load, so the choice
   // never stuck. Reads defensively: storage throws in private windows.
@@ -344,7 +312,6 @@ export default function App() {
       /* storage unavailable — the sidebar still works, it just will not persist */
     }
   }, [desktopSidebarOpen]);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // Scroll UI state
   const [isScrolled, setIsScrolled] = useState(false);
   const [showMobileNavNotifications, setShowMobileNavNotifications] = useState(false);
@@ -471,7 +438,6 @@ export default function App() {
   const [tradeNotes, setTradeNotes] = useState('');
   const [showNoteField, setShowNoteField] = useState(false);
   const [showEmotionField, setShowEmotionField] = useState(false);
-  const [showStrategyField, setShowStrategyField] = useState(false);
   const [tradeScreenshot, setTradeScreenshot] = useState('');
   const [showChartField, setShowChartField] = useState(false);
   const [screenshotError, setScreenshotError] = useState('');
@@ -481,7 +447,6 @@ export default function App() {
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
   const screenshotInputRef = useRef<HTMLInputElement>(null);
   const [tradeTags, setTradeTags] = useState<string[]>([]);
-  const [customTagInput, setCustomTagInput] = useState('');
   // Symbol autocomplete
   const [symbolSuggestions, setSymbolSuggestions] = useState<string[]>([]);
   const [showSymbolDropdown, setShowSymbolDropdown] = useState(false);
@@ -511,7 +476,7 @@ export default function App() {
   // Filtering / Search state for Journal
   const [searchQuery, setSearchQuery] = useState('');
   const [journalFilterSymbol, setJournalFilterSymbol] = useState('');
-  const [journalFilterStrategy, setJournalFilterStrategy] = useState('');
+  const [journalFilterStrategy] = useState('');
   const [journalFilterEmotion, setJournalFilterEmotion] = useState('');
 
   // Export Journal modal
@@ -982,7 +947,7 @@ export default function App() {
   // Violet by default: emerald is the profit colour everywhere else in the
   // app, so an emerald equity curve read as "this line is a gain" rather than
   // "this line is your balance".
-  const [chartStyle, setChartStyle] = useState<'violet' | 'emerald' | 'indigo' | 'charcoal' | 'sunset'>('violet');
+  const [chartStyle] = useState<'violet' | 'emerald' | 'indigo' | 'charcoal' | 'sunset'>('violet');
 
   const getChartColors = () => {
     switch (chartStyle) {
@@ -1223,275 +1188,6 @@ export default function App() {
     }
   };
 
-  const handleAccountChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const accId = e.target.value;
-    setSelectedAccountId(accId);
-    persistSelectedAccount(accId);
-    await fetchTradesAndParams(accId);
-  };
-
-  // Auth Operations
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!authEmail) return;
-    setActionLoading(true);
-    setAuthError(null);
-    try {
-      if (isSupabaseConfigured) {
-        try {
-          const { data: supabaseData, error: supabaseError } = await supabase.auth.signInWithPassword({
-            email: authEmail,
-            password: authPassword
-          });
-
-          if (!supabaseError && supabaseData?.session?.user) {
-            await syncSupabaseUser(supabaseData.session.user, supabaseData.session.access_token);
-            return;
-          }
-        } catch (sErr) {
-          console.warn('[AxyFx] Supabase login warning, falling back to backend:', sErr);
-        }
-      }
-
-      // Login/Sync with Express backend
-      persistAuthSession(sessionStorage.getItem('auth_user_id') || user?.id || '', authEmail);
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-auth-email': authEmail
-        },
-        body: JSON.stringify({ email: authEmail, password: authPassword })
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        setAuthError(errorData.error || 'Login failed.');
-        return;
-      }
-
-      const data = await res.json();
-      if (data.user) {
-        persistAuthSession(data.user.id, data.user.email || authEmail, data.sessionToken);
-        setUser(data.user);
-        const isCompleted = !!(data.user.onboardingCompleted || (data.user as any).onboarding_completed);
-        setShowOnboardingWizard(!isCompleted);
-        await fetchAccountData();
-      }
-    } catch (err: any) {
-      console.error('[AxyFx] Login error:', err);
-      setAuthError(`Login connection error: ${err?.message || err || 'Network or Parsing error'}`);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!authEmail || !authName) return;
-    setActionLoading(true);
-    setAuthError(null);
-    try {
-      // 1. Try registering with Supabase Auth in background if configured
-      if (isSupabaseConfigured) {
-        try {
-          await supabase.auth.signUp({
-            email: authEmail,
-            password: authPassword,
-            options: {
-              data: {
-                full_name: authName
-              }
-            }
-          });
-        } catch (sErr) {
-          console.warn('[AxyFx] Supabase register background warning:', sErr);
-        }
-      }
-
-      // 2. Register with Express Backend API (sends 6-digit OTP code via SendGrid / Resend)
-      // Do NOT persist a session before OTP verification — otherwise a page refresh
-      // while the OTP window is open would bypass verification.
-      persistAuthSession(sessionStorage.getItem('auth_user_id') || user?.id || '');
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'x-auth-email': authEmail },
-        body: JSON.stringify({ email: authEmail, name: authName, password: authPassword })
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        setAuthError(errorData.error || 'Failed to create account.');
-        return;
-      }
-
-      const data = await res.json();
-      // Prompt user for 6-digit OTP Verification code
-      setIsOtpMode(true);
-      if (data.devOtp) {
-        setOtpCode(data.devOtp);
-      } else {
-        setOtpCode('');
-      }
-      setAuthError(null);
-    } catch (err: any) {
-      console.error('[AxyFx] Registration connection error:', err);
-      setAuthError(`Registration error: ${err?.message || err || 'Network error'}`);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!authEmail || !otpCode || otpCode.length !== 6) {
-      setAuthError('Please enter a valid 6-digit code');
-      return;
-    }
-    setActionLoading(true);
-    setAuthError(null);
-    try {
-      // 1. Verify 6-digit OTP code via backend API
-      const res = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'x-auth-email': authEmail },
-        body: JSON.stringify({ email: authEmail, otp: otpCode })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setAuthError(data.error || 'Invalid or expired OTP code.');
-        return;
-      }
-
-      if (data.user) {
-        persistAuthSession(data.user.id, data.user.email || authEmail, data.sessionToken);
-        setUser(data.user);
-        setIsOtpMode(false);
-        setOtpCode('');
-        setShowOnboardingWizard(true);
-        await fetchAccountData();
-        return;
-      }
-
-      // 2. Also attempt Supabase verifyOtp in parallel if configured
-      if (isSupabaseConfigured) {
-        try {
-          await supabase.auth.verifyOtp({
-            email: authEmail,
-            token: otpCode,
-            type: 'signup'
-          });
-        } catch (sErr) {
-          console.warn('[AxyFx] Supabase OTP verify warning:', sErr);
-        }
-      }
-    } catch (err: any) {
-      setAuthError(`OTP Verification error: ${err?.message || err}`);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    if (!authEmail) return;
-    setActionLoading(true);
-    setAuthError(null);
-    try {
-      const res = await fetch('/api/auth/resend-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-auth-email': authEmail },
-        body: JSON.stringify({ email: authEmail })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setAuthError(data.error || 'Failed to resend verification code.');
-      } else {
-        if (data.devOtp) {
-          setOtpCode(data.devOtp);
-          alert(`Code generated: ${data.devOtp} (Email provider sender unverified or pending setup)`);
-        } else {
-          setOtpCode('');
-          alert(`A new 6-digit verification code has been sent to ${authEmail}`);
-        }
-      }
-    } catch (err: any) {
-      setAuthError(`Resend error: ${err?.message || err}`);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetEmail) return;
-    setActionLoading(true);
-    setAuthError(null);
-    try {
-      const res = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setAuthError(data.error || 'Request failed. Please try again.');
-        return;
-      }
-      // Move to OTP + new password step
-      setIsResetOtpMode(true);
-      if (data.devOtp) {
-        setResetOtpCode(data.devOtp);
-        alert(`Dev mode – Reset code: ${data.devOtp}`);
-      } else {
-        setResetOtpCode('');
-      }
-      setAuthError(null);
-    } catch (err: any) {
-      setAuthError(`Error: ${err?.message || err}`);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetOtpCode || resetOtpCode.length !== 6 || !newPassword) return;
-    setActionLoading(true);
-    setAuthError(null);
-    try {
-      const res = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail, otp: resetOtpCode, newPassword })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setAuthError(data.error || 'Failed to reset password.');
-        return;
-      }
-      // Success – show success message then go back to login
-      setResetSuccess(true);
-      setTimeout(() => {
-        setIsForgotPassword(false);
-        setIsResetOtpMode(false);
-        setResetSuccess(false);
-        setResetEmail('');
-        setResetOtpCode('');
-        setNewPassword('');
-        setAuthError(null);
-      }, 2500);
-    } catch (err: any) {
-      setAuthError(`Error: ${err?.message || err}`);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
 
   const handleLogout = async () => {
     setShowSignOutModal(true);
@@ -1513,20 +1209,12 @@ export default function App() {
     setAccounts([]);
     setTrades([]);
     setSelectedAccountId('');
-    setTickets([]);
-    setAnnouncements([]);
     setRiskSettings(null);
     setEditingAccount(null);
     setEditingTradeId(null);
     setActiveTab('dashboard');
     setOnboardingStep(0);
     setShowOnboardingWizard(false);
-    setIsOtpMode(false);
-    setIsForgotPassword(false);
-    setAuthError(null);
-    setAuthEmail('');
-    setAuthPassword('');
-    setAuthName('');
     // Role and referral state belong to the account that just left. Leaving
     // them set would carry one person's Partner tab and "you joined through X"
     // into the next sign-in on this device until the server answered again.
@@ -1866,7 +1554,6 @@ export default function App() {
       setTradeNotes(trade.notes || '');
       setShowNoteField(!!(trade.notes && trade.notes.trim().length > 0));
       setShowEmotionField(!!(trade.emotion && trade.emotion !== 'Calm'));
-      setShowStrategyField(!!(trade.strategy && trade.strategy.trim().length > 0 && trade.strategy !== 'Unspecified'));
       setTradeScreenshot(trade.screenshot || '');
       setShowChartField(!!trade.screenshot);
       setScreenshotError('');
@@ -1900,7 +1587,6 @@ export default function App() {
       setTradeNotes('');
       setShowNoteField(false);
       setShowEmotionField(false);
-      setShowStrategyField(false);
       setTradeScreenshot('');
       setShowChartField(false);
       setScreenshotError('');
@@ -2201,7 +1887,6 @@ export default function App() {
     let bestScore = -1;
     let bestHeaders: string[] = [];
 
-    const dealKeywords = ['ticket', 'type', 'buy', 'sell', 'volume', 'symbol', 'profit', 'commission', 'swap'];
     const headerAliases: [string, string[]][] = [
       ['type', ['type', 'direction']],
       ['symbol', ['symbol', 'item', 'instrument', 'pair']],
@@ -2433,7 +2118,6 @@ export default function App() {
   // escalation hole), so the old button reported success and granted nothing.
 
   const [billingLoading, setBillingLoading] = useState(true);
-  const [billingConfigured, setBillingConfigured] = useState(false);
   const [subscription, setSubscription] = useState<any>(null);
   const [billingPayments, setBillingPayments] = useState<any[]>([]);
 
@@ -2473,12 +2157,10 @@ export default function App() {
 
   const loadBilling = useCallback(async () => {
     try {
-      const [cfgRes, subRes] = await Promise.all([
+      const [, subRes] = await Promise.all([
         fetch('/api/payments/config'),
         authFetch('/api/payments/subscription'),
       ]);
-      const cfg = await cfgRes.json().catch(() => ({}));
-      setBillingConfigured(!!cfg?.configured);
       if (subRes.ok) {
         const data = await subRes.json().catch(() => ({}));
         setSubscription(data?.subscription || null);
@@ -2494,21 +2176,6 @@ export default function App() {
   useEffect(() => {
     if (user && settingsTab === 'subscription') loadBilling();
   }, [user, settingsTab, loadBilling]);
-
-  /** Loads Razorpay Checkout on demand rather than on every page load. */
-  const loadRazorpayScript = () =>
-    new Promise<boolean>((resolve) => {
-      if ((window as any).Razorpay) return resolve(true);
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-
-  const handleUpgradeToPro = () => {
-    setShowProModal(true);
-  };
 
   const handleCancelSubscription = () => {
     showAlert(
@@ -2879,19 +2546,6 @@ export default function App() {
       maxTradesPerDay: 5
     };
     setRiskSettings({ ...currentRisk, accountId: accId, [field]: value });
-  };
-
-  // Add tag helper
-  const addCustomTag = () => {
-    const clean = customTagInput.trim();
-    if (clean && !tradeTags.includes(clean)) {
-      setTradeTags([...tradeTags, clean]);
-      setCustomTagInput('');
-    }
-  };
-
-  const removeTag = (t: string) => {
-    setTradeTags(tradeTags.filter(tg => tg !== t));
   };
 
   // ==========================================
@@ -3413,7 +3067,6 @@ export default function App() {
     const BRAND = 'FF1F4E79';
 
     const TABLE_COLS = 10;
-    const SPACER_COL = 11;
     const SUMMARY_LABEL_COL = 12;
     const SUMMARY_VALUE_COL = 13;
     const TOTAL_COLS = 13;
@@ -3815,7 +3468,6 @@ export default function App() {
     const delim = tabCount >= commaCount ? '\t' : ',';
 
     const rows = lines.map(l => l.split(delim).map(c => c.trim()));
-    const rawHeaders = rows[0];
     const headerRow = rows[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
     // Find column indices by matching header aliases
@@ -4352,7 +4004,7 @@ export default function App() {
           >
             {isPartner && (
               <button
-                onClick={() => { setActiveTab('partner'); setMobileMenuOpen(false); }}
+                onClick={() => { setActiveTab('partner'); }}
                 aria-current={activeTab === 'partner' ? 'page' : undefined}
                 title={!desktopSidebarOpen ? 'Partner Portal' : undefined}
                 className={`relative flex items-center transition-colors mb-0.5 ${desktopSidebarOpen
@@ -4367,7 +4019,7 @@ export default function App() {
 
             {isAdmin && !isPartner && (
               <button
-                onClick={() => { setActiveTab('admin'); setMobileMenuOpen(false); }}
+                onClick={() => { setActiveTab('admin'); }}
                 aria-current={activeTab === 'admin' ? 'page' : undefined}
                 title={!desktopSidebarOpen ? (adminRole === 'SUB_ADMIN' ? 'Partner Portal' : 'Admin') : undefined}
                 className={`relative flex items-center transition-colors mb-0.5 ${desktopSidebarOpen
@@ -4402,7 +4054,7 @@ export default function App() {
                     return (
                       <button
                         key={item.id}
-                        onClick={() => { item.onSelect?.(); setActiveTab(item.id); setMobileMenuOpen(false); }}
+                        onClick={() => { item.onSelect?.(); setActiveTab(item.id); }}
                         aria-current={isActive ? 'page' : undefined}
                         title={!desktopSidebarOpen ? item.label : undefined}
                         className={`relative flex items-center transition-colors ${desktopSidebarOpen

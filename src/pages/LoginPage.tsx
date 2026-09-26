@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  ArrowRight, ArrowUpRight, Ban, BarChart3, BookOpen, Bot, Brain, CalendarDays, Check, CheckCircle2,
+  ArrowRight, ArrowUpRight, Ban, BarChart3, BookOpen, Bot, Brain, Check, CheckCircle2,
   ChevronDown, Clock, Compass, Cpu, Database, Eye, EyeOff,
-  Flag, FileText, Gift, Globe, GraduationCap, Instagram, KeyRound, Layers, LineChart, Linkedin, Lock,
-  Menu, MessageSquare, MoonStar, MousePointerClick, Newspaper, Phone, PieChart, RefreshCw, Send, Shield,
-  ShieldCheck, Sparkles, Star, Sun, Tags, Target, TrendingDown,
-  Trophy, Twitter, Wallet, Wrench, X, Youtube, Zap, MapPin, Mail
+  FileText, Gift, Globe, GraduationCap, Instagram, KeyRound, Layers, Lock,
+  Menu, MessageSquare, MoonStar, MousePointerClick, Newspaper, Phone, RefreshCw, Send, Shield,
+  ShieldCheck, Sparkles, Sun, Target,
+  Trophy, Twitter, Wallet, X, Youtube, Zap, MapPin, Mail
 } from 'lucide-react';
 import Logo from '../components/Logo';
 import FXNewsPreview from '../components/FXNewsPreview';
@@ -172,18 +172,6 @@ function TurnstileBox({ onToken }: { onToken: (token: string) => void }) {
     </div>
   );
 }
-
-// The eight areas of the product, in the order a trader meets them.
-const productAreas = [
-  { icon: BookOpen, title: 'Trading Journal', desc: 'Log every position with entry, exit, size, notes, tags, screenshots and the emotion behind it. Filter, review and edit any trade later.' },
-  { icon: Layers, title: 'Accounts', desc: 'Track broker and prop firm accounts side by side. Add trades manually, or connect MetaTrader 5 so they arrive on their own.' },
-  { icon: BarChart3, title: 'Analytics', desc: 'Win rate, profit factor, expectancy, drawdown, risk-to-reward, streaks and session breakdowns — calculated as you log.' },
-  { icon: CalendarDays, title: 'Calendar', desc: 'Your month at a glance. Every day coloured by net P/L, so winning and losing patterns show themselves.' },
-  { icon: Newspaper, title: 'FX News', desc: 'Live forex headlines plus the economic calendar — NFP, CPI, FOMC — so you know what is moving the market before you click buy.' },
-  { icon: LineChart, title: 'Live Charts', desc: 'Price charts inside the journal, with your own trades marked on them. No switching windows to review a setup.' },
-  { icon: Bot, title: 'AI Mentor', desc: 'Ask why last week went wrong. It reads your actual trade history and answers on your numbers, not generic advice.' },
-  { icon: Wrench, title: 'Tools', desc: 'Pip value and position size calculators, so risk is worked out before the order, not after.' },
-];
 
 const howItWorks = [
   {
@@ -403,7 +391,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
   // Contact Form State
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-  const [contactSubject, setContactSubject] = useState('General Inquiry');
+  const contactSubject = 'General Inquiry';
   const [contactMessage, setContactMessage] = useState('');
   const [contactSubmitted, setContactSubmitted] = useState(false);
   const [contactLoading, setContactLoading] = useState(false);

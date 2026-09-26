@@ -364,8 +364,7 @@ html.dark body {
 .dark .bg-\[\#FBFBFA\]\/40,
 .dark .bg-slate-50,
 .dark .bg-slate-100\/50,
-.dark .bg-slate-100\/30,
-.dark .bg-[#FBFBFA]\/40 {
+.dark .bg-slate-100\/30 {
   background-color: #1a1e2a !important;
 }
 
@@ -510,7 +509,7 @@ html.dark body {
 .dark .bg-indigo-100\/50,
 .dark .bg-indigo-100,
 .dark .bg-indigo-50\/70,
-.dark .bg-[#efefee] {
+.dark .bg-\[\#efefee\] {
   background-color: rgba(99, 102, 241, 0.06) !important;
   border: 1px solid rgba(99, 102, 241, 0.15) !important;
 }
