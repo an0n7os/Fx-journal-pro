@@ -208,7 +208,10 @@ export default function SubAdminConsole({
     setLoading(true);
     setError('');
     try {
-      const query = subAdminId ? `?subAdminId=${encodeURIComponent(subAdminId)}` : '';
+      const params = new URLSearchParams();
+      if (subAdminId) params.set('subAdminId', subAdminId);
+      if (variant) params.set('type', variant);
+      const query = params.toString() ? `?${params.toString()}` : '';
       const res = await fetch(`/api/subadmin/overview${query}`, {
         credentials: 'include',
         headers: getAuthHeaders()
@@ -223,7 +226,7 @@ export default function SubAdminConsole({
     } finally {
       setLoading(false);
     }
-  }, [subAdminId]);
+  }, [subAdminId, variant]);
 
   useEffect(() => { loadOverview(); }, [loadOverview]);
 
@@ -450,6 +453,36 @@ export default function SubAdminConsole({
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" /> <span>{error}</span>
         </div>
       )}
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-violet-600/10 border border-violet-500/25 text-violet-400">
+            <Users className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-white tracking-tight">
+              {isPartner ? 'Referred Users Registry' : 'Assigned Users Registry'}
+            </h3>
+            <p className="text-xs text-slate-400">
+              {isPartner
+                ? 'Traders and students registered under your referral network'
+                : 'Traders assigned to your supervision desk'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-xs font-mono font-bold text-violet-300">
+            {overview?.stats.totalUsers ?? 0} {overview?.stats.totalUsers === 1 ? 'Trader' : 'Traders'}
+          </span>
+          <button
+            onClick={loadOverview}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 border border-slate-700/70 rounded-lg px-2.5 py-1.5 transition cursor-pointer"
+          >
+            <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin text-violet-400' : ''}`} /> Refresh
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <StatTile icon={Users} label={isPartner ? 'Referred users' : 'Assigned users'} value={overview?.stats.totalUsers ?? 0} tone="violet" />

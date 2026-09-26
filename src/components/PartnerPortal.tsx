@@ -171,21 +171,22 @@ export default function PartnerPortal() {
         </div>
       </div>
 
-      {/* Pricing, coupon and campaign links. Moved here from the admin
-          dashboard, where none of it applied to the viewer. */}
+      {/* ── Pricing, coupon and campaign links ───────────────────── */}
       <ReferralIncomeHub />
 
-      {/* Sets expectations before the partner opens a card and finds it locked. */}
-      <div className="flex items-start gap-2.5 rounded-2xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
-        <Users className="h-4 w-4 shrink-0 text-slate-500 mt-px" />
-        <p className="text-[11px] leading-relaxed text-slate-500">
-          You can always see who is in your network. Their trades, analysis and journal stay
-          private until each user turns on <span className="text-slate-300 font-semibold">Allow Partner to
-          View Trade Details</span> in their own settings — and they can turn it back off at any time.
-        </p>
-      </div>
+      {/* ── Referred Users Registry (Network) ────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-start gap-2.5 rounded-2xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
+          <Users className="h-4 w-4 shrink-0 text-slate-500 mt-px" />
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            You can always see who is in your network. Their trades, analysis and journal stay
+            private until each user turns on <span className="text-slate-300 font-semibold">Allow Partner to
+            View Trade Details</span> in their own settings — and they can turn it back off at any time.
+          </p>
+        </div>
 
-      <SubAdminConsole variant="partner" />
+        <SubAdminConsole variant="partner" />
+      </div>
     </div>
   );
 }

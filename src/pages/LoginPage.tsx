@@ -671,6 +671,14 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
   const persistAuthSession = (userId: string, email?: string, sessionToken?: string) => {
     if (typeof window === 'undefined') return;
+    const prevUserId = window.localStorage.getItem('auth_user_id') || window.sessionStorage.getItem('auth_user_id');
+    // If switching accounts on the same device, clear stale tokens & account selections immediately
+    if (prevUserId && prevUserId !== userId) {
+      window.sessionStorage.removeItem('auth_session_token');
+      window.localStorage.removeItem('auth_session_token');
+      window.sessionStorage.removeItem('selected_account_id');
+      window.localStorage.removeItem('selected_account_id');
+    }
     if (userId) {
       window.sessionStorage.setItem('auth_user_id', userId);
       window.localStorage.setItem('auth_user_id', userId);
@@ -688,6 +696,9 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     if (sessionToken) {
       window.sessionStorage.setItem('auth_session_token', sessionToken);
       window.localStorage.setItem('auth_session_token', sessionToken);
+    } else if (prevUserId && prevUserId !== userId) {
+      window.sessionStorage.removeItem('auth_session_token');
+      window.localStorage.removeItem('auth_session_token');
     }
   };
 

@@ -182,6 +182,19 @@ export default function NotebookTab({ user }: NotebookTabProps) {
     return DEFAULT_TAGS;
   });
 
+  // Re-sync notes, folders, and customTags if the active user changes
+  useEffect(() => {
+    try {
+      const savedNotes = localStorage.getItem(`${storagePrefix}_notes`);
+      setNotes(savedNotes ? JSON.parse(savedNotes) : []);
+      const savedFolders = localStorage.getItem(`${storagePrefix}_folders`);
+      setFolders(savedFolders ? JSON.parse(savedFolders) : DEFAULT_FOLDERS);
+      const savedTags = localStorage.getItem(`${storagePrefix}_tags`);
+      setCustomTags(savedTags ? JSON.parse(savedTags) : DEFAULT_TAGS);
+      setSelectedNoteId(null);
+    } catch (_) {}
+  }, [storagePrefix]);
+
   // Mobile view toggle (list vs editor)
   const [mobileShowEditor, setMobileShowEditor] = useState(false);
 

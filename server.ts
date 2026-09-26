@@ -3004,7 +3004,10 @@ app.get('/api/auth/me', async (req, res) => {
 
 app.post('/api/auth/logout', async (req, res) => {
   try {
-    const session = verifySessionValue(req.cookies?.[SESSION_COOKIE]);
+    const authHeader = (req.headers['authorization'] || '').toString().trim();
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    const rawToken = req.cookies?.[SESSION_COOKIE] || (req.headers['x-session-token'] as string) || bearerToken || '';
+    const session = verifySessionValue(rawToken);
     if (session) {
       revokeSessionsFor(session.userId);
       revokeSessionsFor(session.email);
@@ -7290,15 +7293,15 @@ app.get('/api/subadmin/overview', async (req, res) => {
   if (!ctx) return;
 
   let targetSubAdminId = ctx.user?.id || null;
-  let scopeRole = ctx.role;
+  let scopeRole = req.query.type === 'partner' ? 'PARTNER' : ctx.role;
   if (!SCOPED_ROLES.has(ctx.role) && req.query.subAdminId) {
     // A super admin inspecting someone else's console. Resolve that account's
     // own role so a partner's network is read from referrals and a sub-admin's
     // from assignments, rather than assuming one of the two.
     targetSubAdminId = String(req.query.subAdminId);
-    scopeRole = (await lookupUserRole(targetSubAdminId)) || 'SUB_ADMIN';
+    scopeRole = (await lookupUserRole(targetSubAdminId)) || (req.query.type === 'partner' ? 'PARTNER' : 'SUB_ADMIN');
   } else if (!SCOPED_ROLES.has(ctx.role)) {
-    scopeRole = 'SUB_ADMIN';
+    scopeRole = req.query.type === 'partner' ? 'PARTNER' : 'SUB_ADMIN';
   }
   const scope = await scopeUserIds(scopeRole, targetSubAdminId);
   const ids = scope || [];
@@ -7941,16 +7944,30 @@ async function savePartnerProfile(
     writePartnerProfiles(filtered);
     return;
   }
-  await supabase.from('partner_profiles').upsert(
-    {
-      user_id: userId,
-      referral_code: code,
-      offer_price: offerPrice,
-      links: links || [],
-      created_by: createdBy || null
-    },
-    { onConflict: 'user_id' },
-  );
+  try {
+    const { error: upsertErr } = await supabase.from('partner_profiles').upsert(
+      {
+        user_id: userId,
+        referral_code: code,
+        offer_price: offerPrice,
+        links: links || [],
+        created_by: createdBy || null
+      },
+      { onConflict: 'user_id' },
+    );
+    if (upsertErr) {
+      await supabase.from('partner_profiles').upsert(
+        {
+          user_id: userId,
+          referral_code: code,
+          created_by: createdBy || null
+        },
+        { onConflict: 'user_id' },
+      );
+    }
+  } catch (err) {
+    console.warn('[savePartnerProfile] Supabase upsert error:', err);
+  }
 }
 
 // ── Partner: own profile, referral link, offer price and custom links ─────

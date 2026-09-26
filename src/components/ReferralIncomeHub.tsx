@@ -288,68 +288,6 @@ export default function ReferralIncomeHub() {
               </p>
             )}
           </div>
-
-          {/* Action Hub (Primary Coupon & Link) */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {editingCoupon ? (
-              <div className="flex items-center gap-2 bg-slate-950/90 border border-purple-500/50 rounded-xl p-1.5">
-                <input
-                  type="text"
-                  value={draftCouponCode}
-                  onChange={(e) => setDraftCouponCode(e.target.value.toUpperCase())}
-                  placeholder="CUSTOMCODE"
-                  className="px-2.5 py-1 text-xs font-mono font-bold bg-slate-900 text-white rounded-lg border border-purple-500/40 w-28 uppercase focus:outline-none focus:border-purple-400"
-                />
-                <button
-                  type="button"
-                  onClick={handleSaveCouponCode}
-                  disabled={savingCoupon}
-                  className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition cursor-pointer"
-                >
-                  {savingCoupon ? '...' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingCoupon(false)}
-                  className="p-1 text-slate-400 hover:text-white transition cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 bg-slate-950/80 border border-purple-500/30 rounded-xl px-3 py-1.5 shadow-sm">
-                <span className="text-[10px] text-slate-400 font-semibold uppercase">Coupon:</span>
-                <span className="font-mono text-sm font-black text-purple-300 tracking-wider">
-                  {partnerProfile?.referralCode || 'MENTOR60'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleCopyCoupon(partnerProfile?.referralCode || 'MENTOR60')}
-                  className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] flex items-center gap-1 transition cursor-pointer"
-                >
-                  {copiedCoupon === (partnerProfile?.referralCode || 'MENTOR60') ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                  <span>{copiedCoupon === (partnerProfile?.referralCode || 'MENTOR60') ? 'Copied' : 'Copy'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingCoupon(true)}
-                  title="Edit custom code"
-                  className="p-1 rounded-lg text-slate-400 hover:text-white transition cursor-pointer"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => handleCopyRefLink(partnerProfile?.referralUrl || `${window.location.origin}/?ref=${partnerProfile?.referralCode || 'MENTOR60'}`)}
-              className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
-            >
-              {copiedRefLink === (partnerProfile?.referralUrl || `${window.location.origin}/?ref=${partnerProfile?.referralCode || 'MENTOR60'}`) ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Link2 className="h-3.5 w-3.5 text-violet-400" />}
-              <span>{copiedRefLink === (partnerProfile?.referralUrl || `${window.location.origin}/?ref=${partnerProfile?.referralCode || 'MENTOR60'}`) ? 'Link Copied!' : 'Copy Referral Link'}</span>
-            </button>
-          </div>
         </div>
 
         {/* Dynamic Offer Price Slider & Live Income Calculator */}

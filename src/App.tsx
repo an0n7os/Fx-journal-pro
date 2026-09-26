@@ -232,6 +232,14 @@ export default function App() {
   // including after a page refresh where the React state is empty.
   const persistAuthSession = (userId: string, email?: string, sessionToken?: string) => {
     if (typeof window === 'undefined') return;
+    const prevUserId = window.localStorage.getItem('auth_user_id') || window.sessionStorage.getItem('auth_user_id');
+    // If switching between different accounts on the same device, clear stale tokens & account selections immediately
+    if (prevUserId && prevUserId !== userId) {
+      window.sessionStorage.removeItem('auth_session_token');
+      window.localStorage.removeItem('auth_session_token');
+      window.sessionStorage.removeItem('selected_account_id');
+      window.localStorage.removeItem('selected_account_id');
+    }
     if (userId) {
       window.sessionStorage.setItem('auth_user_id', userId);
       window.localStorage.setItem('auth_user_id', userId);
@@ -249,6 +257,9 @@ export default function App() {
     if (sessionToken) {
       window.sessionStorage.setItem('auth_session_token', sessionToken);
       window.localStorage.setItem('auth_session_token', sessionToken);
+    } else if (prevUserId && prevUserId !== userId) {
+      window.sessionStorage.removeItem('auth_session_token');
+      window.localStorage.removeItem('auth_session_token');
     }
   };
 
@@ -260,6 +271,7 @@ export default function App() {
 
   const clearAuthSession = () => {
     if (typeof window === 'undefined') return;
+    const token = window.sessionStorage.getItem('auth_session_token') || window.localStorage.getItem('auth_session_token') || '';
     window.sessionStorage.removeItem('auth_user_id');
     window.sessionStorage.removeItem('auth_email');
     window.sessionStorage.removeItem('auth_session_token');
@@ -271,6 +283,9 @@ export default function App() {
     return fetch('/api/auth/logout', {
       method: 'POST',
       credentials: 'include',
+      headers: {
+        ...(token ? { 'x-session-token': token, 'Authorization': `Bearer ${token}` } : {})
+      },
       keepalive: true,
     }).catch(console.error);
   };
@@ -286,8 +301,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.replace(/^\//, '').toLowerCase();
-      const DASHBOARD_TABS = ['dashboard', 'journal', 'notebook', 'accounts', 'analytics', 'calendar', 'chart', 'fxnews', 'tools', 'insights', 'settings', 'admin'];
-      const TAB_ALIASES: Record<string, string> = { notes: 'notebook', note: 'notebook', news: 'fxnews', mentor: 'insights', 'ai-mentor': 'insights', mt5: 'dashboard', 'mt5-sync': 'dashboard' };
+      const DASHBOARD_TABS = ['dashboard', 'journal', 'notebook', 'accounts', 'analytics', 'calendar', 'chart', 'fxnews', 'tools', 'insights', 'settings', 'admin', 'partner'];
+      const TAB_ALIASES: Record<string, string> = { notes: 'notebook', note: 'notebook', news: 'fxnews', mentor: 'insights', 'ai-mentor': 'insights', mt5: 'dashboard', 'mt5-sync': 'dashboard', affiliate: 'partner', partners: 'partner' };
       const mapped = TAB_ALIASES[path] || path;
       if (DASHBOARD_TABS.includes(mapped)) return mapped;
     }
@@ -355,7 +370,7 @@ export default function App() {
   // the Partner Portal rather than the Admin panel, so the role itself has to
   // reach the UI — isAdmin alone cannot tell the two apart.
   const [adminRole, setAdminRole] = useState<string>('USER');
-  const isPartner = adminRole === 'PARTNER';
+  const isPartner = adminRole === 'PARTNER' || adminRole === 'SUPER_ADMIN' || adminRole === 'ADMIN';
 
   // Who referred this user, and whether they have agreed to let that partner
   // read their trading data. Both come from the server; the toggle below is a
@@ -1209,6 +1224,8 @@ export default function App() {
     setAccounts([]);
     setTrades([]);
     setSelectedAccountId('');
+    setTickets([]);
+    setAnnouncements([]);
     setRiskSettings(null);
     setEditingAccount(null);
     setEditingTradeId(null);
@@ -3938,7 +3955,7 @@ export default function App() {
                           <Users className="h-4 w-4" /> Partner Portal
                         </button>
                       )}
-                      {isAdmin && !isPartner && (
+                      {isAdmin && adminRole !== 'PARTNER' && (
                         <button
                           role="menuitem"
                           onClick={() => { setActiveTab('admin'); setShowMobileNavProfile(false); }}
@@ -4017,7 +4034,7 @@ export default function App() {
               </button>
             )}
 
-            {isAdmin && !isPartner && (
+            {isAdmin && adminRole !== 'PARTNER' && (
               <button
                 onClick={() => { setActiveTab('admin'); }}
                 aria-current={activeTab === 'admin' ? 'page' : undefined}
@@ -7361,6 +7378,7 @@ export default function App() {
           {/* 6. AI CO-PILOT INSIGHTS VIEW */}
             {activeTab === 'insights' && activeAccount && user && (
               <AIInsights
+                key={`${user.id}_${activeAccount.id}`}
                 user={user}
                 account={activeAccount}
                 onUpgradeToPro={goToSubscriptionSettings}
@@ -7395,7 +7413,7 @@ export default function App() {
               />
             )}
             {activeTab === 'notebook' && isProActive && (
-              <NotebookTab user={user} account={activeAccount} />
+              <NotebookTab key={user?.id || 'guest'} user={user} account={activeAccount} />
             )}
 
 
@@ -7427,7 +7445,7 @@ export default function App() {
           { id: 'insights', icon: Brain, label: 'Heyza', pro: true },
           { id: 'settings', icon: Settings, label: 'Settings' },
           ...(isPartner ? [{ id: 'partner', icon: Users, label: 'Partner Portal' }] : []),
-          ...(isAdmin && !isPartner ? [{ id: 'admin', icon: Shield, label: 'Admin Panel' }] : []),
+          ...(isAdmin && adminRole !== 'PARTNER' ? [{ id: 'admin', icon: Shield, label: 'Admin Panel' }] : []),
         ];
         const isMoreActive = moreTabs.some(t => t.id === activeTab);
         return (
