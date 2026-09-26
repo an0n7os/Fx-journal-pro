@@ -264,8 +264,10 @@ export default function ProUpgradeModal({
         order_id: data.orderId,
         name: 'FX Journal Pro',
         description: appliedCoupon ? `Pro Access (30 Days) — ₹${appliedCoupon.offerPrice} (Mentor Offer Applied)` : `Pro Access (30 Days) — ₹${amountRupees}`,
-        prefill: { email: user?.email, name: user?.name },
-        theme: { color: '#8b5cf6' },
+        theme: {
+          color: '#8b5cf6',
+          backdrop_color: '#07080c',
+        },
         config: {
           display: {
             blocks: {
@@ -305,6 +307,7 @@ export default function ProUpgradeModal({
           }
         },
         modal: {
+          backdropclose: true,
           ondismiss: () => setLoading(false),
         },
       });
