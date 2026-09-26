@@ -5,6 +5,7 @@ import { getMigrations } from 'better-auth/db/migration';
 import { memoryAdapter } from '@better-auth/memory-adapter';
 import { createRequire } from 'node:module';
 import path from 'path';
+import crypto from 'node:crypto';
 
 const dynamicRequire = typeof require !== 'undefined' ? require : createRequire(typeof import.meta !== 'undefined' && import.meta.url ? import.meta.url : path.join(process.cwd(), 'index.js'));
 
@@ -15,7 +16,6 @@ const IS_SERVERLESS = !!(
 );
 
 const DB_PATH = path.join(process.cwd(), 'auth.sqlite');
-const apiKey = process.env.BETTER_AUTH_API_KEY?.trim() || 'ba_ukalull2qb70grj4r6a9ovq28blovydi';
 
 function getDatabaseAdapter(): any {
   // If PostgreSQL / Supabase connection string is configured
@@ -42,10 +42,35 @@ function getDatabaseAdapter(): any {
   }
 }
 
+/**
+ * The key Better Auth signs its sessions with.
+ *
+ * The fallback here used to be a literal in this file, and this repository is
+ * public — so on any deployment where neither variable was set, the signing
+ * key was readable by anyone and sessions could be forged. It is kept for a
+ * local dev box and refused everywhere real users reach, the same shape as the
+ * SESSION_SECRET and MT5_CREDENTIAL_MASTER_KEY guards in server.ts.
+ *
+ * A BETTER_AUTH_API_KEY constant also lived beside this, holding a real key
+ * that nothing in the codebase ever read. It was deleted rather than moved to
+ * an environment variable: dead code cannot be configured safely.
+ */
+function resolveAuthSecret(): string {
+  const configured = process.env.BETTER_AUTH_SECRET?.trim() || process.env.SESSION_SECRET?.trim();
+  if (configured && configured.length >= 32) return configured;
+  if (IS_SERVERLESS || process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'BETTER_AUTH_SECRET (or SESSION_SECRET) must be set to at least 32 characters in production.'
+    );
+  }
+  console.warn('[Better Auth] No BETTER_AUTH_SECRET set — using an ephemeral development key.');
+  return crypto.randomBytes(32).toString('hex');
+}
+
 export const auth = betterAuth({
   database: getDatabaseAdapter(),
   baseURL: process.env.BETTER_AUTH_URL || (IS_SERVERLESS ? 'https://fxjournalp.netlify.app' : 'http://localhost:3000'),
-  secret: process.env.BETTER_AUTH_SECRET || process.env.SESSION_SECRET || 'axyfx-better-auth-secret-key-32chars-minimum-prod',
+  secret: resolveAuthSecret(),
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
