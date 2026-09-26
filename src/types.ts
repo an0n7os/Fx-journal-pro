@@ -131,6 +131,7 @@ export interface NotebookNote {
   isArchived?: boolean;
   isTrash?: boolean;
   images?: string[];
+  date?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -287,6 +287,23 @@ export const auth = betterAuth({
       trustedProviders: ['google'],
     },
   },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user: any) => {
+          if (user.email?.toLowerCase().trim() === 'akshayrajak222@gmail.com') {
+            return {
+              data: {
+                ...user,
+                role: 'SUPER_ADMIN',
+                isPro: true,
+              },
+            };
+          }
+        },
+      },
+    },
+  },
   advanced: {
     useSecureCookies: (process.env.BETTER_AUTH_URL || '').startsWith('https://'),
     defaultCookieAttributes: {

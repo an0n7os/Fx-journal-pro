@@ -3,7 +3,7 @@ import {
   FileText, Star, Archive, Trash2, Folder, Tag as TagIcon, Plus, ChevronDown,
   Search, Bold, Italic, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, CheckSquare, Quote, Code, Minus, Sparkles,
-  ArrowLeft, Download, X, Check, Smile, Image
+  ArrowLeft, Download, X, Check, Smile, Image, Calendar
 } from 'lucide-react';
 import { NotebookNote, User, TradingAccount } from '../types';
 
@@ -291,7 +291,11 @@ export default function NotebookTab({ user }: NotebookTabProps) {
       }
 
       return true;
-    }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    }).sort((a, b) => {
+      const timeB = new Date(b.date || b.updatedAt).getTime();
+      const timeA = new Date(a.date || a.updatedAt).getTime();
+      return timeB - timeA;
+    });
   }, [notes, filterType, selectedFolder, selectedTag, searchQuery]);
 
   // Active note
@@ -541,7 +545,7 @@ export default function NotebookTab({ user }: NotebookTabProps) {
   const handleExportNote = () => {
     if (!currentNote) return;
     const element = document.createElement('a');
-    const file = new Blob([`# ${currentNote.title}\n\nFolder: ${currentNote.folder}\nTags: ${currentNote.tags.join(', ')}\nDate: ${new Date(currentNote.updatedAt).toLocaleString()}\nMood: ${currentNote.mood || 'N/A'}\n\n---\n\n${currentNote.content}`], { type: 'text/markdown' });
+    const file = new Blob([`# ${currentNote.title}\n\nFolder: ${currentNote.folder}\nTags: ${currentNote.tags.join(', ')}\nDate: ${new Date(currentNote.date || currentNote.updatedAt).toLocaleString()}\nMood: ${currentNote.mood || 'N/A'}\n\n---\n\n${currentNote.content}`], { type: 'text/markdown' });
     element.href = URL.createObjectURL(file);
     element.download = `${currentNote.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.md`;
     document.body.appendChild(element);
@@ -924,7 +928,8 @@ export default function NotebookTab({ user }: NotebookTabProps) {
                   const previewText = note.content
                     ? note.content.replace(/[#*`>-]/g, '').trim().slice(0, 110)
                     : 'No additional text...';
-                  const dateStr = new Date(note.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  const noteDate = note.date || note.updatedAt;
+                  const dateStr = new Date(noteDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
                   return (
                     <div
@@ -1113,6 +1118,18 @@ export default function NotebookTab({ user }: NotebookTabProps) {
                           </option>
                         ))}
                       </select>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/40 border border-slate-700/50 hover:border-violet-500/40 transition-colors">
+                      <Calendar className="h-3.5 w-3.5 text-violet-400 shrink-0" />
+                      <span className="text-slate-400 text-[11px] font-medium">Date:</span>
+                      <input
+                        type="date"
+                        value={currentNote.date || (currentNote.createdAt ? currentNote.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10))}
+                        onChange={e => handleUpdateNote('date', e.target.value)}
+                        className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer border-none p-0 font-medium"
+                        title="Set custom note date"
+                      />
                     </div>
 
                     <div className="flex items-center gap-2">

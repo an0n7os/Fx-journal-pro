@@ -147,9 +147,9 @@ const SOCIAL_LINKS: { label: string; href: string; icon: any }[] = [
   { label: 'WhatsApp', href: 'https://wa.me/918136802573', icon: WhatsAppIcon },
   { label: 'Instagram', href: 'https://www.instagram.com/fx_journalpro/', icon: Instagram },
   { label: 'Telegram Community', href: 'https://t.me/fxjournalpro', icon: Send },
-  { label: 'X (Twitter)', href: 'https://twitter.com/fxjournalpro', icon: Twitter },
   { label: 'Discord Server', href: 'https://discord.gg/fxjournalpro', icon: MessageSquare },
-  { label: 'YouTube Channel', href: 'https://youtube.com/@fxjournalpro', icon: Youtube },
+  // { label: 'X (Twitter)', href: 'https://twitter.com/fxjournalpro', icon: Twitter },
+  // { label: 'YouTube Channel', href: 'https://youtube.com/@fxjournalpro', icon: Youtube },
 ];
 
 const CONTACT_EMAIL = 'contact@fxjournalpro.com';

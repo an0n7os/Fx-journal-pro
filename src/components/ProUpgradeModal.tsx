@@ -55,7 +55,7 @@ const PRO_BENEFITS = [
   'AI Mentor on your trades',
   'Live Chart with markers',
   'Excel & PDF reports',
-  'Economic calendar & FX news',
+  'Trader Notebook & plans',
 ];
 
 /** Shown as chips so the long list of methods stops crowding a table row. */

@@ -3675,7 +3675,7 @@ export default function App() {
       items: [
         { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
         { id: 'journal', label: 'Journal', icon: BookOpen },
-        { id: 'notebook', label: 'Notebook', icon: Edit3 },
+        { id: 'notebook', label: 'Notebook', icon: Edit3, pro: true },
         { id: 'accounts', label: 'Accounts', icon: Layers },
         { id: 'calendar', label: 'Calendar', icon: Calendar },
       ]
@@ -4209,7 +4209,7 @@ export default function App() {
                   <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 sm:line-clamp-1">
                     {activeTab === 'dashboard' ? 'Welcome back! Here\'s an overview of your trading performance.' :
                       activeTab === 'journal' ? 'Inline workspace database to log, filter, and audit trading setups.' :
-                        activeTab === 'notebook' ? 'Jot down your feelings, plans, and daily reviews with our integrated rich-text templates.' :
+                        activeTab === 'notebook' ? 'Note down your feelings, plans, and daily reviews with our integrated rich-text templates.' :
                           activeTab === 'accounts' ? 'Manage your MetaTrader or custom brokerage accounts on-the-fly.' :
                           activeTab === 'analytics' ? 'Explore your strategic edge, session concentrations, and profit distribution.' :
                             activeTab === 'calendar' ? 'Visualize daily profit allocations and execution frequencies.' :
@@ -7387,7 +7387,14 @@ export default function App() {
             )}
 
             {/* 10. NOTEBOOK VIEW */}
-            {activeTab === 'notebook' && (
+            {activeTab === 'notebook' && !isProActive && (
+              <ProFeaturePanel
+                title="Trader's Notebook"
+                blurb="Capture deep pre-market plans, psychology reflections, and trade reviews with integrated templates, custom dates, and rich-text editing."
+                onUpgrade={goToSubscriptionSettings}
+              />
+            )}
+            {activeTab === 'notebook' && isProActive && (
               <NotebookTab user={user} account={activeAccount} />
             )}
 
@@ -7411,13 +7418,13 @@ export default function App() {
         // The role consoles are appended rather than listed inline: the desktop
         // sidebar is `hidden md:flex`, so without an entry here a partner or an
         // admin on a phone could not open their own console from anywhere.
-        const moreTabs = [
-          { id: 'notebook', icon: Edit3, label: 'Notebook' },
+        const moreTabs: { id: string; icon: any; label: string; badge?: any; pro?: boolean }[] = [
+          { id: 'notebook', icon: Edit3, label: 'Notebook', pro: true },
           { id: 'accounts', icon: Layers, label: 'Accounts', badge: accounts.length > 0 ? accounts.length : undefined },
           { id: 'calendar', icon: Calendar, label: 'Calendar' },
-          { id: 'chart', icon: LineChart, label: 'Live Chart' },
+          { id: 'chart', icon: LineChart, label: 'Live Chart', pro: true },
           { id: 'tools', icon: Wrench, label: 'Tools' },
-          { id: 'insights', icon: Brain, label: 'Heyza' },
+          { id: 'insights', icon: Brain, label: 'Heyza', pro: true },
           { id: 'settings', icon: Settings, label: 'Settings' },
           ...(isPartner ? [{ id: 'partner', icon: Users, label: 'Partner Portal' }] : []),
           ...(isAdmin && !isPartner ? [{ id: 'admin', icon: Shield, label: 'Admin Panel' }] : []),
@@ -7487,6 +7494,12 @@ export default function App() {
                             }`}>
                             {item.label}
                           </span>
+
+                          {item.pro && !isProActive && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/12 border border-violet-500/25 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-violet-600 dark:text-violet-300 mr-1 shrink-0">
+                              <Lock className="h-2 w-2" /> Pro
+                            </span>
+                          )}
 
                           {item.badge !== undefined && (
                             <span className="dx-badge text-[10px] px-1.5 min-w-[20px] h-5 rounded-full flex items-center justify-center shrink-0">

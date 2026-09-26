@@ -100,6 +100,17 @@ const DEV_ADMIN_PASSWORD_HASH = (() => {
   return bcrypt.hashSync(custom, 10);
 })();
 
+const SUPER_ADMIN_EMAILS = new Set([
+  'akshayrajak222@gmail.com',
+  ...(process.env.SUPER_ADMIN_EMAILS ? process.env.SUPER_ADMIN_EMAILS.split(',').map((e: string) => e.trim().toLowerCase()) : []),
+  ...(DEV_ACCOUNT_EMAIL ? [DEV_ACCOUNT_EMAIL.toLowerCase().trim()] : []),
+]);
+
+const isSuperAdminEmail = (email?: string | null): boolean => {
+  if (!email) return false;
+  return SUPER_ADMIN_EMAILS.has(email.toLowerCase().trim());
+};
+
 // Absolute file paths for database persistence
 const DB_FILE = path.join(process.cwd(), 'db.json');
 
@@ -2752,6 +2763,7 @@ app.use(async (req, res, next) => {
 
       let db: any = null;
       let dbUser: any = null;
+      const isSuperAdminUser = isSuperAdminEmail(email);
 
       if (useSupabase) {
         let existingUserRow: any = null;
@@ -2768,6 +2780,16 @@ app.use(async (req, res, next) => {
           dbUser = toCamel(existingUserRow);
           userId = existingUserRow.id;
           authUserId = existingUserRow.id;
+
+          // Auto-upgrade designated super admin to SUPER_ADMIN role & Pro
+          if (isSuperAdminUser && (existingUserRow.role !== 'SUPER_ADMIN' || !existingUserRow.is_pro)) {
+            existingUserRow.role = 'SUPER_ADMIN';
+            existingUserRow.is_pro = true;
+            dbUser.role = 'SUPER_ADMIN';
+            dbUser.isPro = true;
+            dbUser.is_pro = true;
+            supabase.from('users').update({ role: 'SUPER_ADMIN', is_pro: true }).eq('id', existingUserRow.id).then();
+          }
         } else if (betterUser && email) {
           // User logged in with Better Auth / Google OAuth for the first time -> auto-provision in Supabase
           const canonicalId = authUserId || `user_${crypto.randomUUID()}`;
@@ -2776,13 +2798,13 @@ app.use(async (req, res, next) => {
             email: email,
             name: betterUser.name || email.split('@')[0],
             password: '',
-            role: 'USER',
+            role: isSuperAdminUser ? 'SUPER_ADMIN' : 'USER',
             status: 'ACTIVE',
             experience: 'Intermediate',
             trading_style: 'Day Trading',
             main_markets: ['Forex', 'Gold'],
             onboarding_completed: false,
-            is_pro: false,
+            is_pro: isSuperAdminUser ? true : false,
             is_email_verified: true,
             auth_provider: 'google',
             last_login: new Date().toISOString(),
@@ -2826,13 +2848,13 @@ app.use(async (req, res, next) => {
             email: email,
             name: betterUser.name || email.split('@')[0],
             password: '',
-            role: 'USER',
+            role: isSuperAdminUser ? 'SUPER_ADMIN' : 'USER',
             status: 'ACTIVE',
             experience: 'Intermediate',
             tradingStyle: 'Day Trading',
             mainMarkets: ['Forex', 'Gold'],
             onboardingCompleted: false,
-            isPro: false,
+            isPro: isSuperAdminUser ? true : false,
             isEmailVerified: true,
             authProvider: 'google',
             lastLogin: new Date().toISOString(),
@@ -2840,6 +2862,12 @@ app.use(async (req, res, next) => {
           dbUser = newRecord;
           db.users.push(newRecord);
         }
+      }
+
+      if (isSuperAdminUser && dbUser) {
+        dbUser.role = 'SUPER_ADMIN';
+        dbUser.isPro = true;
+        dbUser.is_pro = true;
       }
 
       // If user came via Better Auth (Google), their email is verified by Google
@@ -3717,7 +3745,7 @@ const FREE_ACCOUNT_LIMIT = 1;
 const FREE_REPORT_DAYS = 30;
 
 /** Features that require an active Pro plan. */
-type ProFeature = 'mt5Sync' | 'liveChart' | 'aiMentor' | 'unlimitedAccounts' | 'proReports' | 'whatsappAlerts';
+type ProFeature = 'mt5Sync' | 'liveChart' | 'aiMentor' | 'unlimitedAccounts' | 'proReports' | 'whatsappAlerts' | 'notebook';
 
 const PRO_FEATURE_MESSAGES: Record<ProFeature, string> = {
   mt5Sync: 'MT5 sync is a Pro feature. On the free plan you can add trades manually.',
@@ -3726,6 +3754,7 @@ const PRO_FEATURE_MESSAGES: Record<ProFeature, string> = {
   unlimitedAccounts: `The free plan is limited to ${FREE_ACCOUNT_LIMIT} portfolio account. Upgrade to Pro for unlimited broker and prop firm accounts.`,
   proReports: `The free plan reports cover the last ${FREE_REPORT_DAYS} days in CSV. Excel and PDF reports over any period are a Pro feature.`,
   whatsappAlerts: 'WhatsApp news reminders are a Pro feature.',
+  notebook: 'Trader Notebook is a Pro feature. Upgrade to unlock rich-text notes, custom dates, templates, and trade planning.',
 };
 
 /**
@@ -3783,6 +3812,7 @@ app.get('/api/plan/entitlements', (req, res) => {
       calendar: true,
       fxNews: true,
       tools: true,
+      notebook: pro,
       mt5Sync: pro,
       liveChart: pro,
       aiMentor: pro,
@@ -6650,6 +6680,8 @@ const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'SUB_ADMIN', 'PARTNER', 'SU
 /** Resolves the caller's role, re-reading it so a revoked role takes effect at once. */
 const getAdminRole = async (currentUser: any): Promise<string> => {
   if (!currentUser) return 'USER';
+  const email = (currentUser.email || '').toLowerCase().trim();
+  if (isSuperAdminEmail(email)) return 'SUPER_ADMIN';
   let role = currentUser.role;
   if (useSupabase && (currentUser.id || currentUser.email)) {
     const query = currentUser.id
