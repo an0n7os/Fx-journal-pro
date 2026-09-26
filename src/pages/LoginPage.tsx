@@ -2253,7 +2253,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
             <TurnstileBox onToken={setTurnstileToken} />
             <button type="submit" disabled={actionLoading} className={buttonPrimary}>
-              {actionLoading ? 'Activating...' : "Let's start"}
+              {actionLoading ? 'Creating account...' : 'Create Account'}
             </button>
             <div className="relative my-3">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
@@ -2312,7 +2312,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
             <TurnstileBox onToken={setTurnstileToken} />
             <button type="submit" disabled={actionLoading} className={buttonPrimary}>
-              {actionLoading ? 'Starting...' : "Let's start"}
+              {actionLoading ? 'Signing in...' : 'Sign In'}
             </button>
 
             <div className="relative my-3">
