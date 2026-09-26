@@ -75,7 +75,7 @@ export default function NextEventCard({ onOpenCalendar }: { onOpenCalendar: () =
 
   if (loading) {
     return (
-      <div className="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 shadow-xs">
+      <div className="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-3 sm:p-4 shadow-xs">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-500 animate-pulse"><Radio className="h-4 w-4" /></div>
           <div className="flex-1 space-y-2">
@@ -92,7 +92,7 @@ export default function NextEventCard({ onOpenCalendar }: { onOpenCalendar: () =
       <button
         type="button"
         onClick={onOpenCalendar}
-        className="w-full text-left bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 shadow-xs hover:shadow transition flex items-center gap-3"
+        className="w-full text-left bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-3 sm:p-4 shadow-xs hover:shadow transition flex items-center gap-2.5 sm:gap-3"
       >
         <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
           <CalendarRange className="h-4 w-4" />
@@ -110,18 +110,18 @@ export default function NextEventCard({ onOpenCalendar }: { onOpenCalendar: () =
     <button
       type="button"
       onClick={onOpenCalendar}
-      className="w-full text-left group bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 shadow-xs hover:shadow-md transition flex items-center gap-3 cursor-pointer"
+      className="w-full text-left group bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-3 sm:p-4 shadow-xs hover:shadow-md transition flex items-center gap-2.5 sm:gap-3 cursor-pointer"
     >
       <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-500 shrink-0">
         <Radio className="h-4 w-4 animate-pulse" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+          <p className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider truncate">
             Next: {nextEvent.currency} {nextEvent.event}
           </p>
         </div>
-        <p className="text-xs font-semibold text-red-600 dark:text-red-400 mt-1 tabular-nums">
+        <p className="text-xs font-semibold text-red-600 dark:text-red-400 mt-0.5 sm:mt-1 tabular-nums">
           Starts in {countdown}
         </p>
       </div>

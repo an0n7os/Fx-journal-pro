@@ -4485,7 +4485,7 @@ export default function App() {
 
         {/* Main Content Area */}
         <main
-          className="flex-1 overflow-y-auto bg-[#FBFBFA] dark:bg-slate-950 px-4 pt-4 pb-32 md:pb-6 md:px-12 md:pt-8 space-y-6 md:space-y-8"
+          className="flex-1 overflow-y-auto bg-[#FBFBFA] dark:bg-slate-950 px-3.5 sm:px-4 md:px-12 pt-3 sm:pt-4 md:pt-8 pb-32 md:pb-6 space-y-4 sm:space-y-6 md:space-y-8"
           onScroll={handleMainScroll}
         >
           <React.Suspense fallback={<TabLoading />}>
@@ -4599,20 +4599,12 @@ export default function App() {
             </div>
 
             {/* Mobile Dashboard Hero Card — replaces the plain title on small screens */}
-            {/* The glows and the lit top edge are drawn by .dx-hero's own
-              pseudo-elements, so the two white/5 discs that used to sit inside
-              are gone along with the extra DOM. */}
             {activeTab === 'dashboard' && (
-              <div className="dx-hero sm:hidden p-5">
+              <div className="dx-hero sm:hidden p-4 sm:p-5">
                 <div className="relative z-10">
-                  {/* Greeting, relocated from the header so the logo could take
-                    that slot. It belongs with the balance anyway. */}
+                  {/* Greeting, relocated from the header so the logo could take that slot */}
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="min-w-0">
-                      {/* The name is the point of a greeting — "Good afternoon"
-                        on its own greets nobody. First name only: full names
-                        and long email-derived ones push the PRO badge off the
-                        row, and `truncate` needs a single line to work on. */}
                       <p className="text-[13px] font-bold text-white leading-tight truncate">
                         {(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })()}
                         , {user?.name?.split(' ')[0] || 'Trader'}
@@ -4622,13 +4614,13 @@ export default function App() {
                       </span>
                     </div>
                     {user?.isPro ? (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/30 text-amber-300 text-[10px] font-extrabold">
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/30 text-amber-300 text-[10px] font-extrabold shrink-0">
                         <Star className="h-2.5 w-2.5 fill-amber-300" /> PRO
                       </span>
                     ) : (
                       <button
                         onClick={() => setShowProModal(true)}
-                        className="dx-upgrade dx-upgrade-on-accent flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold"
+                        className="dx-upgrade dx-upgrade-on-accent flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold shrink-0 cursor-pointer"
                       >
                         <Sparkles className="h-2.5 w-2.5 text-amber-300 fill-amber-300" /> Upgrade
                       </button>
@@ -4638,7 +4630,7 @@ export default function App() {
                   {/* Balance */}
                   <div className="mb-1">
                     <p className="text-[11px] font-medium text-white/65 mb-1">Current Balance</p>
-                    <p className="font-display text-[34px] leading-none font-black text-white tracking-tight tabular-nums">
+                    <p className="font-display text-[28px] xs:text-[32px] sm:text-[34px] leading-none font-black text-white tracking-tight tabular-nums truncate">
                       {activeAccount ? formatValue(activeAccount.currentBalance ?? activeAccount.startingBalance) : '—'}
                     </p>
                   </div>
@@ -4651,10 +4643,7 @@ export default function App() {
                     const netPnL = parseFloat((_curBal - _startBal).toFixed(2));
                     return (
                       <>
-                        {/* Green and red stay reserved for money, so the growth
-                          pill keeps them. It gains a border because on glass a
-                          tinted fill alone has nothing to sit against. */}
-                        <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-bold mb-4 ${growthPct >= 0
+                        <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-bold mb-3 sm:mb-4 ${growthPct >= 0
                             ? 'bg-emerald-400/15 border-emerald-300/30 text-emerald-200'
                             : 'bg-rose-400/15 border-rose-300/30 text-rose-200'
                           }`}>
@@ -4662,26 +4651,24 @@ export default function App() {
                         </div>
 
                         <div className="grid grid-cols-3 gap-2">
-                          <div className="dx-hero-tile px-2 py-2.5 text-center">
-                            <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 mb-1">Net P&amp;L</p>
-                            <p className={`text-sm font-extrabold tabular-nums ${netPnL >= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>
+                          <div className="dx-hero-tile px-1.5 py-2 sm:px-2 sm:py-2.5 text-center min-w-0">
+                            <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 mb-1 truncate">Net P&amp;L</p>
+                            <p className={`text-xs sm:text-sm font-extrabold tabular-nums truncate ${netPnL >= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>
                               {formatValue(netPnL)}
                             </p>
                           </div>
-                          <div className="dx-hero-tile px-2 py-2.5 text-center">
-                            <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 mb-1">Win Rate</p>
-                            <p className="text-sm font-extrabold text-white tabular-nums">{winRate.toFixed(0)}%</p>
+                          <div className="dx-hero-tile px-1.5 py-2 sm:px-2 sm:py-2.5 text-center min-w-0">
+                            <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 mb-1 truncate">Win Rate</p>
+                            <p className="text-xs sm:text-sm font-extrabold text-white tabular-nums truncate">{winRate.toFixed(0)}%</p>
                           </div>
-                          <div className="dx-hero-tile px-2 py-2.5 text-center">
-                            <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 mb-1">Trades</p>
-                            <p className="text-sm font-extrabold text-white tabular-nums">{totalTradesCount}</p>
+                          <div className="dx-hero-tile px-1.5 py-2 sm:px-2 sm:py-2.5 text-center min-w-0">
+                            <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 mb-1 truncate">Trades</p>
+                            <p className="text-xs sm:text-sm font-extrabold text-white tabular-nums truncate">{totalTradesCount}</p>
                           </div>
                         </div>
 
-                        {/* Rank, folded in. Two stacked cards took 59% of a
-                          812px screen and both were captioned with the same
-                          account name; this is the same information in ~70px. */}
-                        <div className="mt-4 pt-4 border-t border-white/12">
+                        {/* Rank, folded in */}
+                        <div className="mt-3.5 sm:mt-4 pt-3.5 sm:pt-4 border-t border-white/12">
                           <TraderRankCard
                             variant="strip"
                             account={activeAccount || null}
@@ -4701,7 +4688,7 @@ export default function App() {
 
             {/* Global Drawdown Risk alert strip if active */}
             {activeAccount && maxDrawdownPercentage > 0 && dismissedDrawdownAccount !== activeAccount.id && (
-              <div className="bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/25 text-amber-950 dark:text-amber-100 rounded-xl p-4 flex items-start gap-3">
+              <div className="bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/25 text-amber-950 dark:text-amber-100 rounded-xl p-3 sm:p-4 flex items-start gap-3">
                 <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <strong className="text-xs font-bold block">Portfolio Drawdown Active</strong>
@@ -4711,7 +4698,7 @@ export default function App() {
                 </div>
                 <button
                   onClick={() => setDismissedDrawdownAccount(activeAccount.id)}
-                  className="text-amber-500 hover:text-amber-700 hover:bg-amber-100 dark:hover:text-amber-200 dark:hover:bg-amber-400/15 rounded-lg p-1.5 transition flex-shrink-0"
+                  className="text-amber-500 hover:text-amber-700 hover:bg-amber-100 dark:hover:text-amber-200 dark:hover:bg-amber-400/15 rounded-lg p-1.5 transition flex-shrink-0 cursor-pointer"
                   aria-label="Dismiss drawdown warning"
                   title="Dismiss"
                 >
@@ -4724,7 +4711,7 @@ export default function App() {
 
             {/* 1. DASHBOARD VIEW */}
             {activeTab === 'dashboard' && (
-              <div className="space-y-8">
+              <div className="space-y-4 sm:space-y-6 md:space-y-8">
                 {/* Dynamic Trader Rank & Drawdown Protection System.
                   Hidden on phones: the hero above carries the same rank as a
                   strip, so showing both repeated it twice. */}
@@ -4743,27 +4730,23 @@ export default function App() {
                 <NextEventCard onOpenCalendar={openEconomicCalendar} />
 
                 {/* Main Visualizations Grid */}
-                <div className="space-y-6">
-
-
-
-
-                  <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="space-y-4 sm:space-y-6">
+                  <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                     <div className="lg:col-span-2">
                       {/* Equity Curve Area Chart - Widescreen Layout */}
-                      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs flex flex-col h-80">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between mb-4 flex-shrink-0">
-                          <div>
-                            <h3 className="font-bold text-slate-900 text-sm">Portfolio Growth Curve</h3>
-                            <p className="text-[10px] text-slate-400">Equity changes tracked trade-by-trade</p>
+                      <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col h-72 sm:h-80">
+                        <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4 flex-shrink-0">
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate">Portfolio Growth Curve</h3>
+                            <p className="text-[10px] text-slate-400 truncate">Equity changes tracked trade-by-trade</p>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <button onClick={() => setActiveTab('analytics')} className="text-xs text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 font-bold whitespace-nowrap">
+                          <div className="flex items-center gap-3 shrink-0">
+                            <button onClick={() => setActiveTab('analytics')} className="text-[11px] sm:text-xs text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 font-bold whitespace-nowrap cursor-pointer">
                               Advanced Analytics →
                             </button>
                           </div>
                         </div>
-                        <div className="flex-1 w-full min-h-0 -mt-2">
+                        <div className="flex-1 w-full min-h-0 -mt-1 sm:-mt-2">
                           {totalTradesCount > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                               <AreaChart data={equityCurveData}>
@@ -4791,22 +4774,19 @@ export default function App() {
 
                     <div className="lg:col-span-1">
                       {/* Quick Risk Auditor status inside Dashboard */}
-                      {/* min-h, not a fixed h-80: with all three guard rules present
-                    the content is ~29px taller than 320px and spilled out past
-                    the card's bottom edge. */}
-                      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs flex flex-col justify-between min-h-80">
-                        <div className="space-y-4">
+                      <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between min-h-0 sm:min-h-80">
+                        <div className="space-y-3 sm:space-y-4">
                           <div className="flex items-center justify-between">
                             <div>
-                              <h3 className="font-bold text-slate-900 text-sm">Portfolio Guard Rules</h3>
+                              <h3 className="font-bold text-slate-900 dark:text-white text-sm">Portfolio Guard Rules</h3>
                               <p className="text-[10px] text-slate-400">Drawdown status and protection systems</p>
                             </div>
                             <button
                               type="button"
                               onClick={() => handleTogglePortfolioGuard(!isPortfolioGuardOn)}
-                              className={`text-[10px] font-bold px-3 py-2 sm:py-1 rounded-full border uppercase tracking-wider cursor-pointer transition hover:opacity-80 ${isPortfolioGuardOn
-                                ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
-                                : 'text-slate-600 bg-slate-100 border-slate-200 hover:bg-slate-200'
+                              className={`text-[10px] font-bold px-2.5 py-1 sm:px-3 sm:py-1 rounded-full border uppercase tracking-wider cursor-pointer transition hover:opacity-80 ${isPortfolioGuardOn
+                                ? 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 hover:bg-emerald-100'
+                                : 'text-slate-600 bg-slate-100 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 hover:bg-slate-200'
                                 }`}
                               title={isPortfolioGuardOn ? 'Click to turn Portfolio Guard OFF' : 'Click to turn Portfolio Guard ON'}
                             >
@@ -4815,15 +4795,15 @@ export default function App() {
                           </div>
 
                           {isPortfolioGuardOn ? (
-                            <div className="space-y-3">
+                            <div className="space-y-2.5 sm:space-y-3">
                               {/* Daily Loss Guard */}
                               {(() => {
                                 const limit = riskSettings?.dailyLossLimit || 500;
                                 const breached = todayLoss >= limit;
                                 return (
-                                  <div className={`p-3 rounded-lg text-xs transition-colors duration-200 ${breached
-                                    ? 'bg-rose-50/50 border border-rose-100'
-                                    : 'bg-emerald-50/50 border border-emerald-100'
+                                  <div className={`p-2.5 sm:p-3 rounded-lg text-xs transition-colors duration-200 ${breached
+                                    ? 'bg-rose-50/70 border border-rose-200/80 dark:bg-rose-500/10 dark:border-rose-500/25'
+                                    : 'bg-emerald-50/70 border border-emerald-200/80 dark:bg-emerald-500/10 dark:border-emerald-500/25'
                                     }`}>
                                     <div className={`font-bold flex items-center justify-between ${breached ? 'text-rose-900 dark:text-rose-200' : 'text-emerald-900 dark:text-emerald-200'
                                       }`}>
@@ -4835,7 +4815,7 @@ export default function App() {
                                         {breached ? 'Breached' : 'Active'}
                                       </span>
                                     </div>
-                                    <p className={`mt-1 ${breached ? 'text-rose-700/80 dark:text-rose-300/80' : 'text-emerald-700/80 dark:text-emerald-300/80'}`}>
+                                    <p className={`mt-0.5 sm:mt-1 ${breached ? 'text-rose-700/90 dark:text-rose-300/80' : 'text-emerald-700/90 dark:text-emerald-300/80'}`}>
                                       {breached
                                         ? `Today's cumulative loss is ${formatValue(todayLoss)}, exceeding your limit of ${formatValue(limit)}!`
                                         : `Today's loss is ${formatValue(todayLoss)} (Limit: ${formatValue(limit)}). Safe.`
@@ -4850,9 +4830,9 @@ export default function App() {
                                 const limit = riskSettings?.maxTradesPerDay || 5;
                                 const breached = todayTradesCount >= limit;
                                 return (
-                                  <div className={`p-3 rounded-lg text-xs transition-colors duration-200 ${breached
-                                    ? 'bg-rose-50/50 border border-rose-100'
-                                    : 'bg-emerald-50/50 border border-emerald-100'
+                                  <div className={`p-2.5 sm:p-3 rounded-lg text-xs transition-colors duration-200 ${breached
+                                    ? 'bg-rose-50/70 border border-rose-200/80 dark:bg-rose-500/10 dark:border-rose-500/25'
+                                    : 'bg-emerald-50/70 border border-emerald-200/80 dark:bg-emerald-500/10 dark:border-emerald-500/25'
                                     }`}>
                                     <div className={`font-bold flex items-center justify-between ${breached ? 'text-rose-900 dark:text-rose-200' : 'text-emerald-900 dark:text-emerald-200'
                                       }`}>
@@ -4864,7 +4844,7 @@ export default function App() {
                                         {breached ? 'Breached' : 'Active'}
                                       </span>
                                     </div>
-                                    <p className={`mt-1 ${breached ? 'text-rose-700/80 dark:text-rose-300/80' : 'text-emerald-700/80 dark:text-emerald-300/80'}`}>
+                                    <p className={`mt-0.5 sm:mt-1 ${breached ? 'text-rose-700/90 dark:text-rose-300/80' : 'text-emerald-700/90 dark:text-emerald-300/80'}`}>
                                       {breached
                                         ? `Executed ${todayTradesCount} trades today, breaching your limit of ${limit}!`
                                         : `Executed ${todayTradesCount} of ${limit} maximum daily positions. Safe.`
@@ -4875,21 +4855,21 @@ export default function App() {
                               })()}
 
                               {riskSettings && (
-                                <div className="p-3 bg-emerald-50/60 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-400/20 rounded-lg text-xs">
+                                <div className="p-2.5 sm:p-3 bg-emerald-50/60 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-400/20 rounded-lg text-xs">
                                   <div className="font-bold text-emerald-900 dark:text-emerald-200 flex items-center justify-between gap-2">
                                     <span>Risk-Per-Trade Cap</span>
                                     <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border whitespace-nowrap shrink-0 text-emerald-600 bg-white border-emerald-200 dark:bg-emerald-400/15 dark:text-emerald-300 dark:border-emerald-400/30">
                                       Active
                                     </span>
                                   </div>
-                                  <p className="text-emerald-700/80 dark:text-emerald-300/80 mt-1">Maximum limit set to {riskSettings.riskPerTradeLimit}% per position.</p>
+                                  <p className="text-emerald-700/80 dark:text-emerald-300/80 mt-0.5 sm:mt-1">Maximum limit set to {riskSettings.riskPerTradeLimit}% per position.</p>
                                 </div>
                               )}
                             </div>
                           ) : (
-                            <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-xl text-center space-y-2 my-2">
-                              <div className="inline-flex p-2.5 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-400 mb-1">
-                                <ShieldOff className="h-5 w-5 text-slate-400" />
+                            <div className="p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-xl text-center space-y-2 my-1 sm:my-2">
+                              <div className="inline-flex p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-400 mb-0.5">
+                                <ShieldOff className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
                               </div>
                               <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">Portfolio Guard Rules Disabled</h4>
                               <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-xs mx-auto">
@@ -4899,14 +4879,14 @@ export default function App() {
                           )}
                         </div>
 
-                        <button onClick={() => { setActiveTab('settings'); setSettingsTab('risk'); }} className="w-full text-center py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg transition mt-4 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] dark:border-white/10 dark:text-slate-200">
+                        <button onClick={() => { setActiveTab('settings'); setSettingsTab('risk'); }} className="w-full text-center py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg transition mt-3 sm:mt-4 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] dark:border-white/10 dark:text-slate-200 cursor-pointer">
                           Configure Guard Limits
                         </button>
                       </div>
                     </div>
                   </section>
 
-                  <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     {/* Risk-Reward Abstract Professional Balance Beam Card */}
                     {(() => {
                       const rrVal = avgRR || 0;
@@ -4925,53 +4905,52 @@ export default function App() {
                       const yR = pivotY + beamHalfLength * Math.sin(angleRad);
 
                       return (
-                        <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs flex flex-col justify-between h-80">
+                        <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between h-72 sm:h-80">
                           <div className="flex justify-between items-start">
                             <div>
-                              <h3 className="font-bold text-slate-900 text-sm">Risk : Reward</h3>
+                              <h3 className="font-bold text-slate-900 dark:text-white text-sm">Risk : Reward</h3>
                               <p className="text-[10px] text-slate-400">Average risk-to-reward ratio of executions</p>
                             </div>
                             <span className={`text-[9px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${totalTradesCount === 0 ? 'bg-slate-100 text-slate-500 border border-slate-200 dark:bg-white/[0.06] dark:text-slate-400 dark:border-white/10' :
-                              rrVal < 1.0 ? 'bg-rose-50 text-rose-600 border border-rose-100' :
-                                rrVal < 1.5 ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                  rrVal < 2.5 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                    'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                              rrVal < 1.0 ? 'bg-rose-50 text-rose-600 border border-rose-100 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30' :
+                                rrVal < 1.5 ? 'bg-amber-50 text-amber-600 border border-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30' :
+                                  rrVal < 2.5 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30' :
+                                    'bg-indigo-50 text-indigo-600 border border-indigo-100 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/30'
                               }`}>
                               {totalTradesCount === 0 ? 'No data' : rrVal < 1.0 ? 'Low' : rrVal < 1.5 ? 'Moderate' : rrVal < 2.5 ? 'Good' : 'Excellent'}
                             </span>
                           </div>
 
                           {/* Prominent Center/Top Ratio */}
-                          <div className="text-center mt-6">
-                            <span className="text-4xl font-black text-slate-800 dark:text-white font-mono tracking-tight tabular-nums">
+                          <div className="text-center mt-3 sm:mt-6">
+                            <span className="text-3xl sm:text-4xl font-black text-slate-800 dark:text-white font-mono tracking-tight tabular-nums">
                               {totalTradesCount === 0 ? '1 : —' : `1 : ${rrVal.toFixed(2)}`}
                             </span>
                           </div>
 
                           {/* SVG Professional Abstract Balance Beam Illustration */}
-                          <div className="relative w-full flex justify-center my-6 flex-1 items-center">
-                            <svg width="220" height="70" viewBox="0 0 220 70" className="overflow-visible">
-
+                          <div className="relative w-full flex justify-center my-3 sm:my-6 flex-1 items-center">
+                            <svg width="220" height="70" viewBox="0 0 220 70" className="overflow-visible max-w-full">
                               {/* Reference Baseline (1:1 perfect balance indication) */}
-                              <line x1="25" y1={pivotY} x2="195" y2={pivotY} className="stroke-slate-200" strokeWidth="1" strokeDasharray="3 3" />
+                              <line x1="25" y1={pivotY} x2="195" y2={pivotY} className="stroke-slate-200 dark:stroke-slate-700" strokeWidth="1" strokeDasharray="3 3" />
 
                               {/* Minimalist Center Pivot Base */}
-                              <path d={`M ${pivotX} ${pivotY} L ${pivotX + 6} ${pivotY + 25} L ${pivotX - 6} ${pivotY + 25} Z`} className="fill-slate-50 stroke-slate-300" strokeWidth="1" strokeLinejoin="round" />
-                              <circle cx={pivotX} cy={pivotY} r="2.5" className="fill-slate-400" />
+                              <path d={`M ${pivotX} ${pivotY} L ${pivotX + 6} ${pivotY + 25} L ${pivotX - 6} ${pivotY + 25} Z`} className="fill-slate-50 dark:fill-slate-800 stroke-slate-300 dark:stroke-slate-600" strokeWidth="1" strokeLinejoin="round" />
+                              <circle cx={pivotX} cy={pivotY} r="2.5" className="fill-slate-400 dark:fill-slate-500" />
 
                               {/* Tilted Precision Beam */}
-                              <line x1={xL} y1={yL} x2={xR} y2={yR} className="stroke-slate-400" strokeWidth="1.5" strokeLinecap="round" />
+                              <line x1={xL} y1={yL} x2={xR} y2={yR} className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" strokeLinecap="round" />
 
                               {/* Left Side: Risk 1R (Abstract Node) */}
-                              <circle cx={xL} cy={yL} r="5" className="fill-white stroke-rose-500" strokeWidth="2" />
+                              <circle cx={xL} cy={yL} r="5" className="fill-white dark:fill-slate-900 stroke-rose-500" strokeWidth="2" />
 
                               {/* Right Side: Reward (Abstract Node) */}
-                              <circle cx={xR} cy={yR} r="5" className="fill-white stroke-emerald-500" strokeWidth="2" />
+                              <circle cx={xR} cy={yR} r="5" className="fill-white dark:fill-slate-900 stroke-emerald-500" strokeWidth="2" />
                             </svg>
                           </div>
 
                           {/* Small Labels Risk 1R vs Reward 2.5R */}
-                          <div className="border-t border-slate-50 pt-3 flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          <div className="border-t border-slate-100 dark:border-slate-800/80 pt-2.5 sm:pt-3 flex justify-between items-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                             <span className="flex items-center gap-1.5">
                               <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
                               Risk 1R
@@ -4987,8 +4966,6 @@ export default function App() {
                     {/* Win Rate Arc Chart Card */}
                     {(() => {
                       const wrVal = winRate || 0;
-                      // No trades yet means no verdict: a 0% gauge labelled
-                      // "Needs Work" judges a user who has not done anything.
                       const hasTrades = totalTradesCount > 0;
                       const wrPercentage = Math.min(Math.max(wrVal / 100, 0), 1);
                       const radius = 40;
@@ -4996,20 +4973,20 @@ export default function App() {
                       const strokeDashoffset = circumference - (wrPercentage * circumference);
 
                       return (
-                        <div className="dx-panel p-6 shadow-xs flex flex-col justify-between h-80 relative overflow-hidden">
+                        <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between h-72 sm:h-80 relative overflow-hidden">
                           <div className="flex items-center gap-1.5 relative z-10">
-                            <h3 className="font-bold text-slate-900 text-sm tracking-wide">Win / Loss Rate</h3>
+                            <h3 className="font-bold text-slate-900 dark:text-white text-sm tracking-wide">Win / Loss Rate</h3>
                             <button
                               onClick={() => alert("Win Rate is calculated as:\n(Total Winning Trades ÷ Total Executed Trades) × 100")}
                               title="How is Win Rate calculated?"
-                              className="hover:scale-110 transition-transform -m-2 p-2 shrink-0"
+                              className="hover:scale-110 transition-transform -m-2 p-2 shrink-0 cursor-pointer"
                             >
-                              <HelpCircle className="w-4 h-4 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer" />
+                              <HelpCircle className="w-4 h-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer" />
                             </button>
                           </div>
 
-                          <div className="relative w-full flex-1 flex flex-col items-center justify-center mt-8">
-                            <div className="relative w-64 h-36 flex items-end justify-center overflow-visible">
+                          <div className="relative w-full flex-1 flex flex-col items-center justify-center mt-3 sm:mt-6">
+                            <div className="relative w-56 sm:w-64 h-32 sm:h-36 flex items-end justify-center overflow-visible">
                               <svg className="w-full h-full overflow-visible" viewBox="0 0 100 55">
                                 {/* Background Track */}
                                 <path
@@ -5041,11 +5018,11 @@ export default function App() {
                                 />
                               </svg>
 
-                              <div className="absolute flex flex-col items-center justify-end pb-3 gap-2 z-10">
-                                <span className="gauge-chip text-xs font-bold px-4 py-1.5 rounded-full">
+                              <div className="absolute flex flex-col items-center justify-end pb-2 sm:pb-3 gap-1.5 sm:gap-2 z-10">
+                                <span className="gauge-chip text-xs font-bold px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-full">
                                   {!hasTrades ? 'No data yet' : winRate < 40 ? 'Needs Work' : winRate < 50 ? 'Average' : winRate < 65 ? 'Good!' : 'Excellent!'}
                                 </span>
-                                <span className="gauge-chip text-xs font-medium px-5 py-2 rounded-full flex items-center gap-1.5">
+                                <span className="gauge-chip text-xs font-medium px-4 py-1.5 sm:px-5 sm:py-2 rounded-full flex items-center gap-1.5">
                                   <span className="gauge-chip-value font-bold text-sm tracking-tight">{hasTrades ? wrVal.toFixed(0) + '%' : '—'}</span> Win Rate
                                 </span>
                               </div>
@@ -5056,7 +5033,7 @@ export default function App() {
                     })()}
 
                     {/* Winning vs Losing Trades Donut Chart */}
-                    <div className="dx-panel p-6 shadow-xs flex flex-col justify-between h-80 relative overflow-hidden">
+                    <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between h-72 sm:h-80 relative overflow-hidden">
                       <div className="flex items-center justify-between relative z-10">
                         <div>
                           <h3 className="font-bold text-slate-900 dark:text-white text-sm">Win / Loss Ratio</h3>
@@ -5064,7 +5041,7 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="relative w-full flex-1 flex items-center justify-center mt-2">
+                      <div className="relative w-full flex-1 flex items-center justify-center mt-1 sm:mt-2">
                         {totalTradesCount > 0 ? (
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
@@ -5075,8 +5052,8 @@ export default function App() {
                                 ]}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={65}
-                                outerRadius={85}
+                                innerRadius={58}
+                                outerRadius={78}
                                 paddingAngle={5}
                                 dataKey="value"
                                 stroke="none"
@@ -5102,14 +5079,14 @@ export default function App() {
                             <span className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter">
                               {totalTradesCount}
                             </span>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 sm:mt-1">
                               Trades
                             </span>
                           </div>
                         )}
                       </div>
 
-                      <div className="flex justify-between items-center mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+                      <div className="flex justify-between items-center mt-3 sm:mt-4 border-t border-slate-100 dark:border-slate-800 pt-3 sm:pt-4">
                         <div className="flex items-center gap-2">
                           <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
                           <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{wins.length} Wins</span>
@@ -5126,38 +5103,40 @@ export default function App() {
                 </div>
 
                 {/* Recent Executions Log Row */}
-                <section className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs overflow-hidden">
-                  <div className="flex items-center justify-between mb-4">
+                <section className="dx-panel p-4 sm:p-6 shadow-xs overflow-hidden">
+                  <div className="flex items-center justify-between mb-3 sm:mb-4">
                     <div>
-                      <h3 className="font-bold text-slate-900 text-sm">Recent Trading Positions</h3>
+                      <h3 className="font-bold text-slate-900 dark:text-white text-sm">Recent Trading Positions</h3>
                       <p className="text-[10px] text-slate-400 font-medium">Your 4 most recently logged positions</p>
                     </div>
                     <button
                       onClick={() => setActiveTab('journal')}
-                      className="text-xs text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 font-bold"
+                      className="text-[11px] sm:text-xs text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 font-bold whitespace-nowrap cursor-pointer"
                     >
-                      View Full Journal →
+                      View Journal →
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                     {trades.slice(0, 4).map((t) => (
-                      <div key={t.id} className="border border-slate-100 bg-white hover:bg-slate-50/50 rounded-xl p-4 text-xs transition duration-200 flex flex-col justify-between space-y-3">
+                      <div key={t.id} className="border border-slate-100 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-slate-100/60 dark:hover:bg-slate-800/70 rounded-xl p-3.5 sm:p-4 text-xs transition duration-200 flex flex-col justify-between space-y-2.5 sm:space-y-3">
                         <div className="flex justify-between items-start">
-                          <div>
-                            <strong className="text-sm font-bold text-slate-900 block">{t.symbol}</strong>
-                            <span className="text-[10px] text-slate-400 font-semibold">{t.strategy || 'No Strategy'}</span>
+                          <div className="min-w-0 pr-2">
+                            <strong className="text-sm font-bold text-slate-900 dark:text-white block truncate">{t.symbol}</strong>
+                            <span className="text-[10px] text-slate-400 font-semibold truncate block">{t.strategy || 'No Strategy'}</span>
                           </div>
-                          <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${t.type === 'Buy' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                          <span className={`font-bold px-2 py-0.5 rounded text-[10px] shrink-0 ${t.type === 'Buy'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-500/20'
+                              : 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300 border border-rose-200/50 dark:border-rose-500/20'
                             }`}>
                             {t.type}
                           </span>
                         </div>
 
-                        <div className="flex justify-between items-baseline pt-2 border-t border-slate-100/60">
+                        <div className="flex justify-between items-baseline pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
                           <div>
                             <span className="text-[10px] text-slate-400 block">P/L Impact</span>
-                            <span className={`font-extrabold text-sm ${t.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            <span className={`font-extrabold text-sm ${t.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                               {t.profit >= 0 ? '+' : ''}{formatValue(t.profit)}
                             </span>
                           </div>
@@ -5167,7 +5146,7 @@ export default function App() {
                     ))}
 
                     {trades.length === 0 && (
-                      <div className="col-span-4 text-center py-10 text-xs text-slate-400">
+                      <div className="col-span-1 sm:col-span-2 lg:col-span-4 text-center py-8 sm:py-10 text-xs text-slate-400">
                         No trades in this portfolio yet. Add your first one to start tracking.
                       </div>
                     )}
@@ -5674,21 +5653,17 @@ export default function App() {
 
             {/* 5. PERFORMANCE ANALYTICS VIEW */}
             {activeTab === 'analytics' && (
-              <div className="space-y-8">
-
-
-
-                <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
+              <div className="space-y-4 sm:space-y-6 md:space-y-8">
+                <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                   {/* Equity Curve Area Chart */}
-                  <div className="lg:col-span-2 bg-white border border-slate-100 rounded-xl p-6 shadow-xs">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between mb-4">
+                  <div className="lg:col-span-2 dx-panel p-4 sm:p-6 shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between mb-3 sm:mb-4">
                       <div>
-                        <h3 className="font-bold text-slate-900 text-sm">Portfolio Growth Curve</h3>
+                        <h3 className="font-bold text-slate-900 dark:text-white text-sm">Portfolio Growth Curve</h3>
                         <p className="text-[10px] text-slate-400">Cumulative account equity changes traced trade-by-trade</p>
                       </div>
                     </div>
-                    <div className="h-64">
+                    <div className="h-60 sm:h-64">
                       {totalTradesCount > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <AreaChart data={equityCurveData}>
@@ -5714,38 +5689,38 @@ export default function App() {
                   </div>
 
                   {/* Side cards for core mathematical ratios */}
-                  <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs space-y-4 flex flex-col justify-between">
+                  <div className="dx-panel p-4 sm:p-6 shadow-xs space-y-4 flex flex-col justify-between">
                     <div>
-                      <h3 className="font-bold text-slate-900 text-sm mb-4">Trading Mechanics</h3>
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center border-b border-slate-50 pb-2 text-xs">
+                      <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-3 sm:mb-4">Trading Mechanics</h3>
+                      <div className="space-y-3 sm:space-y-4">
+                        <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2 text-xs">
                           <span className="text-slate-400 font-medium">Profit Factor</span>
                           <span className={`font-extrabold ${totalTradesCount === 0 ? 'text-slate-400' : profitFactor >= 1.5 ? 'text-emerald-600' : 'text-slate-900 dark:text-white'}`}>{totalTradesCount === 0 ? '—' : profitFactor}</span>
                         </div>
-                        <div className="flex justify-between items-center border-b border-slate-50 pb-2 text-xs">
+                        <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2 text-xs">
                           <span className="text-slate-400 font-medium">Risk-to-Reward Ratio</span>
                           <span className="font-extrabold text-slate-900 dark:text-white">{totalTradesCount === 0 ? '1 : —' : `1 : ${avgRR}`}</span>
                         </div>
-                        <div className="flex justify-between items-center border-b border-slate-50 pb-2 text-xs">
+                        <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2 text-xs">
                           <span className="text-slate-400 font-medium">Wins / Losses</span>
-                          <span className="font-bold text-slate-800">{wins.length} Wins / {losses.length} Losses</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{wins.length} Wins / {losses.length} Losses</span>
                         </div>
-                        <div className="flex justify-between items-center border-b border-slate-50 pb-2 text-xs">
+                        <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2 text-xs">
                           <span className="text-slate-400 font-medium">Active Drawdown</span>
                           <span className={`font-extrabold ${totalTradesCount === 0 ? 'text-slate-400' : maxDrawdownPercentage > 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>{totalTradesCount === 0 ? '—' : `${maxDrawdownPercentage}%`}</span>
                         </div>
-                        <div className="flex justify-between items-center border-b border-slate-50 pb-2 text-xs">
+                        <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2 text-xs">
                           <span className="text-slate-400 font-medium">Winning Streak</span>
                           <span className="font-extrabold text-emerald-600">{maxWinStreak}{maxWinStreak > 0 && currentWinStreak > 0 ? ` (${currentWinStreak} active)` : ''}</span>
                         </div>
-                        <div className="flex justify-between items-center border-b border-slate-50 pb-2 text-xs">
+                        <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2 text-xs">
                           <span className="text-slate-400 font-medium">Losing Streak</span>
                           <span className="font-extrabold text-rose-600">{maxLossStreak}{maxLossStreak > 0 && currentLossStreak > 0 ? ` (${currentLossStreak} active)` : ''}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="bg-slate-50 rounded-lg p-3 text-[11px] text-slate-500 leading-relaxed border border-slate-100">
+                    <div className="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed border border-slate-100 dark:border-slate-800">
                       <span className="font-bold text-slate-800 dark:text-slate-200 block mb-0.5">Analyst Tip</span>
                       {totalTradesCount === 0
                         ? 'Log your first trades and this panel will show your profit factor, streaks and drawdown. Ratios above 1.5 indicate a viable system.'
@@ -5754,12 +5729,11 @@ export default function App() {
                   </div>
                 </section>
 
-                <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {/* Risk-Reward Abstract Professional Balance Beam Card */}
                   {(() => {
                     const rrVal = avgRR || 0;
-                    // Balanced at 1:1, right side (reward) tilts down if > 1.
-                    const maxTilt = 10; // Keep tilt subtle and sophisticated
+                    const maxTilt = 10;
                     const tiltAngle = Math.min(Math.max((rrVal - 1) * 4, -maxTilt), maxTilt);
 
                     const angleRad = (tiltAngle * Math.PI) / 180;
@@ -5773,53 +5747,43 @@ export default function App() {
                     const yR = pivotY + beamHalfLength * Math.sin(angleRad);
 
                     return (
-                      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs flex flex-col justify-between h-80">
+                      <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between h-72 sm:h-80">
                         <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="font-bold text-slate-900 text-sm">Risk : Reward</h3>
+                            <h3 className="font-bold text-slate-900 dark:text-white text-sm">Risk : Reward</h3>
                             <p className="text-[10px] text-slate-400">Average risk-to-reward ratio of executions</p>
                           </div>
                           <span className={`text-[9px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${totalTradesCount === 0 ? 'bg-slate-100 text-slate-500 border border-slate-200 dark:bg-white/[0.06] dark:text-slate-400 dark:border-white/10' :
-                            rrVal < 1.0 ? 'bg-rose-50 text-rose-600 border border-rose-100' :
-                              rrVal < 1.5 ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                rrVal < 2.5 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                  'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                            rrVal < 1.0 ? 'bg-rose-50 text-rose-600 border border-rose-100 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30' :
+                              rrVal < 1.5 ? 'bg-amber-50 text-amber-600 border border-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30' :
+                                rrVal < 2.5 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30' :
+                                  'bg-indigo-50 text-indigo-600 border border-indigo-100 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/30'
                             }`}>
                             {totalTradesCount === 0 ? 'No data' : rrVal < 1.0 ? 'Low' : rrVal < 1.5 ? 'Moderate' : rrVal < 2.5 ? 'Good' : 'Excellent'}
                           </span>
                         </div>
 
                         {/* Prominent Center/Top Ratio */}
-                        <div className="text-center mt-6">
-                          <span className="text-4xl font-black text-slate-800 dark:text-white font-mono tracking-tight tabular-nums">
+                        <div className="text-center mt-3 sm:mt-6">
+                          <span className="text-3xl sm:text-4xl font-black text-slate-800 dark:text-white font-mono tracking-tight tabular-nums">
                             {totalTradesCount === 0 ? '1 : —' : `1 : ${rrVal.toFixed(2)}`}
                           </span>
                         </div>
 
                         {/* SVG Professional Abstract Balance Beam Illustration */}
-                        <div className="relative w-full flex justify-center my-6 flex-1 items-center">
-                          <svg width="220" height="70" viewBox="0 0 220 70" className="overflow-visible">
-
-                            {/* Reference Baseline (1:1 perfect balance indication) */}
-                            <line x1="25" y1={pivotY} x2="195" y2={pivotY} className="stroke-slate-200" strokeWidth="1" strokeDasharray="3 3" />
-
-                            {/* Minimalist Center Pivot Base */}
-                            <path d={`M ${pivotX} ${pivotY} L ${pivotX + 6} ${pivotY + 25} L ${pivotX - 6} ${pivotY + 25} Z`} className="fill-slate-50 stroke-slate-300" strokeWidth="1" strokeLinejoin="round" />
-                            <circle cx={pivotX} cy={pivotY} r="2.5" className="fill-slate-400" />
-
-                            {/* Tilted Precision Beam */}
-                            <line x1={xL} y1={yL} x2={xR} y2={yR} className="stroke-slate-400" strokeWidth="1.5" strokeLinecap="round" />
-
-                            {/* Left Side: Risk 1R (Abstract Node) */}
-                            <circle cx={xL} cy={yL} r="5" className="fill-white stroke-rose-500" strokeWidth="2" />
-
-                            {/* Right Side: Reward (Abstract Node) */}
-                            <circle cx={xR} cy={yR} r="5" className="fill-white stroke-emerald-500" strokeWidth="2" />
+                        <div className="relative w-full flex justify-center my-3 sm:my-6 flex-1 items-center">
+                          <svg width="220" height="70" viewBox="0 0 220 70" className="overflow-visible max-w-full">
+                            <line x1="25" y1={pivotY} x2="195" y2={pivotY} className="stroke-slate-200 dark:stroke-slate-700" strokeWidth="1" strokeDasharray="3 3" />
+                            <path d={`M ${pivotX} ${pivotY} L ${pivotX + 6} ${pivotY + 25} L ${pivotX - 6} ${pivotY + 25} Z`} className="fill-slate-50 dark:fill-slate-800 stroke-slate-300 dark:stroke-slate-600" strokeWidth="1" strokeLinejoin="round" />
+                            <circle cx={pivotX} cy={pivotY} r="2.5" className="fill-slate-400 dark:fill-slate-500" />
+                            <line x1={xL} y1={yL} x2={xR} y2={yR} className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" strokeLinecap="round" />
+                            <circle cx={xL} cy={yL} r="5" className="fill-white dark:fill-slate-900 stroke-rose-500" strokeWidth="2" />
+                            <circle cx={xR} cy={yR} r="5" className="fill-white dark:fill-slate-900 stroke-emerald-500" strokeWidth="2" />
                           </svg>
                         </div>
 
                         {/* Small Labels Risk 1R vs Reward 2.5R */}
-                        <div className="border-t border-slate-50 pt-3 flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        <div className="border-t border-slate-100 dark:border-slate-800/80 pt-2.5 sm:pt-3 flex justify-between items-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                           <span className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
                             Risk 1R
@@ -5835,31 +5799,28 @@ export default function App() {
                   {/* Win Rate Arc Chart Card */}
                   {(() => {
                     const wrVal = winRate || 0;
-                    // No trades yet means no verdict: a 0% gauge labelled
-                    // "Needs Work" judges a user who has not done anything.
                     const hasTrades = totalTradesCount > 0;
                     const wrPercentage = Math.min(Math.max(wrVal / 100, 0), 1);
                     const radius = 40;
-                    const circumference = Math.PI * radius; // ~125.66
+                    const circumference = Math.PI * radius;
                     const strokeDashoffset = circumference - (wrPercentage * circumference);
 
                     return (
-                      <div className="dx-panel p-6 shadow-xs flex flex-col justify-between h-80 relative overflow-hidden">
+                      <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between h-72 sm:h-80 relative overflow-hidden">
                         <div className="flex items-center gap-1.5 relative z-10">
-                          <h3 className="font-bold text-slate-900 text-sm tracking-wide">Win / Loss Rate</h3>
+                          <h3 className="font-bold text-slate-900 dark:text-white text-sm tracking-wide">Win / Loss Rate</h3>
                           <button
                             onClick={() => alert("Win Rate is calculated as:\n(Total Winning Trades ÷ Total Executed Trades) × 100")}
                             title="How is Win Rate calculated?"
-                            className="hover:scale-110 transition-transform -m-2 p-2 shrink-0"
+                            className="hover:scale-110 transition-transform -m-2 p-2 shrink-0 cursor-pointer"
                           >
-                            <HelpCircle className="w-4 h-4 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer" />
+                            <HelpCircle className="w-4 h-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer" />
                           </button>
                         </div>
 
-                        <div className="relative w-full flex-1 flex flex-col items-center justify-center mt-8">
-                          <div className="relative w-64 h-36 flex items-end justify-center overflow-visible">
+                        <div className="relative w-full flex-1 flex flex-col items-center justify-center mt-3 sm:mt-6">
+                          <div className="relative w-56 sm:w-64 h-32 sm:h-36 flex items-end justify-center overflow-visible">
                             <svg className="w-full h-full overflow-visible" viewBox="0 0 100 55">
-                              {/* Background Track */}
                               <path
                                 d="M 10 50 A 40 40 0 0 1 90 50"
                                 fill="none"
@@ -5867,7 +5828,6 @@ export default function App() {
                                 strokeWidth="8"
                                 strokeLinecap="round"
                               />
-                              {/* Active Progress */}
                               <path
                                 d="M 10 50 A 40 40 0 0 1 90 50"
                                 fill="none"
@@ -5878,7 +5838,6 @@ export default function App() {
                                 strokeDashoffset={strokeDashoffset}
                                 className="transition-all duration-1000 ease-out"
                               />
-                              {/* Dots overlay */}
                               <path
                                 d="M 10 50 A 40 40 0 0 1 90 50"
                                 fill="none"
@@ -5889,11 +5848,11 @@ export default function App() {
                               />
                             </svg>
 
-                            <div className="absolute flex flex-col items-center justify-end pb-3 gap-2 z-10">
-                              <span className="gauge-chip text-xs font-bold px-4 py-1.5 rounded-full">
+                            <div className="absolute flex flex-col items-center justify-end pb-2 sm:pb-3 gap-1.5 sm:gap-2 z-10">
+                              <span className="gauge-chip text-xs font-bold px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-full">
                                 {!hasTrades ? 'No data yet' : winRate < 40 ? 'Needs Work' : winRate < 50 ? 'Average' : winRate < 65 ? 'Good!' : 'Excellent!'}
                               </span>
-                              <span className="gauge-chip text-xs font-medium px-5 py-2 rounded-full flex items-center gap-1.5">
+                              <span className="gauge-chip text-xs font-medium px-4 py-1.5 sm:px-5 sm:py-2 rounded-full flex items-center gap-1.5">
                                 <span className="gauge-chip-value font-bold text-sm tracking-tight">{hasTrades ? wrVal.toFixed(0) + '%' : '—'}</span> Win Rate
                               </span>
                             </div>
@@ -5904,7 +5863,7 @@ export default function App() {
                   })()}
 
                   {/* Winning vs Losing Trades Donut Chart */}
-                  <div className="dx-panel p-6 shadow-xs flex flex-col justify-between h-80 relative overflow-hidden">
+                  <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between h-72 sm:h-80 relative overflow-hidden">
                     <div className="flex items-center justify-between relative z-10">
                       <div>
                         <h3 className="font-bold text-slate-900 dark:text-white text-sm">Win / Loss Ratio</h3>
@@ -5912,7 +5871,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="relative w-full flex-1 flex items-center justify-center mt-2">
+                    <div className="relative w-full flex-1 flex items-center justify-center mt-1 sm:mt-2">
                       {totalTradesCount > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
@@ -5923,8 +5882,8 @@ export default function App() {
                               ]}
                               cx="50%"
                               cy="50%"
-                              innerRadius={65}
-                              outerRadius={85}
+                              innerRadius={58}
+                              outerRadius={78}
                               paddingAngle={5}
                               dataKey="value"
                               stroke="none"
@@ -5950,14 +5909,14 @@ export default function App() {
                           <span className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter">
                             {totalTradesCount}
                           </span>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 sm:mt-1">
                             Trades
                           </span>
                         </div>
                       )}
                     </div>
 
-                    <div className="flex justify-between items-center mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+                    <div className="flex justify-between items-center mt-3 sm:mt-4 border-t border-slate-100 dark:border-slate-800 pt-3 sm:pt-4">
                       <div className="flex items-center gap-2">
                         <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
                         <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{wins.length} Wins</span>
@@ -5971,13 +5930,12 @@ export default function App() {
 
                 </section>
 
-                <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
+                <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                   {/* Monthly P&L Bar Chart */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-6 shadow-xs">
+                  <div className="dx-panel p-4 sm:p-6 shadow-xs">
                     <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-1">Monthly P&L Distribution</h3>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-4 font-semibold">Net profit or loss grouped chronologically by month</p>
-                    <div className="h-64">
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-3 sm:mb-4 font-semibold">Net profit or loss grouped chronologically by month</p>
+                    <div className="h-60 sm:h-64">
                       {monthlyPnlChartData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={monthlyPnlChartData}>
@@ -6001,9 +5959,9 @@ export default function App() {
                   </div>
 
                   {/* Profit by Instrument */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-6 shadow-xs">
-                    <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-4">Cumulative Profit by Instrument</h3>
-                    <div className="h-64">
+                  <div className="dx-panel p-4 sm:p-6 shadow-xs">
+                    <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-3 sm:mb-4">Cumulative Profit by Instrument</h3>
+                    <div className="h-60 sm:h-64">
                       {symbolChartData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={symbolChartData} layout="vertical">
@@ -6027,46 +5985,45 @@ export default function App() {
                   </div>
                 </section>
 
-                <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
+                <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {/* Best Trade Card */}
-                  <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs flex flex-col justify-between">
+                  <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between">
                     <div>
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center justify-between mb-3 sm:mb-4">
                         <div>
-                          <h4 className="font-bold text-slate-900 text-sm">Best Trade</h4>
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">Best Trade</h4>
                           <p className="text-[10px] text-slate-400">Single highest profit execution</p>
                         </div>
-                        <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                        <div className="p-2 bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded-lg">
                           <TrendingUp className="h-5 w-5" />
                         </div>
                       </div>
                       {bestTrade ? (
                         <div className="space-y-3">
                           <div className="flex items-baseline justify-between">
-                            <span className="text-xl font-black text-emerald-600">
+                            <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">
                               +{formatValue(bestTrade.profit)}
                             </span>
-                            <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-50 text-slate-600 rounded">
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded">
                               {bestTrade.symbol}
                             </span>
                           </div>
-                          <div className="grid grid-cols-2 gap-x-2 gap-y-3 text-xs pt-2 border-t border-slate-50">
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-3 text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
                             <div>
                               <span className="text-slate-400 font-medium block">Type / Lots</span>
-                              <span className="font-bold text-slate-800">{bestTrade.type} / {bestTrade.lotSize} Lots</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{bestTrade.type} / {bestTrade.lotSize} Lots</span>
                             </div>
                             <div>
                               <span className="text-slate-400 font-medium block">Date</span>
-                              <span className="font-bold text-slate-800">{new Date(bestTrade.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(bestTrade.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                             </div>
                             <div>
                               <span className="text-slate-400 font-medium block">Entry Price</span>
-                              <span className="font-bold text-slate-800">{bestTrade.entryPrice}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{bestTrade.entryPrice}</span>
                             </div>
                             <div>
                               <span className="text-slate-400 font-medium block">Exit Price</span>
-                              <span className="font-bold text-slate-800">{bestTrade.exitPrice}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{bestTrade.exitPrice}</span>
                             </div>
                           </div>
                         </div>
@@ -6079,43 +6036,43 @@ export default function App() {
                   </div>
 
                   {/* Worst Trade Card */}
-                  <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs flex flex-col justify-between">
+                  <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between">
                     <div>
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center justify-between mb-3 sm:mb-4">
                         <div>
-                          <h4 className="font-bold text-slate-900 text-sm">Worst Trade</h4>
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">Worst Trade</h4>
                           <p className="text-[10px] text-slate-400">Single deepest loss execution</p>
                         </div>
-                        <div className="p-2 bg-rose-50 text-rose-600 rounded-lg">
+                        <div className="p-2 bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400 rounded-lg">
                           <TrendingDown className="h-5 w-5" />
                         </div>
                       </div>
                       {worstTrade ? (
                         <div className="space-y-3">
                           <div className="flex items-baseline justify-between">
-                            <span className="text-xl font-black text-rose-600">
+                            <span className="text-xl font-black text-rose-600 dark:text-rose-400">
                               {formatValue(worstTrade.profit)}
                             </span>
-                            <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-50 text-slate-600 rounded">
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded">
                               {worstTrade.symbol}
                             </span>
                           </div>
-                          <div className="grid grid-cols-2 gap-x-2 gap-y-3 text-xs pt-2 border-t border-slate-50">
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-3 text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
                             <div>
                               <span className="text-slate-400 font-medium block">Type / Lots</span>
-                              <span className="font-bold text-slate-800">{worstTrade.type} / {worstTrade.lotSize} Lots</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{worstTrade.type} / {worstTrade.lotSize} Lots</span>
                             </div>
                             <div>
                               <span className="text-slate-400 font-medium block">Date</span>
-                              <span className="font-bold text-slate-800">{new Date(worstTrade.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(worstTrade.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                             </div>
                             <div>
                               <span className="text-slate-400 font-medium block">Entry Price</span>
-                              <span className="font-bold text-slate-800">{worstTrade.entryPrice}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{worstTrade.entryPrice}</span>
                             </div>
                             <div>
                               <span className="text-slate-400 font-medium block">Exit Price</span>
-                              <span className="font-bold text-slate-800">{worstTrade.exitPrice}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{worstTrade.exitPrice}</span>
                             </div>
                           </div>
                         </div>
@@ -6128,10 +6085,10 @@ export default function App() {
                   </div>
 
                   {/* Sessions Concentration */}
-                  <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs">
-                    <h3 className="font-bold text-slate-900 text-sm mb-1">Session Concentration</h3>
-                    <p className="text-[10px] text-slate-400 mb-4 font-semibold">Allocations of executions across operational timezones</p>
-                    <div className="h-64 flex items-center justify-center">
+                  <div className="dx-panel p-4 sm:p-6 shadow-xs">
+                    <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-1">Session Concentration</h3>
+                    <p className="text-[10px] text-slate-400 mb-3 sm:mb-4 font-semibold">Allocations of executions across operational timezones</p>
+                    <div className="h-60 sm:h-64 flex items-center justify-center">
                       {sessionData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
