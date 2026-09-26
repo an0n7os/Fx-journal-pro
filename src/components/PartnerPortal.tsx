@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Check, Copy, Link2, Pencil, Ticket, Users, X } from 'lucide-react';
-import SubAdminConsole from './SubAdminConsole';
+import PartnerUserRegistry from './PartnerUserRegistry';
 import ReferralIncomeHub from './ReferralIncomeHub';
 
 interface PartnerMe {
@@ -10,16 +10,11 @@ interface PartnerMe {
   referralUrl: string;
 }
 
-/**
- * Partner Portal.
- *
- * Two parts: the partner's own referral identity (link and code, which they
- * can rename), and the read-only console over the users who signed up with it.
- * The console is the same component a sub-admin sees — the scoping, and the
- * per-user consent gate on trade data, are decided by the server from the
- * session's role, not by anything passed in here.
- */
-export default function PartnerPortal() {
+interface PartnerPortalProps {
+  onInspectUser?: (user: any) => void;
+}
+
+export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}) {
   const [me, setMe] = useState<PartnerMe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -185,8 +180,9 @@ export default function PartnerPortal() {
           </p>
         </div>
 
-        <SubAdminConsole variant="partner" />
+        <PartnerUserRegistry onInspectUser={onInspectUser} />
       </div>
     </div>
   );
 }
+

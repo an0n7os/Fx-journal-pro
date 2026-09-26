@@ -8,7 +8,7 @@ import {
   Clock, Heart, Edit3, Image as ImageIcon, Eye, EyeOff, RefreshCw,
   Terminal, Globe, Bell, CreditCard, Info, Activity, Sun, Moon, Brain, Upload,
   FileSpreadsheet, FileText, Mail, Wrench, X, Newspaper, Trophy, Lock, MessageSquare, MoreHorizontal, Users,
-  Settings, Instagram, Phone
+  Settings, Instagram, Phone, GraduationCap
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -375,9 +375,23 @@ export default function App() {
   // Who referred this user, and whether they have agreed to let that partner
   // read their trading data. Both come from the server; the toggle below is a
   // view of the stored value, never the value itself.
-  const [partnerLink, setPartnerLink] = useState<{ hasPartner: boolean; partnerName?: string; allowPartnerTradeView: boolean } | null>(null);
-  /** Per-section mentor permissions, and the accounts the student picks from. */
-  const [mentorAccess, setMentorAccess] = useState<Record<string, any> | null>(null);
+  const [partnerLink, setPartnerLink] = useState<{
+    hasPartner: boolean;
+    partnerName?: string;
+    partnerUsername?: string;
+    partnerEmail?: string | null;
+    referralCode?: string | null;
+    allowPartnerTradeView: boolean;
+  } | null>(null);
+  const [mentorAccess, setMentorAccess] = useState<Record<string, any> | null>(() => ({
+    dashboard: true,
+    analysis: true,
+    accounts: null,
+    calendar: true,
+    liveCharts: true,
+    journal: true,
+    notebook: false,
+  }));
   const [mentorAccounts, setMentorAccounts] = useState<{ id: string; name: string }[]>([]);
   const [savingMentorAccess, setSavingMentorAccess] = useState<string | null>(null);
   const [savingPartnerVisibility, setSavingPartnerVisibility] = useState(false);
@@ -434,6 +448,17 @@ export default function App() {
   const [editingTradeId, setEditingTradeId] = useState<string | null>(null);
   const [selectedNote, setSelectedNote] = useState<string | null>(null);
   const [journalPage, setJournalPage] = useState(1);
+  // Session Summary Table Sorting
+  const [sessionSortField, setSessionSortField] = useState<'default' | 'session' | 'net' | 'winRate' | 'profit' | 'loss' | 'trades'>('default');
+  const [sessionSortAsc, setSessionSortAsc] = useState<boolean>(true);
+  // Summary Pairs Table Sorting
+  const [pairSortField, setPairSortField] = useState<'default' | 'pair' | 'net' | 'winRate' | 'profit' | 'loss' | 'trades'>('default');
+  const [pairSortAsc, setPairSortAsc] = useState<boolean>(true);
+  // Win / Loss Performance Controls
+  const [winActiveDays, setWinActiveDays] = useState(false);
+  const [winShowVolume, setWinShowVolume] = useState(false);
+  const [lossActiveDays, setLossActiveDays] = useState(false);
+  const [lossShowVolume, setLossShowVolume] = useState(false);
   const [tradeDate, setTradeDate] = useState('');
   const [tradeExitTime, setTradeExitTime] = useState('');
   const [tradeSymbol, setTradeSymbol] = useState(() => localStorage.getItem('lastTradeSymbol') || 'XAUUSD');
@@ -448,7 +473,7 @@ export default function App() {
   const [tradeComm, setTradeComm] = useState('0');
   const [tradeSwap, setTradeSwap] = useState('0');
   const [tradeRisk, setTradeRisk] = useState('1.0');
-  const [tradeStrategy, setTradeStrategy] = useState('Order Block Rejection');
+  const [tradeStrategy, setTradeStrategy] = useState('');
   const [tradeEmotion, setTradeEmotion] = useState<'Calm' | 'Excited' | 'Anxious' | 'FOMO' | 'Greedy' | 'Revenge'>('Calm');
   const [tradeNotes, setTradeNotes] = useState('');
   const [showNoteField, setShowNoteField] = useState(false);
@@ -982,6 +1007,14 @@ export default function App() {
 
   // active account
   const activeAccount = accounts.find(a => a.id === selectedAccountId);
+
+  // UI Currency formatting
+  const formatValue = (val: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: activeAccount?.currency || 'USD'
+    }).format(val);
+  };
 
   // authFetch — wraps native fetch and injects auth credentials, bearer tokens, and headers
   const authFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
@@ -1599,7 +1632,7 @@ export default function App() {
       setTradeComm('0');
       setTradeSwap('0');
       setTradeRisk('1.0');
-      setTradeStrategy('Order Block Rejection');
+      setTradeStrategy('');
       setTradeEmotion('Calm');
       setTradeNotes('');
       setShowNoteField(false);
@@ -1807,8 +1840,9 @@ export default function App() {
     }
     setIsMentorReadOnlyMode(false);
     setInspectedUser(null);
+    const returnTab = adminBackupData?.activeTab || (isPartner && adminRole === 'PARTNER' ? 'partner' : 'admin');
     setAdminBackupData(null);
-    setActiveTab('admin');
+    setActiveTab(returnTab);
   };
 
   const executeDeleteTrade = async (tradeId: string) => {
@@ -2365,6 +2399,37 @@ export default function App() {
     }
   };
 
+  const [mentorCodeInput, setMentorCodeInput] = useState('');
+  const [linkingMentor, setLinkingMentor] = useState(false);
+  const [mentorLinkError, setMentorLinkError] = useState<string | null>(null);
+
+  const handleLinkMentor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mentorCodeInput.trim()) return;
+    setLinkingMentor(true);
+    setMentorLinkError(null);
+    try {
+      const res = await authFetch('/api/user/link-partner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: mentorCodeInput.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to link mentor.');
+      setPartnerLink(data);
+      setMentorCodeInput('');
+      showAlert(`Successfully linked to mentor ${data.partnerName || data.partnerUsername}!`, {
+        title: 'Mentor Linked',
+        type: 'success',
+      });
+      loadMentorAccess();
+    } catch (err: any) {
+      setMentorLinkError(err.message || 'Failed to link mentor.');
+    } finally {
+      setLinkingMentor(false);
+    }
+  };
+
   const handleSaveNotifications = (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('notif_daily', String(dailyTradingReminder));
@@ -2649,13 +2714,356 @@ export default function App() {
     profit: parseFloat(symbolMap[sym].toFixed(2))
   })).sort((a, b) => b.profit - a.profit);
 
-  // 3. Pie Chart: Sessions
-  // Map trades to trading sessions (simulated based on timestamp hour, or mock)
+  // 3. Trading Session Classification & Aggregation
+  const getTradeSessionName = (t: Trade): 'London' | 'New York' | 'Asia' | 'Outside of Sessions' => {
+    if (t.tags && Array.isArray(t.tags)) {
+      for (const tag of t.tags) {
+        const lower = tag.toLowerCase();
+        if (lower.includes('london')) return 'London';
+        if (lower.includes('new york') || lower.includes('ny')) return 'New York';
+        if (lower.includes('asia') || lower.includes('tokyo') || lower.includes('sydney')) return 'Asia';
+      }
+    }
+
+    if (!t.date) return 'Outside of Sessions';
+    const d = new Date(t.date);
+    if (isNaN(d.getTime())) return 'Outside of Sessions';
+
+    // Market session classification in UTC:
+    // London: 07:00 – 13:00 UTC
+    // New York: 13:00 – 19:00 UTC
+    // Asia (Tokyo & Sydney): 19:00 – 07:00 UTC
+    const hour = d.getUTCHours();
+    const minute = d.getUTCMinutes();
+    const timeVal = hour + minute / 60;
+
+    if (timeVal >= 7 && timeVal < 13) return 'London';
+    if (timeVal >= 13 && timeVal < 19) return 'New York';
+    if (timeVal >= 19 || timeVal < 7) return 'Asia';
+
+    return 'Outside of Sessions';
+  };
+
+  // Pie Chart: Sessions
+  const sessionCounts: Record<string, number> = {
+    'London Session': 0,
+    'New York Session': 0,
+    'Asian Session': 0,
+    'Outside of Sessions': 0
+  };
+  tradingTrades.forEach(t => {
+    const s = getTradeSessionName(t);
+    if (s === 'London') sessionCounts['London Session']++;
+    else if (s === 'New York') sessionCounts['New York Session']++;
+    else if (s === 'Asia') sessionCounts['Asian Session']++;
+    else sessionCounts['Outside of Sessions']++;
+  });
+
   const sessionData = [
-    { name: 'London Session', value: tradingTrades.filter((_, idx) => idx % 3 === 0).length, color: '#2563eb' },
-    { name: 'New York Session', value: tradingTrades.filter((_, idx) => idx % 3 === 1).length, color: '#10b981' },
-    { name: 'Asian Session', value: tradingTrades.filter((_, idx) => idx % 3 === 2).length, color: '#f59e0b' }
+    { name: 'London Session', value: sessionCounts['London Session'], color: '#2563eb' },
+    { name: 'New York Session', value: sessionCounts['New York Session'], color: '#10b981' },
+    { name: 'Asian Session', value: sessionCounts['Asian Session'], color: '#f59e0b' },
+    { name: 'Outside of Sessions', value: sessionCounts['Outside of Sessions'], color: '#64748b' }
   ].filter(d => d.value > 0);
+
+  // Summary Session Table Data
+  interface SessionRowData {
+    id: 'london' | 'newyork' | 'asia' | 'outside';
+    name: string;
+    badgeType: 'code' | 'emoji';
+    badge: string;
+    net: number;
+    winRate: number;
+    profit: number;
+    loss: number;
+    trades: number;
+    isBest?: boolean;
+  }
+
+  const rawSessionRows: SessionRowData[] = [
+    { id: 'london', name: 'London', badgeType: 'code', badge: 'GB', net: 0, winRate: 0, profit: 0, loss: 0, trades: 0 },
+    { id: 'newyork', name: 'New York', badgeType: 'code', badge: 'US', net: 0, winRate: 0, profit: 0, loss: 0, trades: 0 },
+    { id: 'asia', name: 'Asia', badgeType: 'code', badge: 'JP', net: 0, winRate: 0, profit: 0, loss: 0, trades: 0 },
+    { id: 'outside', name: 'Outside of Sessions', badgeType: 'emoji', badge: '🌍', net: 0, winRate: 0, profit: 0, loss: 0, trades: 0 },
+  ];
+
+  const sessionAgg: Record<string, { trades: number; wins: number; profit: number; loss: number; net: number }> = {
+    London: { trades: 0, wins: 0, profit: 0, loss: 0, net: 0 },
+    'New York': { trades: 0, wins: 0, profit: 0, loss: 0, net: 0 },
+    Asia: { trades: 0, wins: 0, profit: 0, loss: 0, net: 0 },
+    'Outside of Sessions': { trades: 0, wins: 0, profit: 0, loss: 0, net: 0 }
+  };
+
+  tradingTrades.forEach(t => {
+    const sName = getTradeSessionName(t);
+    const agg = sessionAgg[sName] || sessionAgg['Outside of Sessions'];
+    agg.trades += 1;
+    const net = t.profit + (t.commission || 0) + (t.swap || 0);
+    agg.net += net;
+    if (t.profit > 0) {
+      agg.wins += 1;
+      agg.profit += t.profit;
+    } else if (t.profit < 0) {
+      agg.loss += Math.abs(t.profit);
+    }
+  });
+
+  let bestSessionId: string | null = null;
+  let highestNet = 0;
+
+  rawSessionRows.forEach(row => {
+    const agg = sessionAgg[row.name];
+    row.trades = agg.trades;
+    row.net = parseFloat(agg.net.toFixed(2));
+    row.profit = parseFloat(agg.profit.toFixed(2));
+    row.loss = parseFloat(agg.loss.toFixed(2));
+    row.winRate = agg.trades > 0 ? parseFloat(((agg.wins / agg.trades) * 100).toFixed(1)) : 0;
+    if (row.net > highestNet) {
+      highestNet = row.net;
+      bestSessionId = row.id;
+    }
+  });
+
+  if (bestSessionId) {
+    const target = rawSessionRows.find(r => r.id === bestSessionId);
+    if (target) target.isBest = true;
+  }
+
+  const sortedSessionRows = React.useMemo(() => {
+    if (sessionSortField === 'default') return rawSessionRows;
+    return [...rawSessionRows].sort((a, b) => {
+      let cmp = 0;
+      if (sessionSortField === 'session') cmp = a.name.localeCompare(b.name);
+      else if (sessionSortField === 'net') cmp = a.net - b.net;
+      else if (sessionSortField === 'winRate') cmp = a.winRate - b.winRate;
+      else if (sessionSortField === 'profit') cmp = a.profit - b.profit;
+      else if (sessionSortField === 'loss') cmp = a.loss - b.loss;
+      else if (sessionSortField === 'trades') cmp = a.trades - b.trades;
+      return sessionSortAsc ? cmp : -cmp;
+    });
+  }, [rawSessionRows, sessionSortField, sessionSortAsc]);
+
+  const handleToggleSessionSort = (field: 'session' | 'net' | 'winRate' | 'profit' | 'loss' | 'trades') => {
+    if (sessionSortField === field) {
+      if (sessionSortAsc) {
+        setSessionSortAsc(false);
+      } else {
+        setSessionSortField('default');
+        setSessionSortAsc(true);
+      }
+    } else {
+      setSessionSortField(field);
+      setSessionSortAsc(true);
+    }
+  };
+
+  // Summary Pairs Table Data
+  interface PairRowData {
+    symbol: string;
+    net: number;
+    netPercent: number;
+    winRate: number;
+    profit: number;
+    loss: number;
+    trades: number;
+    isBest?: boolean;
+  }
+
+  const rawPairRows = React.useMemo(() => {
+    const pairMap: Record<string, { trades: number; wins: number; profit: number; loss: number; net: number }> = {};
+
+    tradingTrades.forEach(t => {
+      const sym = (t.symbol || 'OTHER').toUpperCase().trim();
+      if (!pairMap[sym]) {
+        pairMap[sym] = { trades: 0, wins: 0, profit: 0, loss: 0, net: 0 };
+      }
+      const agg = pairMap[sym];
+      agg.trades += 1;
+      const net = t.profit + (t.commission || 0) + (t.swap || 0);
+      agg.net += net;
+      if (t.profit > 0) {
+        agg.wins += 1;
+        agg.profit += t.profit;
+      } else if (t.profit < 0) {
+        agg.loss += Math.abs(t.profit);
+      }
+    });
+
+    const rows: PairRowData[] = Object.keys(pairMap).map(sym => {
+      const data = pairMap[sym];
+      const netPercent = startingBal > 0 ? (data.net / startingBal) * 100 : 0;
+      return {
+        symbol: sym,
+        net: parseFloat(data.net.toFixed(2)),
+        netPercent: parseFloat(netPercent.toFixed(2)),
+        winRate: data.trades > 0 ? parseFloat(((data.wins / data.trades) * 100).toFixed(1)) : 0,
+        profit: parseFloat(data.profit.toFixed(2)),
+        loss: parseFloat(data.loss.toFixed(2)),
+        trades: data.trades
+      };
+    });
+
+    let bestPairSym: string | null = null;
+    let maxPairNet = 0;
+    rows.forEach(r => {
+      if (r.net > maxPairNet) {
+        maxPairNet = r.net;
+        bestPairSym = r.symbol;
+      }
+    });
+
+    if (bestPairSym) {
+      const bRow = rows.find(r => r.symbol === bestPairSym);
+      if (bRow) bRow.isBest = true;
+    }
+
+    return rows;
+  }, [tradingTrades, startingBal]);
+
+  const sortedPairRows = React.useMemo(() => {
+    if (pairSortField === 'default') return rawPairRows;
+    return [...rawPairRows].sort((a, b) => {
+      let cmp = 0;
+      if (pairSortField === 'pair') cmp = a.symbol.localeCompare(b.symbol);
+      else if (pairSortField === 'net') cmp = a.net - b.net;
+      else if (pairSortField === 'winRate') cmp = a.winRate - b.winRate;
+      else if (pairSortField === 'profit') cmp = a.profit - b.profit;
+      else if (pairSortField === 'loss') cmp = a.loss - b.loss;
+      else if (pairSortField === 'trades') cmp = a.trades - b.trades;
+      return pairSortAsc ? cmp : -cmp;
+    });
+  }, [rawPairRows, pairSortField, pairSortAsc]);
+
+  const handleTogglePairSort = (field: 'pair' | 'net' | 'winRate' | 'profit' | 'loss' | 'trades') => {
+    if (pairSortField === field) {
+      if (pairSortAsc) {
+        setPairSortAsc(false);
+      } else {
+        setPairSortField('default');
+        setPairSortAsc(true);
+      }
+    } else {
+      setPairSortField(field);
+      setPairSortAsc(true);
+    }
+  };
+
+  // Win & Loss Performance suite
+  const winningTradesList = React.useMemo(() => {
+    return [...tradingTrades]
+      .filter(t => t.profit > 0)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [tradingTrades]);
+
+  const losingTradesList = React.useMemo(() => {
+    return [...tradingTrades]
+      .filter(t => t.profit < 0)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [tradingTrades]);
+
+  // Win Performance metrics
+  const winTotalPnl = React.useMemo(() => {
+    return winningTradesList.reduce((sum, t) => sum + t.profit, 0);
+  }, [winningTradesList]);
+
+  const winTotalCommissions = React.useMemo(() => {
+    return winningTradesList.reduce((sum, t) => sum + Math.abs(t.commission || 0), 0);
+  }, [winningTradesList]);
+
+  const winAvgDailyVolume = React.useMemo(() => {
+    if (winningTradesList.length === 0) return '0.00';
+    const daySet = new Set(winningTradesList.map(t => new Date(t.date).toDateString()));
+    const totalLots = winningTradesList.reduce((s, t) => s + (t.lotSize || 0), 0);
+    return daySet.size > 0 ? (totalLots / daySet.size).toFixed(2) : '0.00';
+  }, [winningTradesList]);
+
+  const avgWinningTrade = React.useMemo(() => {
+    return winningTradesList.length > 0 ? formatValue(winTotalPnl / winningTradesList.length) : formatValue(0);
+  }, [winningTradesList, winTotalPnl]);
+
+  const winPerformanceChartData = React.useMemo(() => {
+    if (winningTradesList.length === 0) return [];
+    if (winActiveDays) {
+      const dayMap: Record<string, { lots: number; profit: number }> = {};
+      winningTradesList.forEach(t => {
+        const d = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        if (!dayMap[d]) dayMap[d] = { lots: 0, profit: 0 };
+        dayMap[d].lots += t.lotSize || 0;
+        dayMap[d].profit += t.profit;
+      });
+      return Object.keys(dayMap).map(k => ({
+        date: k,
+        val: winShowVolume ? parseFloat(dayMap[k].lots.toFixed(2)) : parseFloat(dayMap[k].profit.toFixed(2))
+      }));
+    }
+
+    let cum = 0;
+    const points: { date: string; val: number }[] = [];
+    if (winningTradesList.length === 1) {
+      points.push({ date: 'Start', val: 0 });
+    }
+    winningTradesList.forEach((t) => {
+      cum += t.profit;
+      const d = t.date ? new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      points.push({
+        date: d || 'Trade',
+        val: winShowVolume ? (t.lotSize || 0) : parseFloat(cum.toFixed(2))
+      });
+    });
+    return points;
+  }, [winningTradesList, winActiveDays, winShowVolume]);
+
+  // Loss Performance metrics
+  const lossTotalPnl = React.useMemo(() => {
+    return losingTradesList.reduce((sum, t) => sum + t.profit, 0);
+  }, [losingTradesList]);
+
+  const lossTotalCommissions = React.useMemo(() => {
+    return losingTradesList.reduce((sum, t) => sum + Math.abs(t.commission || 0), 0);
+  }, [losingTradesList]);
+
+  const lossAvgDailyVolume = React.useMemo(() => {
+    if (losingTradesList.length === 0) return '0.00';
+    const daySet = new Set(losingTradesList.map(t => new Date(t.date).toDateString()));
+    const totalLots = losingTradesList.reduce((s, t) => s + (t.lotSize || 0), 0);
+    return daySet.size > 0 ? (totalLots / daySet.size).toFixed(2) : '0.00';
+  }, [losingTradesList]);
+
+  const avgLosingTrade = React.useMemo(() => {
+    return losingTradesList.length > 0 ? `-${formatValue(Math.abs(lossTotalPnl) / losingTradesList.length)}` : formatValue(0);
+  }, [losingTradesList, lossTotalPnl]);
+
+  const lossPerformanceChartData = React.useMemo(() => {
+    if (losingTradesList.length === 0) return [];
+    if (lossActiveDays) {
+      const dayMap: Record<string, { lots: number; profit: number }> = {};
+      losingTradesList.forEach(t => {
+        const d = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        if (!dayMap[d]) dayMap[d] = { lots: 0, profit: 0 };
+        dayMap[d].lots += t.lotSize || 0;
+        dayMap[d].profit += t.profit;
+      });
+      return Object.keys(dayMap).map(k => ({
+        date: k,
+        val: lossShowVolume ? parseFloat(dayMap[k].lots.toFixed(2)) : parseFloat(dayMap[k].profit.toFixed(2))
+      }));
+    }
+
+    let cum = 0;
+    const points: { date: string; val: number }[] = [];
+    if (losingTradesList.length === 1) {
+      points.push({ date: 'Start', val: 0 });
+    }
+    losingTradesList.forEach((t) => {
+      cum += t.profit;
+      const d = t.date ? new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      points.push({
+        date: d || 'Trade',
+        val: lossShowVolume ? (t.lotSize || 0) : parseFloat(cum.toFixed(2))
+      });
+    });
+    return points;
+  }, [losingTradesList, lossActiveDays, lossShowVolume]);
 
   // 4. Best & Worst Trades
   const sortedTradesByProfit = [...tradingTrades].sort((a, b) => b.profit - a.profit);
@@ -3593,13 +4001,6 @@ export default function App() {
     return results;
   };
 
-  // UI Currency formatting
-  const formatValue = (val: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: activeAccount?.currency || 'USD'
-    }).format(val);
-  };
 
   // Rendering check
   if (loading && !user) {
@@ -4792,7 +5193,9 @@ export default function App() {
                         <div className="flex justify-between items-start">
                           <div className="min-w-0 pr-2">
                             <strong className="text-sm font-bold text-slate-900 dark:text-white block truncate">{t.symbol}</strong>
-                            <span className="text-[10px] text-slate-400 font-semibold truncate block">{t.strategy || 'No Strategy'}</span>
+                            {t.strategy && t.strategy !== 'Order Block Rejection' && t.strategy !== 'Unspecified' && (
+                              <span className="text-[10px] text-slate-400 font-semibold truncate block">{t.strategy}</span>
+                            )}
                           </div>
                           <span className={`font-bold px-2 py-0.5 rounded text-[10px] shrink-0 ${t.type === 'Buy'
                               ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-500/20'
@@ -5785,6 +6188,417 @@ export default function App() {
                   </div>
                 </section>
 
+                {/* Summary Session Section */}
+                <section className="dx-panel p-5 sm:p-6 shadow-xs">
+                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Summary Session</h3>
+                    <div className="relative group cursor-pointer inline-flex items-center">
+                      <Info className="h-4 w-4 text-slate-400 hover:text-slate-200 transition-colors" />
+                      <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-72 p-3 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl text-[11px] text-slate-300 leading-relaxed backdrop-blur-md pointer-events-none">
+                        <p className="font-bold text-white mb-1.5">Operational Trading Windows (UTC)</p>
+                        <div className="space-y-1">
+                          <p><strong className="text-slate-200">London:</strong> 07:00 – 13:00 UTC</p>
+                          <p><strong className="text-slate-200">New York:</strong> 13:00 – 19:00 UTC</p>
+                          <p><strong className="text-slate-200">Asia:</strong> 19:00 – 07:00 UTC (Tokyo & Sydney)</p>
+                          <p><strong className="text-slate-200">Outside of Sessions:</strong> Executions outside primary windows</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[650px] text-xs sm:text-sm text-left">
+                      <thead>
+                        <tr className="text-slate-400 text-xs select-none border-b border-slate-100 dark:border-slate-800/80">
+                          <th className="py-3 px-4 text-left font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('session')}>
+                            <div className="flex items-center gap-1.5">
+                              <span>Session</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('net')}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>Net P&L</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('winRate')}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>Win Rate</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('profit')}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>Total Profit</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('loss')}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>Total Loss</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('trades')}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>Total Trades</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
+                        {sortedSessionRows.map((row) => (
+                          <tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                            <td className="py-4 px-4 whitespace-nowrap">
+                              <div className="flex items-center gap-3">
+                                {row.badgeType === 'code' ? (
+                                  <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-200 shrink-0">
+                                    {row.badge}
+                                  </div>
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center text-sm shrink-0">
+                                    {row.badge}
+                                  </div>
+                                )}
+                                <span className="font-semibold text-slate-900 dark:text-slate-200">{row.name}</span>
+                                {row.isBest && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#06331b] border border-[#166534] text-[#4ade80] shadow-xs">
+                                    Best
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-center whitespace-nowrap">
+                              <span className={`font-semibold ${row.net < 0 ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
+                                {row.net > 0 ? `+${formatValue(row.net)}` : row.net < 0 ? `-${formatValue(Math.abs(row.net))}` : formatValue(0)}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-center whitespace-nowrap">
+                              <div className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-800/90 rounded-full mx-auto relative flex items-center justify-center overflow-hidden">
+                                {row.trades > 0 ? (
+                                  <div
+                                    className="h-full bg-emerald-400 dark:bg-emerald-400 rounded-full transition-all duration-300"
+                                    style={{ width: `${Math.max(row.winRate, 4)}%` }}
+                                  />
+                                ) : (
+                                  <div className="w-2 h-0.5 bg-slate-400 dark:bg-slate-600 rounded-full" />
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-center whitespace-nowrap">
+                              <span className="font-semibold text-emerald-500 dark:text-emerald-400">
+                                {formatValue(row.profit)}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-center whitespace-nowrap">
+                              <span className="font-semibold text-rose-500 dark:text-rose-400">
+                                {formatValue(row.loss)}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-center whitespace-nowrap">
+                              <span className="font-bold text-slate-800 dark:text-slate-100">
+                                {row.trades}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                {/* Summary Pairs Section */}
+                <section className="dx-panel p-5 sm:p-6 shadow-xs">
+                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Summary Pairs</h3>
+                    <div className="relative group cursor-pointer inline-flex items-center">
+                      <Info className="h-4 w-4 text-slate-400 hover:text-slate-200 transition-colors" />
+                      <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-72 p-3 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl text-[11px] text-slate-300 leading-relaxed backdrop-blur-md pointer-events-none">
+                        <p className="font-bold text-white mb-1.5">Asset & Currency Pair Performance</p>
+                        <p>Aggregated trade analytics, return percentage, and win metrics categorized by traded instrument.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[650px] text-xs sm:text-sm text-left">
+                      <thead>
+                        <tr className="text-slate-400 text-xs select-none border-b border-slate-100 dark:border-slate-800/80">
+                          <th className="py-3 px-4 text-left font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('pair')}>
+                            <div className="flex items-center gap-1.5">
+                              <span>Pair</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('net')}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>Net P&L</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('winRate')}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>Winning %</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('profit')}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>Total Profit</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('loss')}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>Total Loss</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('trades')}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>Total Trades</span>
+                              <span className="text-[11px] text-slate-400">↕</span>
+                            </div>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
+                        {sortedPairRows.length > 0 ? (
+                          sortedPairRows.map((row) => (
+                            <tr key={row.symbol} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                              <td className="py-4 px-4 whitespace-nowrap">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="font-bold text-slate-900 dark:text-slate-100 tracking-wide">{row.symbol}</span>
+                                  {row.isBest && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#06331b] border border-[#166534] text-[#4ade80] shadow-xs">
+                                      Best
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-4 px-4 text-center whitespace-nowrap">
+                                <span className={`font-semibold ${row.netPercent < 0 ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
+                                  {row.netPercent > 0 ? `+${row.netPercent.toFixed(2)}%` : row.netPercent < 0 ? `${row.netPercent.toFixed(2)}%` : '+0.00%'}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4 text-center whitespace-nowrap">
+                                <div className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-800/90 rounded-full mx-auto relative flex items-center justify-center overflow-hidden">
+                                  {row.trades > 0 ? (
+                                    <div
+                                      className="h-full bg-emerald-400 dark:bg-emerald-400 rounded-full transition-all duration-300"
+                                      style={{ width: `${Math.max(row.winRate, 4)}%` }}
+                                    />
+                                  ) : (
+                                    <div className="w-2 h-0.5 bg-slate-400 dark:bg-slate-600 rounded-full" />
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-4 px-4 text-center whitespace-nowrap">
+                                <span className="font-semibold text-emerald-500 dark:text-emerald-400">
+                                  {formatValue(row.profit)}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4 text-center whitespace-nowrap">
+                                <span className="font-semibold text-rose-500 dark:text-rose-400">
+                                  {formatValue(row.loss)}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4 text-center whitespace-nowrap">
+                                <span className="font-bold text-slate-800 dark:text-slate-100">
+                                  {row.trades}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={6} className="py-6 text-center text-xs text-slate-400">
+                              No pair metrics recorded yet.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                {/* Win & Loss Performance Section */}
+                <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Win Performance Card */}
+                  <div className="dx-panel p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+                    <div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Win Performance</h3>
+                        <div className="flex items-center gap-3">
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
+                            <span>Active days</span>
+                            <button
+                              type="button"
+                              onClick={() => setWinActiveDays(!winActiveDays)}
+                              className={`w-7 h-3.5 rounded-full transition-colors relative ${winActiveDays ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                            >
+                              <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${winActiveDays ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                            </button>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
+                            <span>Volume</span>
+                            <button
+                              type="button"
+                              onClick={() => setWinShowVolume(!winShowVolume)}
+                              className={`w-7 h-3.5 rounded-full transition-colors relative ${winShowVolume ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                            >
+                              <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${winShowVolume ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                            </button>
+                          </label>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/60 border border-emerald-500/40 text-emerald-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            Wins
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="h-48 sm:h-52 w-full my-2">
+                        {winPerformanceChartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={winPerformanceChartData}>
+                              <defs>
+                                <linearGradient id="winGradient" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#1e293b' : '#f1f5f9'} />
+                              <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                              <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(val) => winShowVolume ? `${val}` : `$${val}`} />
+                              <Tooltip formatter={(value: any) => [winShowVolume ? `${value} Lots` : formatValue(Number(value)), winShowVolume ? 'Volume' : 'Cumulative Profit']} />
+                              <Area type="monotone" dataKey="val" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#winGradient)" />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                            No winning performance recorded.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Total P&L</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{formatValue(winTotalPnl)}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Winning Trades</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{winningTradesList.length}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Avg Daily Volume</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{winAvgDailyVolume}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Avg. Winning Trade</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{avgWinningTrade}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Total Commissions</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{formatValue(winTotalCommissions)}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Max Consecutive Wins</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{maxWinStreak}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Loss Performance Card */}
+                  <div className="dx-panel p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+                    <div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Loss Performance</h3>
+                        <div className="flex items-center gap-3">
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
+                            <span>Active days</span>
+                            <button
+                              type="button"
+                              onClick={() => setLossActiveDays(!lossActiveDays)}
+                              className={`w-7 h-3.5 rounded-full transition-colors relative ${lossActiveDays ? 'bg-rose-500' : 'bg-slate-700'}`}
+                            >
+                              <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${lossActiveDays ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                            </button>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
+                            <span>Volume</span>
+                            <button
+                              type="button"
+                              onClick={() => setLossShowVolume(!lossShowVolume)}
+                              className={`w-7 h-3.5 rounded-full transition-colors relative ${lossShowVolume ? 'bg-rose-500' : 'bg-slate-700'}`}
+                            >
+                              <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${lossShowVolume ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                            </button>
+                          </label>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-950/60 border border-rose-500/40 text-rose-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                            Losses
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="h-48 sm:h-52 w-full my-2">
+                        {lossPerformanceChartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={lossPerformanceChartData}>
+                              <defs>
+                                <linearGradient id="lossGradient" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.35} />
+                                  <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#1e293b' : '#f1f5f9'} />
+                              <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                              <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(val) => lossShowVolume ? `${val}` : `-$${Math.abs(val)}`} />
+                              <Tooltip formatter={(value: any) => [lossShowVolume ? `${value} Lots` : `-${formatValue(Math.abs(Number(value)))}`, lossShowVolume ? 'Volume' : 'Cumulative Loss']} />
+                              <Area type="monotone" dataKey="val" stroke="#f43f5e" strokeWidth={2.5} fillOpacity={1} fill="url(#lossGradient)" />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                            No loss performance recorded.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Total P&L</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{lossTotalPnl !== 0 ? `-${formatValue(Math.abs(lossTotalPnl))}` : formatValue(0)}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Losing Trades</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{losingTradesList.length}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Avg Daily Volume</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{lossAvgDailyVolume}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Avg. Losing Trade</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{avgLosingTrade}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Total Commissions</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{formatValue(lossTotalCommissions)}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                        <span className="text-[11px] font-medium text-slate-400 block">Max Consecutive Loss</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{maxLossStreak}</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
                 {/* Best & Worst Day Statistics (based on daily net P&L) */}
                 <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Best Day Card */}
@@ -6140,7 +6954,7 @@ export default function App() {
                     </div>
 
                     {/* Desktop Settings Navigation Card */}
-                    <div className="hidden lg:block settings-nav-card rounded-2xl p-3 shadow-xs sticky top-20">
+                    <div className="hidden lg:block settings-nav-card rounded-2xl p-3 shadow-xs sticky top-4">
                       <div className="px-2.5 py-2 border-b border-slate-100 dark:border-white/[0.06] mb-3 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-lg bg-violet-600/10 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
@@ -6239,47 +7053,100 @@ export default function App() {
                     {settingsTab === 'general' && user && (
                       <div className="space-y-6">
                         {/*
-                        Only shown to users who actually have a partner. For
-                        everyone else there is nobody the setting could apply
-                        to, and a dead switch invites the wrong conclusion
-                        about who can see their trades.
-                      */}
-                        {partnerLink?.hasPartner && (
-                          <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs space-y-4">
-                            <div>
-                              <h3 className="font-extrabold text-slate-900 text-base">Partner access</h3>
-                              <p className="text-xs text-slate-400">
-                                You joined through <span className="font-semibold text-slate-600">{partnerLink.partnerName}</span>.
-                              </p>
+                        {/* ── Your Mentor Panel ─────────────────────────────────── */}
+                        <div className="dx-panel p-6 space-y-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                                <GraduationCap className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <h3 className="dx-section-title">Your Mentor</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                  {partnerLink?.hasPartner
+                                    ? 'Your assigned mentor / academy partner.'
+                                    : 'Connect with a mentor or trading academy using their referral code.'}
+                                </p>
+                              </div>
                             </div>
 
-                            <div className="flex items-start justify-between gap-4 p-3.5 bg-slate-50/70 rounded-xl border border-slate-100">
-                              <div className="space-y-0.5 text-xs">
-                                <strong className="text-slate-800 block">Allow Partner to View Trade Details</strong>
-                                <span className="text-[11px] text-slate-400 block leading-relaxed">
-                                  Lets {partnerLink.partnerName} open your trading history, analysis and journal
-                                  in read-only mode. They can never edit, add or delete anything, and they cannot
-                                  change your account. Off by default — turn it back off whenever you like.
+                            {partnerLink?.hasPartner && (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                Active Mentor
+                              </span>
+                            )}
+                          </div>
+
+                          {partnerLink?.hasPartner ? (
+                            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                              <div className="flex items-center gap-3.5">
+                                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white font-black text-base shadow-lg shadow-violet-500/20 shrink-0">
+                                  {((partnerLink.partnerUsername || partnerLink.partnerName || 'M').charAt(0)).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm sm:text-base font-bold text-white tracking-tight">
+                                      {partnerLink.partnerName || partnerLink.partnerUsername}
+                                    </span>
+                                    {partnerLink.referralCode && (
+                                      <span className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-300 border border-violet-500/25 font-bold">
+                                        {partnerLink.referralCode}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                                    <span className="text-xs text-slate-400 font-medium">
+                                      Username: <strong className="text-slate-200">@{((partnerLink.partnerUsername || partnerLink.partnerName || 'mentor').toLowerCase().replace(/\s+/g, ''))}</strong>
+                                    </span>
+                                    {partnerLink.partnerEmail && (
+                                      <>
+                                        <span className="text-slate-600">•</span>
+                                        <span className="text-xs text-slate-400">{partnerLink.partnerEmail}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between gap-1 border-t sm:border-t-0 border-slate-800 pt-3 sm:pt-0">
+                                <span className="text-[11px] text-slate-400 font-medium">Mentor Access:</span>
+                                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-md ${
+                                  partnerLink.allowPartnerTradeView
+                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                                    : 'bg-amber-500/15 text-amber-300 border border-amber-500/25'
+                                }`}>
+                                  {partnerLink.allowPartnerTradeView ? 'Trade Details Enabled' : 'Name & Plan Only'}
                                 </span>
                               </div>
-                              <input
-                                type="checkbox"
-                                role="switch"
-                                aria-label="Allow Partner to View Trade Details"
-                                disabled={savingPartnerVisibility}
-                                checked={partnerLink.allowPartnerTradeView}
-                                onChange={(e) => handlePartnerVisibility(e.target.checked)}
-                                className="mt-0.5 h-4.5 w-4.5 shrink-0 rounded border-slate-300 text-violet-600 focus:ring-violet-500 cursor-pointer disabled:opacity-40"
-                              />
                             </div>
-
-                            <p className="text-[11px] text-slate-400">
-                              {partnerLink.allowPartnerTradeView
-                                ? 'Your partner can currently see your trading data.'
-                                : 'Your partner can see your name and plan only — not your trades.'}
-                            </p>
-                          </div>
-                        )}
+                          ) : (
+                            <form onSubmit={handleLinkMentor} className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-4 sm:p-5 space-y-3">
+                              <p className="text-xs text-slate-400 leading-relaxed">
+                                No mentor linked to your account yet. If your trading academy or mentor provided a referral code, enter it below to connect:
+                              </p>
+                              <div className="flex flex-col sm:flex-row gap-2.5">
+                                <input
+                                  type="text"
+                                  value={mentorCodeInput}
+                                  onChange={(e) => setMentorCodeInput(e.target.value.toUpperCase())}
+                                  placeholder="e.g. FXPARTNER"
+                                  className="cyber-input flex-1 uppercase font-mono tracking-wider text-sm px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-950/80 text-white placeholder-slate-600 focus:outline-none focus:border-violet-500"
+                                />
+                                <button
+                                  type="submit"
+                                  disabled={linkingMentor || !mentorCodeInput.trim()}
+                                  className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs transition shadow-md shadow-violet-600/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
+                                >
+                                  {linkingMentor ? 'Linking...' : 'Link Mentor'}
+                                </button>
+                              </div>
+                              {mentorLinkError && (
+                                <p className="text-xs text-rose-400 font-medium">{mentorLinkError}</p>
+                              )}
+                            </form>
+                          )}
+                        </div>
 
                         {/*
                         {/*
@@ -7401,7 +8268,7 @@ export default function App() {
 
             {/* 9. PARTNER PORTAL — referral network, read-only */}
             {activeTab === 'partner' && isPartner && (
-              <PartnerPortal />
+              <PartnerPortal onInspectUser={handleInspectUser} />
             )}
 
             {/* 10. NOTEBOOK VIEW */}

@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, User as UserIcon, AlertTriangle, Zap } from 'lucide-react';
 import { User, TradingAccount } from '../types';
 import ProFeaturePanel from './ProFeaturePanel';
@@ -140,23 +140,20 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
       >
         <div className="flex items-center gap-3">
           <HeyzaAvatar size="md" />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-white font-bold text-base tracking-tight">Heyza</span>
-              <span
-                className="text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-full"
-                style={{ background: 'linear-gradient(90deg,#7c3aed,#4f46e5)', color: '#fff' }}
-              >
-                AI
-              </span>
-              <span
-                className="text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-full"
-                style={{ background: 'linear-gradient(90deg,#f59e0b,#ef4444)', color: '#1c1206' }}
-              >
-                PRO
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">Your personal trading coach &amp; mindset guide</p>
+          <div className="flex items-center gap-2">
+            <span className="text-white font-bold text-base tracking-tight">Heyza</span>
+            <span
+              className="text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-full"
+              style={{ background: 'linear-gradient(90deg,#7c3aed,#4f46e5)', color: '#fff' }}
+            >
+              AI
+            </span>
+            <span
+              className="text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-full"
+              style={{ background: 'linear-gradient(90deg,#f59e0b,#ef4444)', color: '#1c1206' }}
+            >
+              PRO
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-1.5">

@@ -224,14 +224,13 @@ const heroPoints = [
   'Complete Trading History Tracking',
 ];
 
-const getPasswordStrength = (pw: string) => {
-  let score = 0;
-  if (pw.length >= 8) score++;
-  if (pw.length >= 12) score++;
-  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
-  if (/\d/.test(pw)) score++;
-  if (/[^A-Za-z0-9]/.test(pw)) score++;
-  return score;
+const getPasswordProgress = (pw: string) => {
+  const len = pw.length;
+  if (len >= 8) return { score: 4, isValid: true, remaining: 0 };
+  if (len >= 6) return { score: 3, isValid: false, remaining: 8 - len };
+  if (len >= 4) return { score: 2, isValid: false, remaining: 8 - len };
+  if (len >= 2) return { score: 1, isValid: false, remaining: 8 - len };
+  return { score: len > 0 ? 1 : 0, isValid: false, remaining: 8 - len };
 };
 
 // The eight that decide whether someone signs up. Everything else is a metric
@@ -2264,10 +2263,13 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               <input id="register-email" type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className={inputClass} placeholder="Email address" />
             </div>
             <div>
-              <label htmlFor="register-password" className="block text-sm font-medium text-slate-300 mb-1.5">Password</label>
+              <div className="flex justify-between items-center mb-1.5">
+                <label htmlFor="register-password" className="block text-sm font-medium text-slate-300">Password</label>
+                <span className="text-[11px] text-slate-400">Minimum 8 characters</span>
+              </div>
               <div className="relative">
-                <input id="register-password" type={showPassword ? "text" : "password"} required value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-11'} placeholder="Password" />
+                <input id="register-password" type={showPassword ? "text" : "password"} required minLength={8} value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-11'} placeholder="At least 8 characters" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -2280,24 +2282,20 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 </button>
               </div>
               {authPassword && (() => {
-                const strength = getPasswordStrength(authPassword);
-                const color = strength >= 5 ? 'bg-emerald-500' : strength >= 3 ? 'bg-amber-400' : 'bg-rose-500';
-                const textColor = strength >= 5 ? 'text-emerald-400' : strength >= 3 ? 'text-amber-300' : 'text-rose-400';
-                const message = strength >= 5
-                  ? 'Strong password.'
-                  : strength === 4
-                    ? 'Good password — almost there.'
-                    : strength === 3
-                      ? 'Getting stronger — add uppercase, numbers, or symbols.'
-                      : 'Use a stronger password — mix uppercase, lowercase, numbers, and symbols.';
+                const { score, isValid, remaining } = getPasswordProgress(authPassword);
+                const color = isValid ? 'bg-emerald-500' : score >= 3 ? 'bg-amber-400' : 'bg-rose-500';
+                const textColor = isValid ? 'text-emerald-400' : score >= 3 ? 'text-amber-300' : 'text-rose-400';
+                const message = isValid
+                  ? '✓ Password accepted (minimum 8 characters met)'
+                  : `${remaining} more character${remaining === 1 ? '' : 's'} needed (minimum 8)`;
                 return (
                   <div className="mt-2">
                     <div className="flex gap-1.5">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= strength ? color : 'bg-white/10'}`}></div>
+                      {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= score ? color : 'bg-white/10'}`}></div>
                       ))}
                     </div>
-                    <p className={`text-xs mt-1.5 ${textColor}`}>{message}</p>
+                    <p className={`text-xs mt-1.5 font-medium ${textColor}`}>{message}</p>
                   </div>
                 );
               })()}

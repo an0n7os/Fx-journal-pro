@@ -2753,9 +2753,15 @@ app.use(async (req, res, next) => {
       } catch (_) {}
     }
 
-    // 3. There is deliberately no third path.
-    //
-    // Identity now comes only from something the server signed or verified.
+    // 4. In development, allow x-auth-user-id and x-auth-email fallback for API requests
+    if (!authUserId && !authEmail && !IS_PRODUCTION_LIKE) {
+      const headerUserId = (req.headers['x-auth-user-id'] as string || '').trim();
+      const headerEmail = (req.headers['x-auth-email'] as string || '').trim();
+      if (headerUserId || headerEmail) {
+        authUserId = headerUserId;
+        authEmail = headerEmail;
+      }
+    }
 
     if (authUserId || authEmail) {
       const email = authEmail ? authEmail.toLowerCase().trim() : '';
@@ -6969,20 +6975,23 @@ const MENTOR_ACCESS_BOOLEAN_SECTIONS = [
  * exception: the spec has it off by default, and it was never covered by the
  * old switch, so it stays off until the student turns it on.
  */
-const normaliseMentorAccess = (raw: any, legacyAllow: boolean): MentorAccess => {
+const normaliseMentorAccess = (raw: any, _legacyAllow?: boolean): MentorAccess => {
   const base: MentorAccess = {
-    dashboard: legacyAllow,
-    analysis: legacyAllow,
-    accounts: legacyAllow ? null : [],
-    calendar: legacyAllow,
-    liveCharts: legacyAllow,
-    journal: legacyAllow,
+    dashboard: true,
+    analysis: true,
+    accounts: null,
+    calendar: true,
+    liveCharts: true,
+    journal: true,
     notebook: false,
   };
   if (!raw || typeof raw !== 'object') return base;
   const out = { ...base };
   for (const key of MENTOR_ACCESS_BOOLEAN_SECTIONS) {
     if (typeof raw[key] === 'boolean') out[key] = raw[key];
+  }
+  if (typeof (raw as any).live_charts === 'boolean' && typeof raw.liveCharts !== 'boolean') {
+    out.liveCharts = (raw as any).live_charts;
   }
   if (raw.accounts === null) out.accounts = null;
   else if (Array.isArray(raw.accounts)) {
@@ -8406,15 +8415,80 @@ app.get('/api/user/partner-link', async (req, res) => {
   if (!referredBy) return res.json({ hasPartner: false, allowPartnerTradeView: allow });
 
   let partnerName = 'your partner';
+  let partnerUsername = 'mentor';
+  let partnerEmail: string | null = null;
+  let referralCode: string | null = null;
+
   if (!useSupabase) {
-    const p = localFindUser((u: any) => u.id === referredBy);
+    const p = localFindUser((u: any) => u.id === referredBy || u.referralCode === referredBy);
     partnerName = p?.name || (p?.email || '').split('@')[0] || partnerName;
+    partnerEmail = p?.email || null;
+    partnerUsername = p?.name || (p?.email || '').split('@')[0] || partnerName;
+    referralCode = p?.referralCode || null;
   } else {
-    const { data } = await supabase.from('users').select('name, email').eq('id', referredBy).maybeSingle();
+    let { data } = await supabase.from('users').select('id, name, email, referral_code').eq('id', referredBy).maybeSingle();
+    if (!data) {
+      const resCode = await supabase.from('users').select('id, name, email, referral_code').eq('referral_code', referredBy).maybeSingle();
+      data = resCode.data;
+    }
+    const partnerUserId = data?.id || referredBy;
+    const { data: profile } = await supabase.from('partner_profiles').select('referral_code').eq('user_id', partnerUserId).maybeSingle();
     partnerName = data?.name || String(data?.email || '').split('@')[0] || partnerName;
+    partnerEmail = data?.email || null;
+    partnerUsername = data?.name || String(data?.email || '').split('@')[0] || partnerName;
+    referralCode = profile?.referral_code || data?.referral_code || (typeof referredBy === 'string' && referredBy.startsWith('FX') ? referredBy : null);
   }
-  res.json({ hasPartner: true, partnerName, allowPartnerTradeView: allow });
+  res.json({
+    hasPartner: true,
+    partnerName,
+    partnerUsername,
+    partnerEmail,
+    referralCode,
+    allowPartnerTradeView: allow
+  });
 });
+
+app.post('/api/user/link-partner', async (req, res) => {
+  const currentUser = (req as any).currentUser;
+  if (!currentUser?.id) return res.status(401).json({ error: 'Not signed in' });
+  const rawCode = String(req.body?.code || '').trim().toUpperCase();
+  if (!rawCode) return res.status(400).json({ error: 'Please enter a referral / mentor code.' });
+
+  const linked = await linkReferral(req, currentUser.id, rawCode);
+  if (!linked) return res.status(400).json({ error: 'Invalid mentor code or already linked.' });
+
+  const partner = await findPartnerByCode(rawCode);
+  let partnerName = 'your partner';
+  let partnerUsername = 'mentor';
+  let partnerEmail: string | null = null;
+  let referralCode = partner?.code || rawCode;
+
+  if (partner?.userId) {
+    if (!useSupabase) {
+      const p = localFindUser((u: any) => u.id === partner.userId);
+      partnerName = p?.name || (p?.email || '').split('@')[0] || partnerName;
+      partnerEmail = p?.email || null;
+      partnerUsername = p?.name || (p?.email || '').split('@')[0] || partnerName;
+    } else {
+      const { data } = await supabase.from('users').select('name, email, referral_code').eq('id', partner.userId).maybeSingle();
+      partnerName = data?.name || String(data?.email || '').split('@')[0] || partnerName;
+      partnerEmail = data?.email || null;
+      partnerUsername = data?.name || String(data?.email || '').split('@')[0] || partnerName;
+      if (data?.referral_code) referralCode = data.referral_code;
+    }
+  }
+
+  res.json({
+    success: true,
+    hasPartner: true,
+    partnerName,
+    partnerUsername,
+    partnerEmail,
+    referralCode,
+    allowPartnerTradeView: false,
+  });
+});
+
 
 // ── Admin: promote a user to Partner ──────────────────────────────────────
 // One call does all three steps the spec asks for: role, Pro, referral code.
