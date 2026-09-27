@@ -194,7 +194,7 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
     setWithdrawSuccess(null);
     setWaClaimUrl(null);
     setWithdrawAmount(earnings.availableBalance > 0 ? earnings.availableBalance : '');
-    setModalUpi(details.upiId || '');
+    setModalUpi(details.upiId || upiDraft || '');
     setWithdrawMethod(details.type || 'UPI');
     setModalMode(mode);
     setShowWithdrawModal(true);
@@ -211,11 +211,8 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
       setWithdrawError(`Requested amount exceeds available balance (₹${earnings.availableBalance}).`);
       return;
     }
-    const targetUpi = (modalUpi || details.upiId || '').trim();
-    if (!targetUpi) {
-      setWithdrawError('Please enter your UPI ID (Google Pay / PhonePe / Paytm).');
-      return;
-    }
+    const rawUpi = (modalUpi || details.upiId || upiDraft || '').trim();
+    const targetUpi = rawUpi || 'Direct on WhatsApp';
 
     setSubmittingWithdrawal(true);
     setWithdrawError(null);
@@ -235,15 +232,19 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
       const partnerName = partnerMe?.name || 'Partner';
       const partnerCode = partnerMe?.referralCode || 'PARTNER';
       const reqId = data?.request?.id || 'PENDING';
-      const msg = `Hi FX Journal Pro Admin! 👋\nI want to claim my Partner Referral Earnings.\n\n🆔 Request ID: ${reqId}\n👤 Partner: ${partnerName}\n🎟️ Referral Code: ${partnerCode}\n💰 Claim Amount: ₹${amt}\n📱 Pay to UPI: ${targetUpi}\n\n(Verify Request ID in Admin Panel). Thank you!`;
+      const upiDisplay = rawUpi ? rawUpi : 'Share directly in WhatsApp chat';
+      const msg = `Hi FX Journal Pro Admin! 👋\nI want to claim my Partner Referral Earnings.\n\n🆔 Request ID: ${reqId}\n👤 Partner: ${partnerName}\n🎟️ Referral Code: ${partnerCode}\n💰 Claim Amount: ₹${amt}\n📱 Pay to UPI: ${upiDisplay}\n\n(Verify Request ID in Admin Panel). Thank you!`;
       const waUrl = `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`;
       setWaClaimUrl(waUrl);
 
-      // Direct navigation to WhatsApp wa.me link (never blocked by popup blockers)
+      // Attempt popup first, then fallback to current tab navigation
       try {
-        window.location.href = waUrl;
+        const win = window.open(waUrl, '_blank');
+        if (!win || win.closed || typeof win.closed === 'undefined') {
+          window.location.href = waUrl;
+        }
       } catch {
-        window.open(waUrl, '_blank');
+        window.location.href = waUrl;
       }
 
       setWithdrawSuccess('Withdrawal registered! If WhatsApp did not open automatically, click the button below to send your claim.');
@@ -861,19 +862,21 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
 
                 {/* UPI ID Input */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Your UPI ID / GPay / PhonePe Number
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Your UPI ID / GPay / PhonePe Number
+                    </label>
+                    <span className="text-[10px] text-slate-500 font-medium">Optional</span>
+                  </div>
                   <input
                     type="text"
                     value={modalUpi}
                     onChange={(e) => setModalUpi(e.target.value)}
-                    placeholder="e.g. 9876543210@paytm, name@okhdfcbank"
+                    placeholder="e.g. 9876543210@paytm, name@okhdfcbank, or phone number"
                     className="w-full bg-slate-950 border border-slate-700/80 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none"
-                    required
                   />
                   <p className="text-[10px] text-slate-500 mt-1">
-                    Admin will send this payout directly to this UPI ID.
+                    Enter your UPI or mobile number, or leave empty to share directly on WhatsApp.
                   </p>
                 </div>
 
@@ -887,7 +890,7 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
                   </button>
                   <button
                     type="submit"
-                    disabled={submittingWithdrawal || !withdrawAmount || Number(withdrawAmount) <= 0 || !modalUpi.trim()}
+                    disabled={submittingWithdrawal || !withdrawAmount || Number(withdrawAmount) <= 0}
                     className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-xs font-bold text-white transition flex items-center gap-2 cursor-pointer shadow-md shadow-emerald-600/30"
                   >
                     {submittingWithdrawal ? (

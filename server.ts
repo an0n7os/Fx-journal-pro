@@ -8851,21 +8851,19 @@ app.post('/api/partner/payout-request', async (req, res) => {
 
   const method = req.body?.method === 'BANK' ? 'BANK' : 'UPI';
 
-  // If partner passed upiId directly in the request body (e.g. from 1-Click WhatsApp Claim):
-  if (req.body?.upiId && typeof req.body.upiId === 'string' && req.body.upiId.trim()) {
+  // If partner passed upiId directly or needs WhatsApp fallback:
+  if (method === 'UPI') {
+    const passedUpi = typeof req.body?.upiId === 'string' ? req.body.upiId.trim() : '';
+    const finalUpi = passedUpi || payoutDetails?.upiId || 'Direct on WhatsApp';
     payoutDetails = {
       ...(payoutDetails || {}),
       type: 'UPI',
-      upiId: req.body.upiId.trim(),
+      upiId: finalUpi,
     };
   }
 
   if (!payoutDetails) {
     return res.status(400).json({ error: 'Please enter your UPI ID (or Bank details) to proceed.' });
-  }
-
-  if (method === 'UPI' && !payoutDetails.upiId) {
-    return res.status(400).json({ error: 'Please enter a valid UPI ID (e.g. yourname@okhdfcbank).' });
   }
 
   if (method === 'BANK' && (!payoutDetails.accountNumber || !payoutDetails.ifsc)) {
