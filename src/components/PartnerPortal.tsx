@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Link2, Pencil, Ticket, Users, X } from 'lucide-react';
+import { Check, Copy, Link2, Pencil, Ticket, Users, X, Wallet, Sparkles } from 'lucide-react';
 import PartnerUserRegistry from './PartnerUserRegistry';
 import ReferralIncomeHub from './ReferralIncomeHub';
+import PartnerPayoutHub from './PartnerPayoutHub';
 
 interface PartnerMe {
   partnerId: string;
@@ -22,6 +23,7 @@ export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}
   const [editing, setEditing] = useState(false);
   const [draftCode, setDraftCode] = useState('');
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'payouts' | 'network'>('overview');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,102 +88,153 @@ export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}
         </div>
       )}
 
-      {/* ── Referral identity ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Link2 className="h-4 w-4 text-violet-400" />
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Referral link</p>
-          </div>
-          <p className="font-mono text-[13px] text-slate-200 break-all leading-relaxed mb-4">
-            {loading ? 'Loading…' : me?.referralUrl}
-          </p>
-          <button
-            onClick={() => me && copy(me.referralUrl, 'link')}
-            disabled={!me}
-            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 px-4 py-2.5 text-xs font-bold text-white transition-colors"
-          >
-            {copied === 'link' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            {copied === 'link' ? 'Copied' : 'Copy link'}
-          </button>
-        </div>
+      {/* ── Sub Navigation Tabs ────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 border-b border-slate-800/80 pb-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            activeTab === 'overview'
+              ? 'bg-violet-600/20 text-violet-300 border border-violet-500/40 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'
+          }`}
+        >
+          <Link2 className="h-4 w-4 text-violet-400" />
+          Referral Links & Pricing
+        </button>
 
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Ticket className="h-4 w-4 text-violet-400" />
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Referral code</p>
-          </div>
+        <button
+          onClick={() => setActiveTab('payouts')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            activeTab === 'payouts'
+              ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'
+          }`}
+        >
+          <Wallet className="h-4 w-4 text-emerald-400" />
+          Withdrawals & Payouts
+        </button>
 
-          {editing ? (
-            <>
-              <input
-                value={draftCode}
-                onChange={(e) => setDraftCode(e.target.value.toUpperCase())}
-                maxLength={16}
-                autoFocus
-                placeholder="YOURCODE"
-                aria-label="Referral code"
-                className="w-full bg-slate-950/60 border border-slate-700 focus:border-violet-500/60 rounded-xl px-3.5 py-2.5 font-mono text-lg tracking-[0.18em] text-white focus:outline-none mb-2"
-              />
-              <p className="text-[11px] text-slate-500 mb-4">4–16 letters and numbers. No spaces or symbols.</p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={saveCode}
-                  disabled={saving}
-                  className="rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 px-4 py-2.5 text-xs font-bold text-white transition-colors"
-                >
-                  {saving ? 'Saving…' : 'Save code'}
-                </button>
-                <button
-                  onClick={() => { setEditing(false); setDraftCode(me?.referralCode || ''); setError(''); }}
-                  className="rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors"
-                >
-                  Cancel
-                </button>
+        <button
+          onClick={() => setActiveTab('network')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            activeTab === 'network'
+              ? 'bg-blue-600/20 text-blue-300 border border-blue-500/40 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'
+          }`}
+        >
+          <Users className="h-4 w-4 text-blue-400" />
+          Referred Traders Network
+        </button>
+      </div>
+
+      {/* ── TAB 1: OVERVIEW & LINKS ──────────────────────────────────────── */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          {/* Referral identity */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Link2 className="h-4 w-4 text-violet-400" />
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Referral link</p>
               </div>
-            </>
-          ) : (
-            <>
-              <p className="font-mono text-2xl font-black tracking-[0.18em] text-white mb-4">
-                {loading ? '…' : me?.referralCode}
+              <p className="font-mono text-[13px] text-slate-200 break-all leading-relaxed mb-4">
+                {loading ? 'Loading…' : me?.referralUrl}
               </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => me && copy(me.referralCode, 'code')}
-                  disabled={!me}
-                  className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 px-4 py-2.5 text-xs font-bold text-white transition-colors"
-                >
-                  {copied === 'code' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                  {copied === 'code' ? 'Copied' : 'Copy code'}
-                </button>
-                <button
-                  onClick={() => setEditing(true)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors"
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Customise
-                </button>
+              <button
+                onClick={() => me && copy(me.referralUrl, 'link')}
+                disabled={!me}
+                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 px-4 py-2.5 text-xs font-bold text-white transition-colors cursor-pointer"
+              >
+                {copied === 'link' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied === 'link' ? 'Copied' : 'Copy link'}
+              </button>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Ticket className="h-4 w-4 text-violet-400" />
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Referral code</p>
               </div>
-            </>
-          )}
+
+              {editing ? (
+                <>
+                  <input
+                    value={draftCode}
+                    onChange={(e) => setDraftCode(e.target.value.toUpperCase())}
+                    maxLength={16}
+                    autoFocus
+                    placeholder="YOURCODE"
+                    aria-label="Referral code"
+                    className="w-full bg-slate-950/60 border border-slate-700 focus:border-violet-500/60 rounded-xl px-3.5 py-2.5 font-mono text-lg tracking-[0.18em] text-white focus:outline-none mb-2"
+                  />
+                  <p className="text-[11px] text-slate-500 mb-4">4–16 letters and numbers. No spaces or symbols.</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={saveCode}
+                      disabled={saving}
+                      className="rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 px-4 py-2.5 text-xs font-bold text-white transition-colors cursor-pointer"
+                    >
+                      {saving ? 'Saving…' : 'Save code'}
+                    </button>
+                    <button
+                      onClick={() => { setEditing(false); setDraftCode(me?.referralCode || ''); setError(''); }}
+                      className="rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="font-mono text-2xl font-black tracking-[0.18em] text-white mb-4">
+                    {loading ? '…' : me?.referralCode}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => me && copy(me.referralCode, 'code')}
+                      disabled={!me}
+                      className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 px-4 py-2.5 text-xs font-bold text-white transition-colors cursor-pointer"
+                    >
+                      {copied === 'code' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copied === 'code' ? 'Copied' : 'Copy code'}
+                    </button>
+                    <button
+                      onClick={() => setEditing(true)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Customise
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Pricing, coupon and campaign links */}
+          <ReferralIncomeHub />
         </div>
-      </div>
+      )}
 
-      {/* ── Pricing, coupon and campaign links ───────────────────── */}
-      <ReferralIncomeHub />
+      {/* ── TAB 2: WITHDRAWALS & PAYOUTS ──────────────────────────────────── */}
+      {activeTab === 'payouts' && (
+        <PartnerPayoutHub />
+      )}
 
-      {/* ── Referred Users Registry (Network) ────────────────────── */}
-      <div className="space-y-4">
-        <div className="flex items-start gap-2.5 rounded-2xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
-          <Users className="h-4 w-4 shrink-0 text-slate-500 mt-px" />
-          <p className="text-[11px] leading-relaxed text-slate-500">
-            You can always see who is in your network. Their trades, analysis and journal stay
-            private until each user turns on <span className="text-slate-300 font-semibold">Allow Partner to
-            View Trade Details</span> in their own settings — and they can turn it back off at any time.
-          </p>
+      {/* ── TAB 3: REFERRED TRADERS NETWORK ──────────────────────────────── */}
+      {activeTab === 'network' && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-2.5 rounded-2xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
+            <Users className="h-4 w-4 shrink-0 text-slate-500 mt-px" />
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              You can always see who is in your network. Their trades, analysis and journal stay
+              private until each user turns on <span className="text-slate-300 font-semibold">Allow Partner to
+              View Trade Details</span> in their own settings — and they can turn it back off at any time.
+            </p>
+          </div>
+
+          <PartnerUserRegistry onInspectUser={onInspectUser} />
         </div>
-
-        <PartnerUserRegistry onInspectUser={onInspectUser} />
-      </div>
+      )}
     </div>
   );
 }

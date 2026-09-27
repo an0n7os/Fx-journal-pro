@@ -7719,11 +7719,38 @@ type ReferralLink = {
   updatedAt?: string;
 };
 
+type PartnerPayoutDetails = {
+  type: 'UPI' | 'BANK';
+  upiId?: string;
+  accountHolderName?: string;
+  accountNumber?: string;
+  ifsc?: string;
+  bankName?: string;
+};
+
+type PartnerPayoutRequest = {
+  id: string;
+  partnerId: string;
+  partnerName: string;
+  partnerEmail: string;
+  partnerCode: string;
+  amount: number;
+  method: 'UPI' | 'BANK';
+  payoutDetails: PartnerPayoutDetails;
+  status: 'PENDING' | 'PAID' | 'REJECTED';
+  utrNumber?: string;
+  adminNotes?: string;
+  requestedAt: string;
+  processedAt?: string;
+  processedBy?: string;
+};
+
 type PartnerProfile = {
   userId: string;
   referralCode: string;
   offerPrice?: number; // 199 to 499 (default 499)
   links?: ReferralLink[];
+  payoutDetails?: PartnerPayoutDetails;
   createdAt: string;
   createdBy: string;
 };
@@ -7740,6 +7767,24 @@ const writePartnerProfiles = (rows: PartnerProfile[]) => {
   const shared = loadDatabaseFromFile();
   shared.partnerProfiles = rows;
   fs.writeFileSync(DB_FILE, JSON.stringify(shared, null, 2), 'utf-8');
+};
+
+const readPayoutRequests = (): PartnerPayoutRequest[] => {
+  try {
+    return loadDatabaseFromFile().partnerPayoutRequests || [];
+  } catch {
+    return [];
+  }
+};
+
+const writePayoutRequests = (rows: PartnerPayoutRequest[]) => {
+  const shared = loadDatabaseFromFile();
+  shared.partnerPayoutRequests = rows;
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(shared, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[writePayoutRequests] Failed to write to DB_FILE:', err);
+  }
 };
 
 /** Finds the partner who owns a referral or coupon code. Searches primary code and custom campaign links. */
@@ -7934,19 +7979,22 @@ async function savePartnerProfile(
   code: string,
   createdBy: string,
   offerPrice: number = 499,
-  links?: ReferralLink[]
+  links?: ReferralLink[],
+  payoutDetails?: PartnerPayoutDetails
 ) {
   if (!useSupabase) {
     const rows = readPartnerProfiles();
     const existing = rows.find((p) => p.userId === userId);
     const existingLinks = links !== undefined ? links : (existing?.links || []);
     const existingOfferPrice = offerPrice !== undefined ? offerPrice : (existing?.offerPrice || 499);
+    const existingPayoutDetails = payoutDetails !== undefined ? payoutDetails : (existing?.payoutDetails);
     const filtered = rows.filter((p) => p.userId !== userId);
     filtered.push({
       userId,
       referralCode: code,
       offerPrice: existingOfferPrice,
       links: existingLinks,
+      payoutDetails: existingPayoutDetails,
       createdAt: existing?.createdAt || new Date().toISOString(),
       createdBy: existing?.createdBy || createdBy
     });
@@ -7960,6 +8008,7 @@ async function savePartnerProfile(
         referral_code: code,
         offer_price: offerPrice,
         links: links || [],
+        payout_details: payoutDetails || {},
         created_by: createdBy || null
       },
       { onConflict: 'user_id' },
@@ -8581,6 +8630,406 @@ app.delete('/api/admin/users/:id/partner', async (req, res) => {
   // users arrived, and clearing it would lose the attribution.
   await writeAuditLog(req, ctx, 'partner.demote', 'user', id, {});
   res.json({ message: 'Partner access removed.', userId: id, role: 'USER' });
+});
+
+// ── Partner: Withdrawal & Payout Management ──────────────────────────────
+
+async function getPartnerPayoutData(userId: string, partnerCode: string) {
+  let totalEarned = 0;
+  if (!useSupabase) {
+    const all = localAllUsers();
+    const referrerOf: Record<string, string> = {};
+    for (const u of all) {
+      if (u.referredBy) referrerOf[u.id] = u.referredBy;
+    }
+    for (const pay of localAllPayments()) {
+      if (String(pay.status || '').toLowerCase() !== 'captured') continue;
+      const key = referrerOf[pay.userId || pay.user_id];
+      if (key === userId || (partnerCode && key === partnerCode)) {
+        totalEarned += Math.max(0, (Number(pay.amount) || 0) - PARTNER_PLATFORM_FLOOR_INR);
+      }
+    }
+  } else {
+    try {
+      const { data: users } = await supabase.from('users').select('id, referred_by');
+      const { data: payments } = await supabase.from('payments').select('amount, status, user_id').eq('status', 'captured');
+      const referrerOf: Record<string, string> = {};
+      for (const u of users || []) {
+        if (u.referred_by) referrerOf[u.id] = u.referred_by;
+      }
+      for (const pay of payments || []) {
+        const key = referrerOf[pay.user_id];
+        if (key === userId || (partnerCode && key === partnerCode)) {
+          totalEarned += Math.max(0, (Number(pay.amount) || 0) - PARTNER_PLATFORM_FLOOR_INR);
+        }
+      }
+    } catch (err) {
+      console.warn('[getPartnerPayoutData] Supabase fetch error:', err);
+    }
+  }
+
+  let allRequests: PartnerPayoutRequest[] = [];
+  if (useSupabase) {
+    try {
+      const { data, error } = await supabase
+        .from('partner_payout_requests')
+        .select('*')
+        .eq('partner_id', userId)
+        .order('requested_at', { ascending: false });
+      if (!error && Array.isArray(data)) {
+        allRequests = data.map((r: any) => ({
+          id: r.id,
+          partnerId: r.partner_id,
+          partnerName: r.partner_name || '',
+          partnerEmail: r.partner_email || '',
+          partnerCode: r.partner_code || partnerCode,
+          amount: Number(r.amount) || 0,
+          method: r.method,
+          payoutDetails: r.payout_details || {},
+          status: r.status,
+          utrNumber: r.utr_number,
+          adminNotes: r.admin_notes,
+          requestedAt: r.requested_at,
+          processedAt: r.processed_at,
+          processedBy: r.processed_by,
+        }));
+      } else {
+        allRequests = readPayoutRequests().filter((r) => r.partnerId === userId);
+      }
+    } catch {
+      allRequests = readPayoutRequests().filter((r) => r.partnerId === userId);
+    }
+  } else {
+    allRequests = readPayoutRequests().filter((r) => r.partnerId === userId);
+  }
+
+  allRequests.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
+
+  const totalWithdrawn = allRequests
+    .filter((r) => r.status === 'PAID')
+    .reduce((sum, r) => sum + r.amount, 0);
+
+  const totalPending = allRequests
+    .filter((r) => r.status === 'PENDING')
+    .reduce((sum, r) => sum + r.amount, 0);
+
+  const availableBalance = Math.max(0, totalEarned - totalWithdrawn - totalPending);
+
+  return {
+    totalEarned,
+    totalWithdrawn,
+    totalPending,
+    availableBalance,
+    minPayoutThreshold: 500,
+    requests: allRequests,
+  };
+}
+
+// GET /api/partner/payout – partner's earnings, available balance, settings & request history
+app.get('/api/partner/payout', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.self');
+  if (!ctx) return;
+  const userId = ctx.user?.id || '';
+
+  let profile: PartnerProfile | null = null;
+  if (!useSupabase) {
+    profile = readPartnerProfiles().find((p) => p.userId === userId) || null;
+  } else {
+    const { data } = await supabase.from('partner_profiles').select('*').eq('user_id', userId).maybeSingle();
+    profile = data ? (toCamel(data) as any) : null;
+  }
+
+  const partnerCode = profile?.referralCode || '';
+  const payoutData = await getPartnerPayoutData(userId, partnerCode);
+
+  res.json({
+    payoutDetails: profile?.payoutDetails || null,
+    earnings: {
+      totalEarned: payoutData.totalEarned,
+      totalWithdrawn: payoutData.totalWithdrawn,
+      totalPending: payoutData.totalPending,
+      availableBalance: payoutData.availableBalance,
+      minPayoutThreshold: payoutData.minPayoutThreshold,
+    },
+    requests: payoutData.requests,
+  });
+});
+
+// PUT /api/partner/payout-settings – save or update partner's UPI or bank account
+app.put('/api/partner/payout-settings', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.self');
+  if (!ctx) return;
+  const userId = ctx.user?.id || '';
+
+  const type = req.body?.type === 'BANK' ? 'BANK' : 'UPI';
+  const upiId = String(req.body?.upiId || '').trim();
+  const accountHolderName = String(req.body?.accountHolderName || '').trim();
+  const accountNumber = String(req.body?.accountNumber || '').trim();
+  const ifsc = String(req.body?.ifsc || '').trim().toUpperCase();
+  const bankName = String(req.body?.bankName || '').trim();
+
+  if (type === 'UPI' && upiId && !/^[\w.\-_]{2,256}@[a-zA-Z]{2,64}$/.test(upiId)) {
+    return res.status(400).json({ error: 'Please enter a valid UPI ID (e.g. name@okhdfcbank, mobile@paytm).' });
+  }
+
+  if (type === 'BANK') {
+    if (accountNumber && !/^\d{9,18}$/.test(accountNumber)) {
+      return res.status(400).json({ error: 'Account number should be 9 to 18 digits.' });
+    }
+    if (ifsc && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+      return res.status(400).json({ error: 'Please enter a valid 11-character IFSC code (e.g. HDFC0001234).' });
+    }
+  }
+
+  const payoutDetails: PartnerPayoutDetails = {
+    type,
+    upiId,
+    accountHolderName,
+    accountNumber,
+    ifsc,
+    bankName,
+  };
+
+  let code = '';
+  let offerPrice = 499;
+  let links: any[] = [];
+  if (!useSupabase) {
+    const prof = readPartnerProfiles().find((p) => p.userId === userId);
+    code = prof?.referralCode || '';
+    offerPrice = prof?.offerPrice || 499;
+    links = prof?.links || [];
+  } else {
+    const { data } = await supabase.from('partner_profiles').select('*').eq('user_id', userId).maybeSingle();
+    code = data?.referral_code || '';
+    offerPrice = data?.offer_price || 499;
+    links = data?.links || [];
+  }
+
+  await savePartnerProfile(userId, code, userId, offerPrice, links, payoutDetails);
+  res.json({ success: true, payoutDetails });
+});
+
+// POST /api/partner/payout-request – submit a new withdrawal request
+app.post('/api/partner/payout-request', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.self');
+  if (!ctx) return;
+  const userId = ctx.user?.id || '';
+
+  let profile: PartnerProfile | null = null;
+  if (!useSupabase) {
+    profile = readPartnerProfiles().find((p) => p.userId === userId) || null;
+  } else {
+    const { data } = await supabase.from('partner_profiles').select('*').eq('user_id', userId).maybeSingle();
+    profile = data ? (toCamel(data) as any) : null;
+  }
+
+  const payoutDetails = profile?.payoutDetails;
+  const method = req.body?.method === 'BANK' ? 'BANK' : 'UPI';
+
+  if (!payoutDetails) {
+    return res.status(400).json({ error: 'Please configure your UPI ID or Bank details in Payout Settings first.' });
+  }
+
+  if (method === 'UPI' && !payoutDetails.upiId) {
+    return res.status(400).json({ error: 'Please configure a valid UPI ID in Payout Settings first.' });
+  }
+
+  if (method === 'BANK' && (!payoutDetails.accountNumber || !payoutDetails.ifsc)) {
+    return res.status(400).json({ error: 'Please enter your Bank Account Number and IFSC in Payout Settings first.' });
+  }
+
+  const rawAmount = Math.floor(Number(req.body?.amount));
+  if (isNaN(rawAmount) || rawAmount <= 0) {
+    return res.status(400).json({ error: 'Please enter a valid withdrawal amount.' });
+  }
+
+  const partnerCode = profile?.referralCode || '';
+  const payoutData = await getPartnerPayoutData(userId, partnerCode);
+
+  if (rawAmount < payoutData.minPayoutThreshold && payoutData.availableBalance >= payoutData.minPayoutThreshold) {
+    return res.status(400).json({ error: `Minimum withdrawal amount is ₹${payoutData.minPayoutThreshold}.` });
+  }
+
+  if (rawAmount > payoutData.availableBalance) {
+    return res.status(400).json({ error: `Withdrawal amount (₹${rawAmount}) exceeds your available balance (₹${payoutData.availableBalance}).` });
+  }
+
+  const requestId = `pr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const partnerName = ctx.user?.name || ctx.user?.email?.split('@')[0] || 'Partner';
+  const partnerEmail = ctx.user?.email || '';
+
+  const newRequest: PartnerPayoutRequest = {
+    id: requestId,
+    partnerId: userId,
+    partnerName,
+    partnerEmail,
+    partnerCode,
+    amount: rawAmount,
+    method,
+    payoutDetails,
+    status: 'PENDING',
+    requestedAt: new Date().toISOString(),
+  };
+
+  const currentRequests = readPayoutRequests();
+  currentRequests.unshift(newRequest);
+  writePayoutRequests(currentRequests);
+
+  if (useSupabase) {
+    try {
+      await supabase.from('partner_payout_requests').insert({
+        id: requestId,
+        partner_id: userId,
+        amount: rawAmount,
+        method,
+        payout_details: payoutDetails,
+        status: 'PENDING',
+        requested_at: newRequest.requestedAt,
+      });
+    } catch (err) {
+      console.warn('[partner-payout-request] Supabase fallback to file storage:', err);
+    }
+  }
+
+  await writeAuditLog(req, ctx, 'partner.payout_request', 'payout', requestId, {
+    amount: rawAmount,
+    method,
+    partnerEmail,
+  });
+
+  res.json({
+    success: true,
+    message: `Withdrawal request for ₹${rawAmount} submitted successfully.`,
+    request: newRequest,
+  });
+});
+
+// ── Admin: List all partner payout requests ───────────────────────────────
+app.get('/api/admin/payouts', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'billing.read');
+  if (!ctx) return;
+
+  let requests: PartnerPayoutRequest[] = [];
+  if (!useSupabase) {
+    requests = readPayoutRequests();
+  } else {
+    try {
+      const { data, error } = await supabase
+        .from('partner_payout_requests')
+        .select('*')
+        .order('requested_at', { ascending: false });
+      if (!error && Array.isArray(data)) {
+        const { data: users } = await supabase.from('users').select('id, name, email');
+        const { data: profs } = await supabase.from('partner_profiles').select('user_id, referral_code');
+        const uMap = new Map<string, any>((users || []).map((u: any) => [u.id, u]));
+        const pMap = new Map<string, any>((profs || []).map((p: any) => [p.user_id, p.referral_code]));
+        requests = data.map((r: any) => {
+          const u = uMap.get(r.partner_id);
+          return {
+            id: r.id,
+            partnerId: r.partner_id,
+            partnerName: u?.name || u?.email?.split('@')[0] || 'Partner',
+            partnerEmail: u?.email || '',
+            partnerCode: pMap.get(r.partner_id) || '',
+            amount: Number(r.amount) || 0,
+            method: r.method,
+            payoutDetails: r.payout_details || {},
+            status: r.status,
+            utrNumber: r.utr_number,
+            adminNotes: r.admin_notes,
+            requestedAt: r.requested_at,
+            processedAt: r.processed_at,
+            processedBy: r.processed_by,
+          };
+        });
+      } else {
+        requests = readPayoutRequests();
+      }
+    } catch {
+      requests = readPayoutRequests();
+    }
+  }
+
+  const totalPending = requests.filter((r) => r.status === 'PENDING').reduce((s, r) => s + r.amount, 0);
+  const totalPaid = requests.filter((r) => r.status === 'PAID').reduce((s, r) => s + r.amount, 0);
+  const pendingCount = requests.filter((r) => r.status === 'PENDING').length;
+
+  res.json({
+    requests,
+    summary: {
+      totalPending,
+      totalPaid,
+      pendingCount,
+      totalCount: requests.length,
+    },
+  });
+});
+
+// ── Admin: Process a partner payout request (PAID or REJECTED) ────────────
+app.post('/api/admin/payouts/:id/process', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'billing.read');
+  if (!ctx) return;
+
+  const { id } = req.params;
+  const action = req.body?.action;
+  const utrNumber = String(req.body?.utrNumber || '').trim();
+  const adminNotes = String(req.body?.adminNotes || '').trim();
+
+  if (action !== 'PAID' && action !== 'REJECTED') {
+    return res.status(400).json({ error: 'Action must be either PAID or REJECTED.' });
+  }
+
+  if (action === 'PAID' && !utrNumber) {
+    return res.status(400).json({ error: 'Please enter a UTR or Transaction Reference number.' });
+  }
+
+  if (action === 'REJECTED' && !adminNotes) {
+    return res.status(400).json({ error: 'Please provide a reason for rejecting this payout request.' });
+  }
+
+  const now = new Date().toISOString();
+  const processedBy = ctx.user?.email || 'Admin';
+
+  const all = readPayoutRequests();
+  const target = all.find((r) => r.id === id);
+  if (target) {
+    target.status = action;
+    target.utrNumber = utrNumber || undefined;
+    target.adminNotes = adminNotes || undefined;
+    target.processedAt = now;
+    target.processedBy = processedBy;
+    writePayoutRequests(all);
+  }
+
+  if (useSupabase) {
+    try {
+      await supabase
+        .from('partner_payout_requests')
+        .update({
+          status: action,
+          utr_number: utrNumber || null,
+          admin_notes: adminNotes || null,
+          processed_at: now,
+          processed_by: processedBy,
+        })
+        .eq('id', id);
+    } catch (err) {
+      console.warn('[process-payout] Supabase update fallback:', err);
+    }
+  }
+
+  await writeAuditLog(req, ctx, `partner.payout_${action.toLowerCase()}`, 'payout', id, {
+    action,
+    utrNumber,
+    adminNotes,
+    amount: target?.amount,
+  });
+
+  res.json({
+    success: true,
+    message: action === 'PAID' ? `Payout marked as PAID (UTR: ${utrNumber})` : 'Payout request rejected.',
+    request: target,
+  });
 });
 
 // ── Admin: every partner and how big their network is ─────────────────────

@@ -129,6 +129,17 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
   const [annTitle, setAnnTitle] = useState('');
   const [annContent, setAnnContent] = useState('');
 
+  // Partner Payout Management in Billing tab
+  const [adminPayouts, setAdminPayouts] = useState<any[]>([]);
+  const [adminPayoutsSummary, setAdminPayoutsSummary] = useState<any>(null);
+  const [payoutFilter, setPayoutFilter] = useState<'ALL' | 'PENDING' | 'PAID' | 'REJECTED'>('ALL');
+  const [selectedPayout, setSelectedPayout] = useState<any | null>(null);
+  const [processModalAction, setProcessModalAction] = useState<'PAID' | 'REJECTED'>('PAID');
+  const [payoutUtrInput, setPayoutUtrInput] = useState('');
+  const [payoutNotesInput, setPayoutNotesInput] = useState('');
+  const [processingPayout, setProcessingPayout] = useState(false);
+  const [copiedDetail, setCopiedDetail] = useState<string | null>(null);
+
   // Auth headers — must be sent to all admin API calls
   const getAuthHeaders = (): Record<string, string> => {
     const userId = sessionStorage.getItem('auth_user_id') || '';
@@ -150,10 +161,11 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
     const authHeaders = getAuthHeaders();
     try {
       // Always fetch dashboard summary and user registry so counters are live across all tabs
-      const [dashRes, usersRes, checkRes] = await Promise.all([
+      const [dashRes, usersRes, checkRes, payoutsSummaryRes] = await Promise.all([
         fetch('/api/admin/dashboard', { headers: authHeaders }),
         fetch('/api/admin/users', { headers: authHeaders }),
-        fetch('/api/admin/check', { headers: authHeaders })
+        fetch('/api/admin/check', { headers: authHeaders }),
+        fetch('/api/admin/payouts', { headers: authHeaders }),
       ]);
       if (checkRes.ok) {
         const check = await checkRes.json();
@@ -164,6 +176,11 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
       if (usersRes.ok) {
         const data = await usersRes.json();
         if (data.users) setUsers(data.users);
+      }
+      if (payoutsSummaryRes.ok) {
+        const pData = await payoutsSummaryRes.json();
+        setAdminPayouts(pData.requests || []);
+        setAdminPayoutsSummary(pData.summary || null);
       }
 
       if (activeTab === 'assigned' && myRole !== 'SUB_ADMIN') {
@@ -185,10 +202,18 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
           if (data.permissions) setRolePermissions(data.permissions);
         }
       } else if (activeTab === 'billing') {
-        const res = await fetch('/api/admin/billing', { headers: authHeaders });
+        const [res, pRes] = await Promise.all([
+          fetch('/api/admin/billing', { headers: authHeaders }),
+          fetch('/api/admin/payouts', { headers: authHeaders }),
+        ]);
         if (res.ok) {
           const data = await res.json();
           setBillingData(data);
+        }
+        if (pRes.ok) {
+          const pData = await pRes.json();
+          setAdminPayouts(pData.requests || []);
+          setAdminPayoutsSummary(pData.summary || null);
         }
       } else if (activeTab === 'audit') {
         const res = await fetch('/api/admin/audit', { headers: authHeaders });
@@ -543,7 +568,7 @@ Their referral link stops working and ` +
           { id: 'assigned', label: isSubAdmin ? 'Partner Console' : 'Sub-Admin Console', icon: UserCheck, need: 'assigned.read', highlight: true },
           { id: 'users', label: 'User Registry', icon: Users, need: 'users.read', badge: users.length ? String(users.length) : undefined },
           { id: 'team', label: 'Team & Roles', icon: Shield, need: 'users.roles' },
-          { id: 'billing', label: 'Billing & Payments', icon: CreditCard, need: 'billing.read' },
+          { id: 'billing', label: 'Billing & Payments', icon: CreditCard, need: 'billing.read', badge: adminPayouts.filter(p => p.status === 'PENDING').length ? `${adminPayouts.filter(p => p.status === 'PENDING').length} Payouts` : undefined },
           { id: 'tickets', label: 'Tickets', icon: AlertCircle, need: 'tickets.read', badge: tickets.filter(t => t.status === 'Open').length || undefined },
           { id: 'bugs', label: 'Bugs', icon: Bug, need: 'dashboard.read' },
           { id: 'features', label: 'Features', icon: Lightbulb, need: 'dashboard.read' },
@@ -1646,6 +1671,356 @@ Their referral link stops working and ` +
               </table>
             </div>
           </div>
+
+          {/* ── Partner Withdrawal & Payout Requests ───────────────────────── */}
+          <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-emerald-400" />
+                  <h4 className="font-bold text-xs text-white uppercase tracking-wider">
+                    Partner Withdrawal & Payout Requests
+                  </h4>
+                  {adminPayouts.filter((p: any) => p.status === 'PENDING').length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse">
+                      {adminPayouts.filter((p: any) => p.status === 'PENDING').length} Pending
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Process affiliate commission settlements directly to partner UPI IDs or Bank Accounts.
+                </p>
+              </div>
+
+              {/* Status Filter Pills */}
+              <div className="flex items-center gap-1.5 p-1 bg-slate-950/80 rounded-xl border border-slate-800 self-start md:self-auto overflow-x-auto">
+                {(['ALL', 'PENDING', 'PAID', 'REJECTED'] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setPayoutFilter(st)}
+                    className={`px-3 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap ${
+                      payoutFilter === st
+                        ? 'bg-violet-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {st === 'ALL' ? 'All' : st === 'PENDING' ? 'Pending' : st === 'PAID' ? 'Paid' : 'Rejected'}
+                    {st === 'PENDING' && adminPayouts.filter((p: any) => p.status === 'PENDING').length > 0 && (
+                      <span className="ml-1.5 px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-mono text-[9px]">
+                        {adminPayouts.filter((p: any) => p.status === 'PENDING').length}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Payouts Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-wider font-bold bg-slate-950/60">
+                    <th className="py-2.5 px-4">Partner</th>
+                    <th className="py-2.5 px-4 text-right">Amount</th>
+                    <th className="py-2.5 px-4">Payout Method & Details</th>
+                    <th className="py-2.5 px-4">Requested At</th>
+                    <th className="py-2.5 px-4 text-center">Status</th>
+                    <th className="py-2.5 px-4 text-center">Actions / Details</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {adminPayouts
+                    .filter((p: any) => (payoutFilter === 'ALL' ? true : p.status === payoutFilter))
+                    .length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-500">
+                        No withdrawal requests found for this filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    adminPayouts
+                      .filter((p: any) => (payoutFilter === 'ALL' ? true : p.status === payoutFilter))
+                      .map((req: any) => (
+                        <tr key={req.id} className="hover:bg-slate-800/40 transition">
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-white">{req.partnerName}</div>
+                            <div className="text-[11px] text-slate-400 font-mono">{req.partnerEmail}</div>
+                            {req.partnerCode && (
+                              <span className="inline-block mt-0.5 px-1.5 py-0.2 text-[10px] font-mono font-bold rounded bg-violet-500/10 text-violet-300 border border-violet-500/20">
+                                {req.partnerCode}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-black text-emerald-400 whitespace-nowrap">
+                            ₹{req.amount?.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4">
+                            {req.method === 'UPI' ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-500/15 text-violet-300 border border-violet-500/20">
+                                  UPI
+                                </span>
+                                <span className="font-mono text-white text-[11px] font-semibold">
+                                  {req.payoutDetails?.upiId}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    if (req.payoutDetails?.upiId) {
+                                      navigator.clipboard.writeText(req.payoutDetails.upiId);
+                                      setCopiedDetail(req.id);
+                                      setTimeout(() => setCopiedDetail(null), 1800);
+                                    }
+                                  }}
+                                  className="text-slate-400 hover:text-white p-1 rounded transition"
+                                  title="Copy UPI ID"
+                                >
+                                  {copiedDetail === req.id ? (
+                                    <Check className="h-3 w-3 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="h-3 w-3" />
+                                  )}
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] space-y-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 text-blue-300 border border-blue-500/20">
+                                    BANK
+                                  </span>
+                                  <span className="font-semibold text-white">
+                                    {req.payoutDetails?.accountHolderName}
+                                  </span>
+                                </div>
+                                <div className="font-mono text-slate-400 text-[10px]">
+                                  A/C: {req.payoutDetails?.accountNumber} | IFSC: {req.payoutDetails?.ifsc}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-slate-400 whitespace-nowrap text-[11px]">
+                            {new Date(req.requestedAt).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            {req.status === 'PAID' && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                                Paid & Completed
+                              </span>
+                            )}
+                            {req.status === 'PENDING' && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/25">
+                                Pending Action
+                              </span>
+                            )}
+                            {req.status === 'REJECTED' && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/25">
+                                Rejected
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            {req.status === 'PENDING' ? (
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setSelectedPayout(req);
+                                    setProcessModalAction('PAID');
+                                    setPayoutUtrInput('');
+                                    setPayoutNotesInput('');
+                                  }}
+                                  className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm cursor-pointer"
+                                >
+                                  Mark as Paid
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedPayout(req);
+                                    setProcessModalAction('REJECTED');
+                                    setPayoutUtrInput('');
+                                    setPayoutNotesInput('');
+                                  }}
+                                  className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/20 transition cursor-pointer"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            ) : req.status === 'PAID' ? (
+                              <div className="text-[11px] font-mono text-slate-300">
+                                {req.utrNumber ? (
+                                  <span className="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 border border-slate-700">
+                                    UTR: {req.utrNumber}
+                                  </span>
+                                ) : (
+                                  <span>Processed</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-red-400/90 italic">
+                                {req.adminNotes || 'Rejected'}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Modal for processing payout */}
+          {selectedPayout && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Wallet className="h-5 w-5 text-violet-400" />
+                    {processModalAction === 'PAID' ? 'Confirm Payout Transfer' : 'Reject Payout Request'}
+                  </h3>
+                  <button
+                    onClick={() => setSelectedPayout(null)}
+                    className="text-slate-400 hover:text-white font-bold text-lg"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Partner:</span>
+                    <span className="font-bold text-white">{selectedPayout.partnerName} ({selectedPayout.partnerEmail})</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Payout Amount:</span>
+                    <span className="font-mono font-black text-emerald-400 text-sm">₹{selectedPayout.amount?.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-800/80">
+                    <span className="text-slate-400">Destination:</span>
+                    {selectedPayout.method === 'UPI' ? (
+                      <span className="font-mono font-bold text-violet-300">
+                        UPI: {selectedPayout.payoutDetails?.upiId}
+                      </span>
+                    ) : (
+                      <span className="font-mono text-blue-300">
+                        A/C: {selectedPayout.payoutDetails?.accountNumber} ({selectedPayout.payoutDetails?.ifsc})
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {processModalAction === 'PAID' ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                        UTR / Transaction Reference Number
+                      </label>
+                      <input
+                        type="text"
+                        value={payoutUtrInput}
+                        onChange={(e) => setPayoutUtrInput(e.target.value)}
+                        placeholder="e.g. UPI/423985729103 or IMPS reference"
+                        className="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none"
+                        required
+                        autoFocus
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Enter the transaction reference from Google Pay, PhonePe, or your bank portal.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                        Internal Note (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={payoutNotesInput}
+                        onChange={(e) => setPayoutNotesInput(e.target.value)}
+                        placeholder="Optional remarks"
+                        className="w-full bg-slate-950 border border-slate-700 focus:border-slate-500 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Rejection Reason (Visible to Partner)
+                    </label>
+                    <textarea
+                      value={payoutNotesInput}
+                      onChange={(e) => setPayoutNotesInput(e.target.value)}
+                      placeholder="e.g. Invalid UPI ID, please update your details in Payout Settings and re-request."
+                      className="w-full bg-slate-950 border border-slate-700 focus:border-red-500 rounded-xl p-3 text-xs text-white focus:outline-none h-24"
+                      required
+                      autoFocus
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Rejecting will return the amount back to the partner's available withdrawal balance.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPayout(null)}
+                    className="px-4 py-2 rounded-xl border border-slate-700 text-xs font-bold text-slate-300 hover:bg-slate-800 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={processingPayout || (processModalAction === 'PAID' && !payoutUtrInput.trim()) || (processModalAction === 'REJECTED' && !payoutNotesInput.trim())}
+                    onClick={async () => {
+                      if (!selectedPayout) return;
+                      setProcessingPayout(true);
+                      try {
+                        const res = await fetch(`/api/admin/payouts/${selectedPayout.id}/process`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                          body: JSON.stringify({
+                            action: processModalAction,
+                            utrNumber: payoutUtrInput.trim(),
+                            adminNotes: payoutNotesInput.trim(),
+                          }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || 'Failed to process payout.');
+                        setSelectedPayout(null);
+                        setPayoutUtrInput('');
+                        setPayoutNotesInput('');
+                        fetchData();
+                      } catch (err: any) {
+                        alert(err.message || 'Error processing payout');
+                      } finally {
+                        setProcessingPayout(false);
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                      processModalAction === 'PAID'
+                        ? 'bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40'
+                        : 'bg-red-600 hover:bg-red-500 disabled:opacity-40'
+                    }`}
+                  >
+                    {processingPayout ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Processing…
+                      </>
+                    ) : processModalAction === 'PAID' ? (
+                      'Confirm & Mark Paid'
+                    ) : (
+                      'Confirm Rejection'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Transactions Table with Search & Status Filters */}
           <div className="overflow-x-auto bg-slate-900/60 rounded-2xl border border-slate-800">
