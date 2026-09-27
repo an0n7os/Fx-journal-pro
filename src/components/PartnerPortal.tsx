@@ -217,7 +217,7 @@ export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}
 
       {/* ── TAB 2: WITHDRAWALS & PAYOUTS ──────────────────────────────────── */}
       {activeTab === 'payouts' && (
-        <PartnerPayoutHub />
+        <PartnerPayoutHub partnerMe={me} />
       )}
 
       {/* ── TAB 3: REFERRED TRADERS NETWORK ──────────────────────────────── */}

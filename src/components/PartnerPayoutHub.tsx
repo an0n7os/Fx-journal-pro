@@ -51,7 +51,28 @@ interface PayoutEarnings {
   minPayoutThreshold: number;
 }
 
-export default function PartnerPayoutHub() {
+interface PartnerMe {
+  partnerId: string;
+  name: string | null;
+  referralCode: string;
+  referralUrl: string;
+}
+
+interface PartnerPayoutHubProps {
+  partnerMe?: PartnerMe | null;
+}
+
+function WhatsAppIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
+
+const ADMIN_WHATSAPP = '918136802573';
+
+export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = {}) {
   const [earnings, setEarnings] = useState<PayoutEarnings>({
     totalEarned: 0,
     totalWithdrawn: 0,
@@ -84,6 +105,8 @@ export default function PartnerPayoutHub() {
 
   // Withdrawal modal state
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [modalMode, setModalMode] = useState<'whatsapp' | 'manual'>('whatsapp');
+  const [modalUpi, setModalUpi] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState<number | ''>('');
   const [withdrawMethod, setWithdrawMethod] = useState<'UPI' | 'BANK'>('UPI');
   const [submittingWithdrawal, setSubmittingWithdrawal] = useState(false);
@@ -165,12 +188,64 @@ export default function PartnerPayoutHub() {
     }
   };
 
-  const handleOpenWithdrawModal = () => {
+  const handleOpenWithdrawModal = (mode: 'whatsapp' | 'manual' = 'whatsapp') => {
     setWithdrawError(null);
     setWithdrawSuccess(null);
-    setWithdrawAmount(earnings.availableBalance >= 500 ? earnings.availableBalance : '');
+    setWithdrawAmount(earnings.availableBalance > 0 ? earnings.availableBalance : '');
+    setModalUpi(details.upiId || '');
     setWithdrawMethod(details.type || 'UPI');
+    setModalMode(mode);
     setShowWithdrawModal(true);
+  };
+
+  const handleWhatsAppClaim = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = Number(withdrawAmount);
+    if (!amt || amt <= 0) {
+      setWithdrawError('Please enter a valid amount.');
+      return;
+    }
+    if (amt > earnings.availableBalance) {
+      setWithdrawError(`Requested amount exceeds available balance (₹${earnings.availableBalance}).`);
+      return;
+    }
+    const targetUpi = (modalUpi || details.upiId || '').trim();
+    if (!targetUpi) {
+      setWithdrawError('Please enter your UPI ID (Google Pay / PhonePe / Paytm).');
+      return;
+    }
+
+    setSubmittingWithdrawal(true);
+    setWithdrawError(null);
+
+    try {
+      // 1. Submit request to backend
+      const res = await fetch('/api/partner/payout-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ amount: amt, method: 'UPI', upiId: targetUpi }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit withdrawal request.');
+
+      // 2. Open WhatsApp with formatted claim
+      const partnerName = partnerMe?.name || 'Partner';
+      const partnerCode = partnerMe?.referralCode || 'PARTNER';
+      const msg = `Hi FX Journal Pro Admin! 👋\nI want to claim my Partner Referral Earnings.\n\n👤 Partner: ${partnerName}\n🎟️ Referral Code: ${partnerCode}\n💰 Claim Amount: ₹${amt}\n📱 Pay to UPI: ${targetUpi}\n\nPlease transfer via GPay/PhonePe and confirm. Thank you!`;
+      const waUrl = `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+      window.open(waUrl, '_blank');
+
+      setWithdrawSuccess('Withdrawal registered & WhatsApp opened! Admin will transfer to your UPI.');
+      setTimeout(() => {
+        setShowWithdrawModal(false);
+        fetchPayoutData(true);
+      }, 1800);
+    } catch (err: any) {
+      setWithdrawError(err.message || 'WhatsApp claim failed.');
+    } finally {
+      setSubmittingWithdrawal(false);
+    }
   };
 
   const handleSubmitWithdrawal = async (e: React.FormEvent) => {
@@ -178,10 +253,6 @@ export default function PartnerPayoutHub() {
     const amt = Number(withdrawAmount);
     if (!amt || amt <= 0) {
       setWithdrawError('Please enter a valid amount.');
-      return;
-    }
-    if (amt < earnings.minPayoutThreshold) {
-      setWithdrawError(`Minimum withdrawal amount is ₹${earnings.minPayoutThreshold}.`);
       return;
     }
     if (amt > earnings.availableBalance) {
@@ -264,6 +335,35 @@ export default function PartnerPayoutHub() {
         </div>
       )}
 
+      {/* ── 1-Click WhatsApp Quick Action Banner ────────────────────────────── */}
+      <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-slate-900/40 border border-emerald-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3.5">
+          <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+            <WhatsAppIcon className="h-6 w-6" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+              Simple 1-Click WhatsApp Payout
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                Direct GPay / PhonePe
+              </span>
+            </h4>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Click claim, enter your UPI ID, and message Admin on WhatsApp. Admin transfers directly to your GPay / PhonePe!
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => handleOpenWithdrawModal('whatsapp')}
+          disabled={earnings.availableBalance <= 0}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 transition-all shadow-md shadow-emerald-600/30 shrink-0 self-stretch sm:self-auto cursor-pointer"
+        >
+          <WhatsAppIcon className="h-4 w-4" />
+          Claim ₹{earnings.availableBalance.toLocaleString()} on WhatsApp
+        </button>
+      </div>
+
       {/* ── Key Financial Overview Cards ────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Available Balance */}
@@ -278,21 +378,24 @@ export default function PartnerPayoutHub() {
           <div className="text-3xl font-black text-emerald-400 font-mono">
             ₹{earnings.availableBalance.toLocaleString()}
           </div>
-          <div className="mt-3">
+          <div className="mt-3 space-y-2">
             <button
-              onClick={handleOpenWithdrawModal}
-              disabled={earnings.availableBalance < earnings.minPayoutThreshold || !hasConfiguredPayout}
-              className="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 transition-all shadow-sm shadow-emerald-600/20 cursor-pointer disabled:cursor-not-allowed"
+              onClick={() => handleOpenWithdrawModal('whatsapp')}
+              disabled={earnings.availableBalance <= 0}
+              className="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 transition-all shadow-md shadow-emerald-600/30 cursor-pointer disabled:cursor-not-allowed"
             >
-              <ArrowDownToLine className="h-3.5 w-3.5" />
-              Request Withdrawal
+              <WhatsAppIcon className="h-4 w-4" />
+              1-Click WhatsApp Claim
+            </button>
+            <button
+              onClick={() => handleOpenWithdrawModal('manual')}
+              disabled={earnings.availableBalance <= 0}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-semibold text-slate-400 hover:text-white hover:bg-slate-800/80 transition cursor-pointer"
+            >
+              <ArrowDownToLine className="h-3 w-3" />
+              Or in-app manual request
             </button>
           </div>
-          {!hasConfiguredPayout && earnings.availableBalance >= earnings.minPayoutThreshold && (
-            <p className="text-[10px] text-amber-400/90 mt-2 text-center">
-              Configure UPI or Bank details below to withdraw
-            </p>
-          )}
         </div>
 
         {/* Total Earned */}
@@ -616,22 +719,57 @@ export default function PartnerPayoutHub() {
         </div>
       </div>
 
-      {/* ── Request Withdrawal Modal ─────────────────────────────────────── */}
+      {/* ── Request Withdrawal / WhatsApp Claim Modal ───────────────────────── */}
       {showWithdrawModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5">
+            {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <ArrowDownToLine className="h-4 w-4" />
+                <div className={`p-2 rounded-lg border ${
+                  modalMode === 'whatsapp'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-violet-500/10 text-violet-400 border-violet-500/20'
+                }`}>
+                  {modalMode === 'whatsapp' ? <WhatsAppIcon className="h-4 w-4" /> : <ArrowDownToLine className="h-4 w-4" />}
                 </div>
-                <h3 className="text-base font-bold text-white">Withdraw Referral Earnings</h3>
+                <h3 className="text-base font-bold text-white">
+                  {modalMode === 'whatsapp' ? '1-Click WhatsApp Claim' : 'Withdraw Referral Earnings'}
+                </h3>
               </div>
               <button
                 onClick={() => setShowWithdrawModal(false)}
-                className="text-slate-400 hover:text-white text-lg font-bold p-1 rounded-lg"
+                className="text-slate-400 hover:text-white text-lg font-bold p-1 rounded-lg cursor-pointer"
               >
                 ✕
+              </button>
+            </div>
+
+            {/* Mode Switcher */}
+            <div className="flex items-center p-1 bg-slate-950/80 rounded-xl border border-slate-800 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setModalMode('whatsapp')}
+                className={`flex-1 py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  modalMode === 'whatsapp'
+                    ? 'bg-emerald-600 text-white shadow-sm font-bold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <WhatsAppIcon className="h-3.5 w-3.5" />
+                WhatsApp Claim (Instant)
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalMode('manual')}
+                className={`flex-1 py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  modalMode === 'manual'
+                    ? 'bg-violet-600 text-white shadow-sm font-bold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <ArrowDownToLine className="h-3.5 w-3.5" />
+                In-App Form
               </button>
             </div>
 
@@ -649,98 +787,173 @@ export default function PartnerPayoutHub() {
               </div>
             )}
 
-            <form onSubmit={handleSubmitWithdrawal} className="space-y-4">
-              {/* Available balance highlight */}
-              <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between">
-                <span className="text-xs text-slate-400 font-medium">Available Balance</span>
-                <span className="font-mono text-base font-black text-emerald-400">
-                  ₹{earnings.availableBalance.toLocaleString()}
-                </span>
-              </div>
+            {modalMode === 'whatsapp' ? (
+              <form onSubmit={handleWhatsAppClaim} className="space-y-4">
+                {/* Available Balance highlight */}
+                <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between">
+                  <span className="text-xs text-slate-400 font-medium">Available Balance</span>
+                  <span className="font-mono text-base font-black text-emerald-400">
+                    ₹{earnings.availableBalance.toLocaleString()}
+                  </span>
+                </div>
 
-              {/* Amount input */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Amount to Withdraw (₹)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                {/* Amount to Claim */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Amount to Claim (₹)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      min={100}
+                      max={earnings.availableBalance}
+                      value={withdrawAmount}
+                      onChange={(e) => setWithdrawAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="Enter amount"
+                      className="w-full bg-slate-950 border border-slate-700/80 focus:border-emerald-500 rounded-xl pl-8 pr-4 py-2.5 text-sm text-white font-mono focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  {/* Preset Quick Chips */}
+                  <div className="flex items-center gap-2 mt-2">
+                    {[500, 1000, 2000].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        disabled={preset > earnings.availableBalance}
+                        onClick={() => setWithdrawAmount(preset)}
+                        className="px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border border-slate-800 bg-slate-950/60 text-slate-300 hover:bg-slate-800 disabled:opacity-30 transition cursor-pointer"
+                      >
+                        ₹{preset}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setWithdrawAmount(earnings.availableBalance)}
+                      className="px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition ml-auto cursor-pointer"
+                    >
+                      Max
+                    </button>
+                  </div>
+                </div>
+
+                {/* UPI ID Input */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Your UPI ID / GPay / PhonePe Number
+                  </label>
                   <input
-                    type="number"
-                    min={earnings.minPayoutThreshold}
-                    max={earnings.availableBalance}
-                    value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder={`Min ₹${earnings.minPayoutThreshold}`}
-                    className="w-full bg-slate-950 border border-slate-700/80 focus:border-violet-500 rounded-xl pl-8 pr-4 py-2.5 text-sm text-white font-mono focus:outline-none"
+                    type="text"
+                    value={modalUpi}
+                    onChange={(e) => setModalUpi(e.target.value)}
+                    placeholder="e.g. 9876543210@paytm, name@okhdfcbank"
+                    className="w-full bg-slate-950 border border-slate-700/80 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none"
                     required
                   />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Admin will send this payout directly to this UPI ID.
+                  </p>
                 </div>
 
-                {/* Quick chip buttons */}
-                <div className="flex items-center gap-2 mt-2">
-                  {[500, 1000, 2000].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      disabled={preset > earnings.availableBalance}
-                      onClick={() => setWithdrawAmount(preset)}
-                      className="px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border border-slate-800 bg-slate-950/60 text-slate-300 hover:bg-slate-800 disabled:opacity-30 transition"
-                    >
-                      ₹{preset}
-                    </button>
-                  ))}
+                <div className="flex items-center justify-end gap-2.5 pt-2">
                   <button
                     type="button"
-                    onClick={() => setWithdrawAmount(earnings.availableBalance)}
-                    className="px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition ml-auto"
+                    onClick={() => setShowWithdrawModal(false)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-700 text-xs font-bold text-slate-300 hover:bg-slate-800 transition cursor-pointer"
                   >
-                    Max
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingWithdrawal || !withdrawAmount || Number(withdrawAmount) <= 0 || !modalUpi.trim()}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-xs font-bold text-white transition flex items-center gap-2 cursor-pointer shadow-md shadow-emerald-600/30"
+                  >
+                    {submittingWithdrawal ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Processing…
+                      </>
+                    ) : (
+                      <>
+                        <WhatsAppIcon className="h-4 w-4" /> Open WhatsApp & Claim ₹{withdrawAmount || 0}
+                      </>
+                    )}
                   </button>
                 </div>
-              </div>
+              </form>
+            ) : (
+              <form onSubmit={handleSubmitWithdrawal} className="space-y-4">
+                {/* Available balance highlight */}
+                <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between">
+                  <span className="text-xs text-slate-400 font-medium">Available Balance</span>
+                  <span className="font-mono text-base font-black text-emerald-400">
+                    ₹{earnings.availableBalance.toLocaleString()}
+                  </span>
+                </div>
 
-              {/* Destination preview */}
-              <div className="p-3 bg-violet-950/30 border border-violet-500/20 rounded-xl space-y-1">
-                <span className="text-[11px] uppercase tracking-wider font-bold text-violet-400">
-                  Sending To:
-                </span>
-                {details.type === 'UPI' ? (
-                  <p className="font-mono text-xs text-white font-bold break-all flex items-center gap-1.5">
-                    <QrCode className="h-3.5 w-3.5 text-violet-400 shrink-0" />
-                    {details.upiId}
-                  </p>
-                ) : (
-                  <div className="text-xs text-white font-bold font-mono space-y-0.5">
-                    <p>{details.accountHolderName} • {details.bankName}</p>
-                    <p className="text-slate-400 text-[11px]">A/C: {details.accountNumber} | IFSC: {details.ifsc}</p>
+                {/* Amount input */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Amount to Withdraw (₹)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      min={100}
+                      max={earnings.availableBalance}
+                      value={withdrawAmount}
+                      onChange={(e) => setWithdrawAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="Enter amount"
+                      className="w-full bg-slate-950 border border-slate-700/80 focus:border-violet-500 rounded-xl pl-8 pr-4 py-2.5 text-sm text-white font-mono focus:outline-none"
+                      required
+                    />
                   </div>
-                )}
-              </div>
+                </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowWithdrawModal(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-700 text-xs font-bold text-slate-300 hover:bg-slate-800 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingWithdrawal || !withdrawAmount || Number(withdrawAmount) < earnings.minPayoutThreshold}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm shadow-emerald-600/30"
-                >
-                  {submittingWithdrawal ? (
-                    <>
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Submitting…
-                    </>
+                {/* Destination preview */}
+                <div className="p-3 bg-violet-950/30 border border-violet-500/20 rounded-xl space-y-1">
+                  <span className="text-[11px] uppercase tracking-wider font-bold text-violet-400">
+                    Sending To:
+                  </span>
+                  {details.type === 'UPI' ? (
+                    <p className="font-mono text-xs text-white font-bold break-all flex items-center gap-1.5">
+                      <QrCode className="h-3.5 w-3.5 text-violet-400 shrink-0" />
+                      {details.upiId || 'Not configured'}
+                    </p>
                   ) : (
-                    'Confirm & Submit Request'
+                    <div className="text-xs text-white font-bold font-mono space-y-0.5">
+                      <p>{details.accountHolderName} • {details.bankName}</p>
+                      <p className="text-slate-400 text-[11px]">A/C: {details.accountNumber} | IFSC: {details.ifsc}</p>
+                    </div>
                   )}
-                </button>
-              </div>
-            </form>
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowWithdrawModal(false)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-700 text-xs font-bold text-slate-300 hover:bg-slate-800 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingWithdrawal || !withdrawAmount || Number(withdrawAmount) <= 0}
+                    className="px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm shadow-violet-600/30"
+                  >
+                    {submittingWithdrawal ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Submitting…
+                      </>
+                    ) : (
+                      'Confirm & Submit Request'
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

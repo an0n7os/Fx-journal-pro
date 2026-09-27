@@ -8851,12 +8851,21 @@ app.post('/api/partner/payout-request', async (req, res) => {
 
   const method = req.body?.method === 'BANK' ? 'BANK' : 'UPI';
 
+  // If partner passed upiId directly in the request body (e.g. from 1-Click WhatsApp Claim):
+  if (req.body?.upiId && typeof req.body.upiId === 'string' && req.body.upiId.trim()) {
+    payoutDetails = {
+      ...(payoutDetails || {}),
+      type: 'UPI',
+      upiId: req.body.upiId.trim(),
+    };
+  }
+
   if (!payoutDetails) {
-    return res.status(400).json({ error: 'Please configure your UPI ID or Bank details in Payout Settings first.' });
+    return res.status(400).json({ error: 'Please enter your UPI ID (or Bank details) to proceed.' });
   }
 
   if (method === 'UPI' && !payoutDetails.upiId) {
-    return res.status(400).json({ error: 'Please configure a valid UPI ID in Payout Settings first.' });
+    return res.status(400).json({ error: 'Please enter a valid UPI ID (e.g. yourname@okhdfcbank).' });
   }
 
   if (method === 'BANK' && (!payoutDetails.accountNumber || !payoutDetails.ifsc)) {
@@ -8871,8 +8880,9 @@ app.post('/api/partner/payout-request', async (req, res) => {
   const partnerCode = profile?.referralCode || '';
   const payoutData = await getPartnerPayoutData(userId, partnerCode);
 
-  if (rawAmount < payoutData.minPayoutThreshold && payoutData.availableBalance >= payoutData.minPayoutThreshold) {
-    return res.status(400).json({ error: `Minimum withdrawal amount is ₹${payoutData.minPayoutThreshold}.` });
+  const effectiveMin = Math.min(500, payoutData.availableBalance);
+  if (rawAmount < Math.min(100, effectiveMin)) {
+    return res.status(400).json({ error: `Minimum withdrawal amount is ₹${Math.min(100, effectiveMin)}.` });
   }
 
   if (rawAmount > payoutData.availableBalance) {
