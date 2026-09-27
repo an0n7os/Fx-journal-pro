@@ -112,6 +112,7 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
   const [submittingWithdrawal, setSubmittingWithdrawal] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
+  const [waClaimUrl, setWaClaimUrl] = useState<string | null>(null);
 
   // Clipboard
   const [copiedUtr, setCopiedUtr] = useState<string | null>(null);
@@ -191,6 +192,7 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
   const handleOpenWithdrawModal = (mode: 'whatsapp' | 'manual' = 'whatsapp') => {
     setWithdrawError(null);
     setWithdrawSuccess(null);
+    setWaClaimUrl(null);
     setWithdrawAmount(earnings.availableBalance > 0 ? earnings.availableBalance : '');
     setModalUpi(details.upiId || '');
     setWithdrawMethod(details.type || 'UPI');
@@ -229,19 +231,22 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to submit withdrawal request.');
 
-      // 2. Open WhatsApp with formatted claim including official server Request ID
+      // 2. Format claim message and generate WhatsApp link
       const partnerName = partnerMe?.name || 'Partner';
       const partnerCode = partnerMe?.referralCode || 'PARTNER';
       const reqId = data?.request?.id || 'PENDING';
       const msg = `Hi FX Journal Pro Admin! 👋\nI want to claim my Partner Referral Earnings.\n\n🆔 Request ID: ${reqId}\n👤 Partner: ${partnerName}\n🎟️ Referral Code: ${partnerCode}\n💰 Claim Amount: ₹${amt}\n📱 Pay to UPI: ${targetUpi}\n\n(Verify Request ID in Admin Panel). Thank you!`;
       const waUrl = `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`;
-      window.open(waUrl, '_blank');
+      setWaClaimUrl(waUrl);
 
-      setWithdrawSuccess('Withdrawal registered & WhatsApp opened! Admin will transfer to your UPI.');
-      setTimeout(() => {
-        setShowWithdrawModal(false);
-        fetchPayoutData(true);
-      }, 1800);
+      // Attempt to open in a new tab; if popup blocked by browser, directly navigate
+      const popup = window.open(waUrl, '_blank', 'noopener,noreferrer');
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        window.location.href = waUrl;
+      }
+
+      setWithdrawSuccess('Withdrawal registered! If WhatsApp did not open automatically, click the button below to send your claim.');
+      fetchPayoutData(true);
     } catch (err: any) {
       setWithdrawError(err.message || 'WhatsApp claim failed.');
     } finally {
@@ -782,9 +787,22 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
             )}
 
             {withdrawSuccess && (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs rounded-xl flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                <span>{withdrawSuccess}</span>
+              <div className="space-y-3">
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs rounded-xl flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <span>{withdrawSuccess}</span>
+                </div>
+                {waClaimUrl && (
+                  <a
+                    href={waClaimUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+                  >
+                    <WhatsAppIcon className="h-4 w-4" />
+                    <span>Open WhatsApp (+91 81368 02573)</span>
+                  </a>
+                )}
               </div>
             )}
 
