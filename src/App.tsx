@@ -2818,13 +2818,13 @@ export default function App() {
     row.profit = parseFloat(agg.profit.toFixed(2));
     row.loss = parseFloat(agg.loss.toFixed(2));
     row.winRate = agg.trades > 0 ? parseFloat(((agg.wins / agg.trades) * 100).toFixed(1)) : 0;
-    if (row.net > highestNet) {
+    if (row.trades > 0 && row.net > highestNet) {
       highestNet = row.net;
       bestSessionId = row.id;
     }
   });
 
-  if (bestSessionId) {
+  if (bestSessionId && highestNet > 0) {
     const target = rawSessionRows.find(r => r.id === bestSessionId);
     if (target) target.isBest = true;
   }
@@ -6249,61 +6249,69 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
-                        {sortedSessionRows.map((row) => (
-                          <tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                            <td className="py-4 px-4 whitespace-nowrap">
-                              <div className="flex items-center gap-3">
-                                {row.badgeType === 'code' ? (
-                                  <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-200 shrink-0">
-                                    {row.badge}
-                                  </div>
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center text-sm shrink-0">
-                                    {row.badge}
-                                  </div>
-                                )}
-                                <span className="font-semibold text-slate-900 dark:text-slate-200">{row.name}</span>
-                                {row.isBest && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#06331b] border border-[#166534] text-[#4ade80] shadow-xs">
-                                    Best
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-4 px-4 text-center whitespace-nowrap">
-                              <span className={`font-semibold ${row.net < 0 ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
-                                {row.net > 0 ? `+${formatValue(row.net)}` : row.net < 0 ? `-${formatValue(Math.abs(row.net))}` : formatValue(0)}
-                              </span>
-                            </td>
-                            <td className="py-4 px-4 text-center whitespace-nowrap">
-                              <div className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-800/90 rounded-full mx-auto relative flex items-center justify-center overflow-hidden">
-                                {row.trades > 0 ? (
-                                  <div
-                                    className="h-full bg-emerald-400 dark:bg-emerald-400 rounded-full transition-all duration-300"
-                                    style={{ width: `${Math.max(row.winRate, 4)}%` }}
-                                  />
-                                ) : (
-                                  <div className="w-2 h-0.5 bg-slate-400 dark:bg-slate-600 rounded-full" />
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-4 px-4 text-center whitespace-nowrap">
-                              <span className="font-semibold text-emerald-500 dark:text-emerald-400">
-                                {formatValue(row.profit)}
-                              </span>
-                            </td>
-                            <td className="py-4 px-4 text-center whitespace-nowrap">
-                              <span className="font-semibold text-rose-500 dark:text-rose-400">
-                                {formatValue(row.loss)}
-                              </span>
-                            </td>
-                            <td className="py-4 px-4 text-center whitespace-nowrap">
-                              <span className="font-bold text-slate-800 dark:text-slate-100">
-                                {row.trades}
-                              </span>
+                        {tradingTrades.length > 0 ? (
+                          sortedSessionRows.map((row) => (
+                            <tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                              <td className="py-4 px-4 whitespace-nowrap">
+                                <div className="flex items-center gap-3">
+                                  {row.badgeType === 'code' ? (
+                                    <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-200 shrink-0">
+                                      {row.badge}
+                                    </div>
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center text-sm shrink-0">
+                                      {row.badge}
+                                    </div>
+                                  )}
+                                  <span className="font-semibold text-slate-900 dark:text-slate-200">{row.name}</span>
+                                  {row.isBest && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#06331b] border border-[#166534] text-[#4ade80] shadow-xs">
+                                      Best
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-4 px-4 text-center whitespace-nowrap">
+                                <span className={`font-semibold ${row.net < 0 ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
+                                  {row.net > 0 ? `+${formatValue(row.net)}` : row.net < 0 ? `-${formatValue(Math.abs(row.net))}` : formatValue(0)}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4 text-center whitespace-nowrap">
+                                <div className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-800/90 rounded-full mx-auto relative flex items-center justify-center overflow-hidden">
+                                  {row.trades > 0 ? (
+                                    <div
+                                      className="h-full bg-emerald-400 dark:bg-emerald-400 rounded-full transition-all duration-300"
+                                      style={{ width: `${Math.max(row.winRate, 4)}%` }}
+                                    />
+                                  ) : (
+                                    <div className="w-2 h-0.5 bg-slate-400 dark:bg-slate-600 rounded-full" />
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-4 px-4 text-center whitespace-nowrap">
+                                <span className="font-semibold text-emerald-500 dark:text-emerald-400">
+                                  {formatValue(row.profit)}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4 text-center whitespace-nowrap">
+                                <span className="font-semibold text-rose-500 dark:text-rose-400">
+                                  {formatValue(row.loss)}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4 text-center whitespace-nowrap">
+                                <span className="font-bold text-slate-800 dark:text-slate-100">
+                                  {row.trades}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
+                              No session trade metrics recorded yet. Trades will automatically populate here once logged or synced.
                             </td>
                           </tr>
-                        ))}
+                        )}
                       </tbody>
                     </table>
                   </div>
