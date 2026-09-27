@@ -8694,7 +8694,12 @@ async function getPartnerPayoutData(userId: string, partnerCode: string) {
           processedBy: r.processed_by,
         }));
       } else {
-        allRequests = readPayoutRequests().filter((r) => r.partnerId === userId);
+        const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
+        if (Array.isArray(u?.preferences?.payoutRequests)) {
+          allRequests = u.preferences.payoutRequests;
+        } else {
+          allRequests = readPayoutRequests().filter((r) => r.partnerId === userId);
+        }
       }
     } catch {
       allRequests = readPayoutRequests().filter((r) => r.partnerId === userId);
@@ -8732,18 +8737,25 @@ app.get('/api/partner/payout', async (req, res) => {
   const userId = ctx.user?.id || '';
 
   let profile: PartnerProfile | null = null;
+  let payoutDetails = null;
+
   if (!useSupabase) {
     profile = readPartnerProfiles().find((p) => p.userId === userId) || null;
+    payoutDetails = profile?.payoutDetails || null;
   } else {
-    const { data } = await supabase.from('partner_profiles').select('*').eq('user_id', userId).maybeSingle();
-    profile = data ? (toCamel(data) as any) : null;
+    const [{ data: profData }, { data: userData }] = await Promise.all([
+      supabase.from('partner_profiles').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('users').select('preferences').eq('id', userId).maybeSingle(),
+    ]);
+    profile = profData ? (toCamel(profData) as any) : null;
+    payoutDetails = profile?.payoutDetails || userData?.preferences?.payoutDetails || null;
   }
 
   const partnerCode = profile?.referralCode || '';
   const payoutData = await getPartnerPayoutData(userId, partnerCode);
 
   res.json({
-    payoutDetails: profile?.payoutDetails || null,
+    payoutDetails,
     earnings: {
       totalEarned: payoutData.totalEarned,
       totalWithdrawn: payoutData.totalWithdrawn,
@@ -8806,6 +8818,13 @@ app.put('/api/partner/payout-settings', async (req, res) => {
   }
 
   await savePartnerProfile(userId, code, userId, offerPrice, links, payoutDetails);
+  if (useSupabase) {
+    try {
+      const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
+      const nextPrefs = { ...(u?.preferences || {}), payoutDetails };
+      await supabase.from('users').update({ preferences: nextPrefs }).eq('id', userId);
+    } catch { }
+  }
   res.json({ success: true, payoutDetails });
 });
 
@@ -8816,14 +8835,20 @@ app.post('/api/partner/payout-request', async (req, res) => {
   const userId = ctx.user?.id || '';
 
   let profile: PartnerProfile | null = null;
+  let payoutDetails = null;
+
   if (!useSupabase) {
     profile = readPartnerProfiles().find((p) => p.userId === userId) || null;
+    payoutDetails = profile?.payoutDetails;
   } else {
-    const { data } = await supabase.from('partner_profiles').select('*').eq('user_id', userId).maybeSingle();
-    profile = data ? (toCamel(data) as any) : null;
+    const [{ data: profData }, { data: userData }] = await Promise.all([
+      supabase.from('partner_profiles').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('users').select('preferences').eq('id', userId).maybeSingle(),
+    ]);
+    profile = profData ? (toCamel(profData) as any) : null;
+    payoutDetails = profile?.payoutDetails || userData?.preferences?.payoutDetails || null;
   }
 
-  const payoutDetails = profile?.payoutDetails;
   const method = req.body?.method === 'BANK' ? 'BANK' : 'UPI';
 
   if (!payoutDetails) {
@@ -8887,8 +8912,15 @@ app.post('/api/partner/payout-request', async (req, res) => {
         requested_at: newRequest.requestedAt,
       });
     } catch (err) {
-      console.warn('[partner-payout-request] Supabase fallback to file storage:', err);
+      console.warn('[partner-payout-request] Supabase fallback to preferences storage:', err);
     }
+    try {
+      const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
+      const existingReqs = Array.isArray(u?.preferences?.payoutRequests) ? u.preferences.payoutRequests : [];
+      existingReqs.unshift(newRequest);
+      const nextPrefs = { ...(u?.preferences || {}), payoutRequests: existingReqs };
+      await supabase.from('users').update({ preferences: nextPrefs }).eq('id', userId);
+    } catch { }
   }
 
   await writeAuditLog(req, ctx, 'partner.payout_request', 'payout', requestId, {
@@ -8943,7 +8975,27 @@ app.get('/api/admin/payouts', async (req, res) => {
           };
         });
       } else {
-        requests = readPayoutRequests();
+        const { data: users } = await supabase.from('users').select('id, name, email, preferences');
+        const { data: profs } = await supabase.from('partner_profiles').select('user_id, referral_code');
+        const pMap = new Map<string, any>((profs || []).map((p: any) => [p.user_id, p.referral_code]));
+        const prefReqs: any[] = [];
+        for (const u of users || []) {
+          if (Array.isArray(u?.preferences?.payoutRequests)) {
+            for (const r of u.preferences.payoutRequests) {
+              prefReqs.push({
+                ...r,
+                partnerName: r.partnerName || u.name || 'Partner',
+                partnerEmail: r.partnerEmail || u.email || '',
+                partnerCode: r.partnerCode || pMap.get(u.id) || '',
+              });
+            }
+          }
+        }
+        if (prefReqs.length > 0) {
+          requests = prefReqs;
+        } else {
+          requests = readPayoutRequests();
+        }
       }
     } catch {
       requests = readPayoutRequests();
@@ -9013,9 +9065,26 @@ app.post('/api/admin/payouts/:id/process', async (req, res) => {
           processed_by: processedBy,
         })
         .eq('id', id);
-    } catch (err) {
-      console.warn('[process-payout] Supabase update fallback:', err);
-    }
+    } catch { }
+
+    // Also update in users.preferences
+    try {
+      const { data: users } = await supabase.from('users').select('id, preferences');
+      for (const u of users || []) {
+        if (Array.isArray(u?.preferences?.payoutRequests)) {
+          const matched = u.preferences.payoutRequests.find((r: any) => r.id === id);
+          if (matched) {
+            matched.status = action;
+            matched.utrNumber = utrNumber || undefined;
+            matched.adminNotes = adminNotes || undefined;
+            matched.processedAt = now;
+            matched.processedBy = processedBy;
+            await supabase.from('users').update({ preferences: u.preferences }).eq('id', u.id);
+            break;
+          }
+        }
+      }
+    } catch { }
   }
 
   await writeAuditLog(req, ctx, `partner.payout_${action.toLowerCase()}`, 'payout', id, {
