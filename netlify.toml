@@ -5,10 +5,7 @@
 
 [build.environment]
   NODE_VERSION = "22"
-  # Applies to the BUILD only. Variables declared here do not reach the
-  # function runtime, so server.ts must not depend on NODE_ENV to know it is
-  # in production — it uses IS_SERVERLESS for that. Set NODE_ENV=production in
-  # the site's own environment variables as well if you want both to agree.
+  NPM_FLAGS = "--include=dev"
   NODE_ENV = "production"
 
 [functions]
