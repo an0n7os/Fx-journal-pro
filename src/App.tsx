@@ -5403,6 +5403,23 @@ export default function App() {
                                         ) : (
                                           <span className="text-slate-400 dark:text-slate-600">-</span>
                                         )}
+                                        {t.screenshot && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setViewingScreenshot(t.screenshot || ''); }}
+                                            className="group relative flex items-center justify-center shrink-0 w-7 h-7 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700/80 hover:border-violet-500 shadow-xs transition-all duration-200 hover:scale-110 cursor-pointer bg-slate-100 dark:bg-slate-800"
+                                            title="View chart screenshot"
+                                          >
+                                            <img
+                                              src={t.screenshot}
+                                              alt="Trade chart screenshot"
+                                              className="w-full h-full object-cover"
+                                            />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                              <Eye className="h-3 w-3 text-white" />
+                                            </div>
+                                          </button>
+                                        )}
                                         {t.notes && (
                                           <button
                                             onClick={(e) => { e.stopPropagation(); setSelectedNote(t.notes || ''); }}
@@ -5410,15 +5427,6 @@ export default function App() {
                                             title="Read Note"
                                           >
                                             <MessageSquare className="h-3.5 w-3.5" />
-                                          </button>
-                                        )}
-                                        {t.screenshot && (
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); setViewingScreenshot(t.screenshot || ''); }}
-                                            className="text-slate-400 hover:text-indigo-500 transition-colors -m-2 p-2 shrink-0"
-                                            title="View chart screenshot"
-                                          >
-                                            <ImageIcon className="h-3.5 w-3.5" />
                                           </button>
                                         )}
                                       </div>
@@ -5487,6 +5495,19 @@ export default function App() {
                                 <span className={`font-bold text-[11px] ${t.type === 'Buy' ? 'text-blue-500 dark:text-blue-400' : 'text-rose-500 dark:text-rose-400'} uppercase tracking-wide`}>{t.type}</span>
                                 <span className="text-[12px] text-slate-500 dark:text-slate-400">{t.lotSize} lots</span>
                                 {t.emotion && <span className="ml-2 text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded-full">{t.emotion}</span>}
+                                {t.screenshot && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setViewingScreenshot(t.screenshot || ''); }}
+                                    className="group relative flex items-center justify-center shrink-0 w-6 h-6 rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 hover:border-violet-500 shadow-xs transition-all cursor-pointer bg-slate-100 dark:bg-slate-800"
+                                    title="View chart screenshot"
+                                  >
+                                    <img src={t.screenshot} alt="Trade chart" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <Eye className="h-2.5 w-2.5 text-white" />
+                                    </div>
+                                  </button>
+                                )}
                                 {t.notes && <button onClick={(e) => { e.stopPropagation(); setSelectedNote(t.notes || ''); }} className="text-slate-400 hover:text-violet-500 transition-colors -m-2 p-2 shrink-0" title="Read Note"><MessageSquare className="h-3.5 w-3.5" /></button>}
                               </div>
                               <div className="flex items-center justify-between">
