@@ -245,6 +245,25 @@ ALTER TABLE admin_audit_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow anon full access on admin_audit_logs" ON admin_audit_logs FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "Allow authenticated full access on admin_audit_logs" ON admin_audit_logs FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
+-- 5. Create shared_journal_links table (Journal Share Feature - Pro)
+CREATE TABLE IF NOT EXISTS shared_journal_links (
+  token TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  user_name TEXT,
+  sections JSONB NOT NULL DEFAULT '["dashboard", "journal"]'::jsonb,
+  months TEXT NOT NULL DEFAULT 'all',
+  active BOOLEAN NOT NULL DEFAULT true,
+  views INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_shared_journal_links_user ON shared_journal_links(user_id);
+CREATE INDEX IF NOT EXISTS idx_shared_journal_links_active ON shared_journal_links(active);
+ALTER TABLE shared_journal_links ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow anon full access on shared_journal_links" ON shared_journal_links FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "Allow authenticated full access on shared_journal_links" ON shared_journal_links FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
 -- ============================================================================
 -- add_user_columns.sql
 -- ============================================================================
@@ -810,6 +829,10 @@ create table if not exists public.partner_profiles (
 -- flyer must not lose a signup because someone typed "axyfx10".
 create unique index if not exists partner_profiles_code_unique
   on public.partner_profiles (lower(referral_code));
+
+alter table public.partner_profiles add column if not exists offer_price integer default 499;
+alter table public.partner_profiles add column if not exists links jsonb default '[]'::jsonb;
+alter table public.partner_profiles add column if not exists payout_details jsonb default '{}'::jsonb;
 
 -- ── 3. Referral link on the user row ───────────────────────────────────────
 alter table public.users add column if not exists referred_by text

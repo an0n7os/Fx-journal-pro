@@ -343,12 +343,13 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
   // the round trip through an OAuth provider: the user leaves the site on
   // /?ref=CODE and comes back on a bare callback URL, and without this the
   // attribution is silently lost for every Google signup.
+  // Referral code from a partner's link (/?ref=CODE) or manual entry
   const [referralCode, setReferralCode] = useState<string>(() => {
     try {
       const fromUrl = new URLSearchParams(window.location.search).get('ref');
       if (fromUrl) {
-        sessionStorage.setItem('fx_referral_code', fromUrl.toUpperCase());
-        return fromUrl.toUpperCase();
+        sessionStorage.setItem('fx_referral_code', fromUrl.toUpperCase().trim());
+        return fromUrl.toUpperCase().trim();
       }
       return sessionStorage.getItem('fx_referral_code') || '';
     } catch {
@@ -356,26 +357,63 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     }
   });
   const [referralPartner, setReferralPartner] = useState<string | null>(null);
+  const [showReferralInput, setShowReferralInput] = useState<boolean>(() => {
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get('ref');
+      const fromSession = sessionStorage.getItem('fx_referral_code');
+      return !!(fromUrl || fromSession);
+    } catch {
+      return false;
+    }
+  });
+  const [validatingReferral, setValidatingReferral] = useState(false);
+  const [referralValidationMsg, setReferralValidationMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!referralCode) { setReferralPartner(null); return; }
+    const trimmed = (referralCode || '').trim().toUpperCase();
+    if (!trimmed) {
+      setReferralPartner(null);
+      setReferralValidationMsg(null);
+      setValidatingReferral(false);
+      try { sessionStorage.removeItem('fx_referral_code'); } catch { /* private mode */ }
+      return;
+    }
+
+    if (trimmed.length < 3) {
+      setReferralPartner(null);
+      setReferralValidationMsg(null);
+      setValidatingReferral(false);
+      return;
+    }
+
     let cancelled = false;
-    fetch(`/api/referral/${encodeURIComponent(referralCode)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return;
-        if (d?.valid) {
-          setReferralPartner(d.partnerName || null);
-        } else {
-          // An unrecognised code is dropped rather than carried into the
-          // signup, where it would just be ignored by the server anyway.
-          setReferralPartner(null);
-          setReferralCode('');
-          try { sessionStorage.removeItem('fx_referral_code'); } catch { /* private mode */ }
-        }
-      })
-      .catch(() => { /* offline: the code is still sent, the server decides */ });
-    return () => { cancelled = true; };
+    setValidatingReferral(true);
+    setReferralValidationMsg(null);
+
+    const timer = setTimeout(() => {
+      fetch(`/api/referral/${encodeURIComponent(trimmed)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (cancelled) return;
+          setValidatingReferral(false);
+          if (d?.valid) {
+            setReferralPartner(d.partnerName || 'Mentor');
+            setReferralValidationMsg(null);
+            try { sessionStorage.setItem('fx_referral_code', trimmed); } catch {}
+          } else {
+            setReferralPartner(null);
+            setReferralValidationMsg(d?.error || 'Referral code not recognised.');
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setValidatingReferral(false);
+        });
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [referralCode]);
 
   const [authEmail, setAuthEmail] = useState('');
@@ -2243,17 +2281,6 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           </form>
         ) : isRegistering ? (
           <form onSubmit={handleRegister} className="space-y-3">
-            {/* A recognised code is confirmed by name so the person can tell
-                they are joining the partner they expect, and a mistyped code
-                does not quietly become an unattributed signup. */}
-            {referralPartner && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-violet-500/25 bg-violet-500/10 px-3.5 py-2.5">
-                <Gift className="h-4 w-4 shrink-0 text-violet-300" />
-                <p className="text-xs text-violet-200">
-                  Joining through <span className="font-bold">{referralPartner}</span>
-                </p>
-              </div>
-            )}
             <div>
               <label htmlFor="register-name" className="block text-sm font-medium text-slate-300 mb-1.5">Full name</label>
               <input id="register-name" type="text" required value={authName} onChange={(e) => setAuthName(e.target.value)} className={inputClass} placeholder="Full name" />
@@ -2299,6 +2326,85 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                   </div>
                 );
               })()}
+            </div>
+
+            {/* Referral / Mentor Code Input (Optional) */}
+            <div className="pt-0.5">
+              {!showReferralInput ? (
+                <button
+                  type="button"
+                  onClick={() => setShowReferralInput(true)}
+                  className="inline-flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 font-medium transition py-1 cursor-pointer"
+                >
+                  <Gift className="h-3.5 w-3.5 text-violet-400" />
+                  <span>Have a referral code?</span>
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              ) : (
+                <div className="space-y-1.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="register-referral" className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Gift className="h-3.5 w-3.5 text-violet-400" />
+                      Referral Code <span className="text-[10px] text-slate-500 font-normal">(Optional)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowReferralInput(false);
+                        setReferralCode('');
+                        setReferralPartner(null);
+                        setReferralValidationMsg(null);
+                        try { sessionStorage.removeItem('fx_referral_code'); } catch {}
+                      }}
+                      className="text-[11px] text-slate-500 hover:text-slate-300 transition cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      id="register-referral"
+                      type="text"
+                      value={referralCode}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase().trim();
+                        setReferralCode(val);
+                      }}
+                      className={inputClass + ' pr-20 uppercase font-mono tracking-wider text-xs py-2'}
+                      placeholder="e.g. AXYRJNV43"
+                    />
+                    {validatingReferral ? (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 flex items-center gap-1">
+                        <RefreshCw className="h-3 w-3 animate-spin text-violet-400" />
+                        Checking...
+                      </span>
+                    ) : referralPartner ? (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                        <Check className="h-3 w-3 stroke-[3]" />
+                        Valid
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {referralPartner ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium pt-0.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Joining through mentor: <strong className="text-white">{referralPartner}</strong>
+                      </span>
+                    </div>
+                  ) : referralValidationMsg ? (
+                    <p className="text-[11px] text-rose-400 font-medium pt-0.5">
+                      {referralValidationMsg}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-slate-500">
+                      Enter your mentor invite code to link your account.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
             <TurnstileBox onToken={setTurnstileToken} />

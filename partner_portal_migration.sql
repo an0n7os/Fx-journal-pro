@@ -35,6 +35,10 @@ create table if not exists public.partner_profiles (
 create unique index if not exists partner_profiles_code_unique
   on public.partner_profiles (lower(referral_code));
 
+alter table public.partner_profiles add column if not exists offer_price integer default 499;
+alter table public.partner_profiles add column if not exists links jsonb default '[]'::jsonb;
+alter table public.partner_profiles add column if not exists payout_details jsonb default '{}'::jsonb;
+
 -- ── 3. Referral link on the user row ───────────────────────────────────────
 alter table public.users add column if not exists referred_by text
   references public.users(id) on delete set null;

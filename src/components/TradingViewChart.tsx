@@ -37,7 +37,7 @@ import {
   createSeriesMarkers,
   ISeriesMarkersPluginApi,
 } from 'lightweight-charts';
-import { Search, RefreshCw, Maximize2, AlertCircle, TrendingUp, X } from 'lucide-react';
+import { Search, RefreshCw, Maximize2, AlertCircle, TrendingUp, X, SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
 import { Trade } from '../types';
 import { TradeLinePrimitive } from './TradeLinePrimitive';
 
@@ -193,6 +193,8 @@ const TradingViewChart = memo(function TradingViewChart({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [countdown, setCountdown] = useState<string>('');
+  const [showMobileFilterDrawer, setShowMobileFilterDrawer] = useState(false);
+  const [showControls, setShowControls] = useState(true);
   const [activeNotePopup, setActiveNotePopup] = useState<{ tradeId: string; note: string; x: number; y: number } | null>(null);
 
   // ─── Chart initialisation ─────────────────────────────────────────────────
@@ -686,158 +688,223 @@ const TradingViewChart = memo(function TradingViewChart({
   return (
     <div className={`${wrapperClass} ${cardBg} border ${cardRadius} overflow-hidden shadow-sm`}>
 
-      {/* ─── Top Toolbar ──────────────────────────────────────────────────────── */}
-      {!hideControls && (
-        <div className="absolute top-4 left-4 right-4 z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm pointer-events-auto">
+      {/* ─── Top Toolbar (integrated header, never covers the chart canvas) ── */}
+      {!hideControls && showControls && (
+        <div className="relative z-20 w-full flex-shrink-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col gap-2 pointer-events-auto">
+          {/* Main Controls Row */}
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2 w-full">
+            {/* Left: Symbol Search & Badge */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="relative">
+                <Search className={`absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 ${textMuted} pointer-events-none`} />
+                <input
+                  type="text"
+                  value={symbolInput}
+                  onChange={handleSymbolInputChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (suggestions.length > 0 && !POPULAR_SYMBOLS.includes(symbolInput.trim().toUpperCase())) {
+                        commitSymbol(suggestions[0]);
+                      } else {
+                        commitSymbol();
+                      }
+                    }
+                    if (e.key === 'Escape') setShowSuggestions(false);
+                  }}
+                  onFocus={() => {
+                    const matches = symbolInput
+                      ? POPULAR_SYMBOLS.filter(s => s.includes(symbolInput)).slice(0, 8)
+                      : POPULAR_SYMBOLS.slice(0, 10);
+                    setSuggestions(matches);
+                    setShowSuggestions(true);
+                  }}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  placeholder="Symbol..."
+                  className={`pl-6 pr-2 py-1 text-xs font-bold uppercase rounded-lg border w-20 sm:w-28 md:w-32 focus:outline-none focus:ring-2 transition ${inputCls}`}
+                />
 
-        {/* Symbol search */}
-        <div className="relative flex-shrink-0">
-          <div className="relative">
-            <Search className={`absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 ${textMuted} pointer-events-none`} />
-            <input
-              type="text"
-              value={symbolInput}
-              onChange={handleSymbolInputChange}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  if (suggestions.length > 0 && !POPULAR_SYMBOLS.includes(symbolInput.trim().toUpperCase())) {
-                    commitSymbol(suggestions[0]);
-                  } else {
-                    commitSymbol();
-                  }
-                }
-                if (e.key === 'Escape') setShowSuggestions(false);
-              }}
-              onFocus={() => {
-                const matches = symbolInput
-                  ? POPULAR_SYMBOLS.filter(s => s.includes(symbolInput)).slice(0, 8)
-                  : POPULAR_SYMBOLS.slice(0, 10);
-                setSuggestions(matches);
-                setShowSuggestions(true);
-              }}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-              placeholder="Search symbol..."
-              className={`pl-7 pr-2.5 py-1.5 text-xs font-bold uppercase rounded-lg border w-28 sm:w-36 focus:outline-none focus:ring-2 transition ${inputCls}`}
-            />
+                {/* Autocomplete */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className={`absolute top-full left-0 mt-1.5 w-44 rounded-xl shadow-2xl border z-[100] overflow-hidden ${isDark ? 'bg-[#18181b] border-slate-700' : 'bg-white border-slate-200'}`}>
+                    <div className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800/40">
+                      Popular Symbols
+                    </div>
+                    <div className="max-h-56 overflow-y-auto">
+                      {suggestions.map(s => (
+                        <button
+                          key={s}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            commitSymbol(s);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs font-bold hover:bg-violet-600 hover:text-white transition flex items-center justify-between border-b last:border-0 ${isDark ? 'border-slate-800/60 text-slate-200' : 'border-slate-100 text-slate-700'}`}
+                        >
+                          <span className="font-mono">{s}</span>
+                          <span className="text-[9px] font-semibold opacity-60">
+                            {s === 'XAUUSD' || s === 'XAGUSD' ? 'METAL' : s.includes('BTC') || s.includes('ETH') ? 'CRYPTO' : s.includes('US30') || s.includes('US500') || s.includes('NAS100') ? 'INDEX' : 'FOREX'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Active symbol badge */}
+              <span className={`text-[11px] sm:text-xs font-black tracking-wider px-1.5 sm:px-2 py-1 rounded-md ${isDark ? 'bg-slate-800 text-indigo-300' : 'bg-indigo-50 text-indigo-700'}`}>
+                {symbol}
+              </span>
+            </div>
+
+            <div className={`w-px h-4 ${isDark ? 'bg-slate-700' : 'bg-slate-200'} mx-0.5 flex-shrink-0 hidden sm:block`} />
+
+            {/* Timeframe selector (horizontal swipeable without wrapping on mobile) */}
+            <div
+              className="flex items-center gap-1 overflow-x-auto py-0.5 flex-1 min-w-0"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {TIMEFRAMES.map(tf => (
+                <button
+                  key={tf.value}
+                  onClick={() => setTimeframe(tf.value)}
+                  className={`text-[11px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md transition flex-shrink-0 cursor-pointer ${timeframe === tf.value ? btnActive : btnInactive}`}
+                >
+                  {tf.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Desktop-only Trade Filter Selector */}
+            <div className="hidden md:flex items-center gap-1 flex-shrink-0">
+              <div className={`w-px h-4 ${isDark ? 'bg-slate-700' : 'bg-slate-200'} mx-1 flex-shrink-0`} />
+              {(['all', 'wins', 'losses', 'buy', 'sell'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setFilterMode(mode)}
+                  className={`text-xs font-bold px-2 py-1 rounded-md transition capitalize cursor-pointer ${filterMode === mode ? btnActive : btnInactive}`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+
+            {/* Desktop Selected trade info pill */}
+            {selectedTradeId && (() => {
+              const t = trades.find(tr => tr.id === selectedTradeId);
+              if (!t) return null;
+              return (
+                <div className={`hidden lg:flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-lg ${isDark ? 'bg-slate-800 text-slate-300' : 'bg-blue-50 text-blue-800'}`}>
+                  <span className={t.type === 'Buy' ? 'text-blue-500' : 'text-orange-500'}>{t.type}</span>
+                  <span>{t.symbol}</span>
+                  <span className="opacity-60">@{t.entryPrice}</span>
+                  {t.stopLoss && <span className="text-rose-500">SL:{t.stopLoss}</span>}
+                  {t.takeProfit && <span className="text-emerald-500">TP:{t.takeProfit}</span>}
+                  <span className={`font-black ${t.profit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    {t.profit >= 0 ? '+' : ''}{t.profit.toFixed(2)}
+                  </span>
+                </div>
+              );
+            })()}
+
+            {/* Countdown */}
+            {countdown && (
+              <span className={`hidden xl:flex items-center gap-1 text-[10px] font-bold ${isDark ? 'text-indigo-400 bg-indigo-900/30' : 'text-indigo-600 bg-indigo-50'} px-2 py-1 rounded-md flex-shrink-0`}>
+                ⏱ {countdown}
+              </span>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
+              {/* Mobile Filter toggle */}
+              <button
+                type="button"
+                onClick={() => setShowMobileFilterDrawer(v => !v)}
+                title="Trade Filters"
+                className={`md:hidden p-1.5 rounded-lg transition cursor-pointer relative ${showMobileFilterDrawer || filterMode !== 'all' ? btnActive : btnInactive}`}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                {filterMode !== 'all' && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-slate-900" />
+                )}
+              </button>
+
+              {/* Refresh & Jump to current price */}
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={loading}
+                title="Refresh data & jump to current price"
+                className={`p-1.5 rounded-lg transition flex-shrink-0 cursor-pointer ${btnInactive}`}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-blue-500' : ''}`} />
+              </button>
+
+              {/* Fullscreen */}
+              <button
+                type="button"
+                onClick={() => setIsFullscreen(f => !f)}
+                title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                className={`p-1.5 rounded-lg transition flex-shrink-0 cursor-pointer ${btnInactive}`}
+              >
+                {isFullscreen ? <X className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              </button>
+
+              {/* Mobile hide controls button */}
+              <button
+                type="button"
+                onClick={() => setShowControls(false)}
+                title="Hide toolbar for full view"
+                className="md:hidden p-1.5 rounded-lg transition flex-shrink-0 cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <ChevronUp className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
-          {/* Autocomplete */}
-          {showSuggestions && suggestions.length > 0 && (
-            <div className={`absolute top-full left-0 mt-1.5 w-44 rounded-xl shadow-2xl border z-[100] overflow-hidden ${isDark ? 'bg-[#18181b] border-slate-700' : 'bg-white border-slate-200'}`}>
-              <div className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800/40">
-                Popular Symbols
-              </div>
-              <div className="max-h-56 overflow-y-auto">
-                {suggestions.map(s => (
+          {/* Mobile Collapsible Filters Drawer */}
+          {showMobileFilterDrawer && (
+            <div className="md:hidden flex items-center justify-between gap-1 pt-1.5 border-t border-slate-200 dark:border-slate-800/80 animate-fade-in">
+              <div className="flex items-center gap-1 overflow-x-auto py-0.5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Trades:</span>
+                {(['all', 'wins', 'losses', 'buy', 'sell'] as const).map(mode => (
                   <button
-                    key={s}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      commitSymbol(s);
+                    key={mode}
+                    onClick={() => {
+                      setFilterMode(mode);
+                      setShowMobileFilterDrawer(false);
                     }}
-                    className={`w-full text-left px-3 py-2 text-xs font-bold hover:bg-violet-600 hover:text-white transition flex items-center justify-between border-b last:border-0 ${isDark ? 'border-slate-800/60 text-slate-200' : 'border-slate-100 text-slate-700'}`}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition capitalize cursor-pointer flex-shrink-0 ${filterMode === mode ? btnActive : btnInactive}`}
                   >
-                    <span className="font-mono">{s}</span>
-                    <span className="text-[9px] font-semibold opacity-60">
-                      {s === 'XAUUSD' || s === 'XAGUSD' ? 'METAL' : s.includes('BTC') || s.includes('ETH') ? 'CRYPTO' : s.includes('US30') || s.includes('US500') || s.includes('NAS100') ? 'INDEX' : 'FOREX'}
-                    </span>
+                    {mode}
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={() => setShowMobileFilterDrawer(false)}
+                className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="h-3 w-3" />
+              </button>
             </div>
           )}
         </div>
+      )}
 
-        {/* Active symbol badge */}
-        <span className={`text-xs font-black tracking-wider px-2 py-1 rounded-md ${isDark ? 'bg-slate-800 text-indigo-300' : 'bg-indigo-50 text-indigo-700'}`}>
-          {symbol}
-        </span>
-
-        <div className={`w-px h-4 ${isDark ? 'bg-slate-700' : 'bg-slate-200'} mx-0.5 flex-shrink-0`} />
-
-        {/* Timeframe selector */}
-        <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
-          {TIMEFRAMES.map(tf => (
-            <button
-              key={tf.value}
-              onClick={() => setTimeframe(tf.value)}
-              className={`text-xs font-bold px-2 py-1 rounded-md transition ${timeframe === tf.value ? btnActive : btnInactive}`}
-            >
-              {tf.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 min-w-0" />
-
-        {/* Trade Filter selector */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {(['all', 'wins', 'losses', 'buy', 'sell'] as const).map(mode => (
-            <button
-              key={mode}
-              onClick={() => setFilterMode(mode)}
-              className={`text-xs font-bold px-2 py-1 rounded-md transition capitalize ${filterMode === mode ? btnActive : btnInactive}`}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-
-        <div className={`w-px h-4 ${isDark ? 'bg-slate-700' : 'bg-slate-200'} mx-0.5 flex-shrink-0`} />
-
-        {/* Selected trade info pill */}
-        {selectedTradeId && (() => {
-          const t = trades.find(tr => tr.id === selectedTradeId);
-          if (!t) return null;
-          return (
-            <div className={`hidden sm:flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-lg ${isDark ? 'bg-slate-800 text-slate-300' : 'bg-blue-50 text-blue-800'}`}>
-              <span className={t.type === 'Buy' ? 'text-blue-500' : 'text-orange-500'}>{t.type}</span>
-              <span>{t.symbol}</span>
-              <span className="opacity-60">@{t.entryPrice}</span>
-              {t.stopLoss && <span className="text-rose-500">SL:{t.stopLoss}</span>}
-              {t.takeProfit && <span className="text-emerald-500">TP:{t.takeProfit}</span>}
-              <span className={`font-black ${t.profit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {t.profit >= 0 ? '+' : ''}{t.profit.toFixed(2)}
-              </span>
-            </div>
-          );
-        })()}
-
-        {/* Last updated & Countdown label */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {countdown && (
-            <span className={`hidden md:flex items-center gap-1 text-[10px] font-bold ${isDark ? 'text-indigo-400 bg-indigo-900/30' : 'text-indigo-600 bg-indigo-50'} px-2 py-1 rounded-md`}>
-              ⏱ {countdown}
-            </span>
-          )}
-          {lastUpdated && !loading && (
-            <span className={`hidden lg:block text-[10px] ${textMuted}`}>
-              {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-        </div>
-
-        {/* Refresh & Jump to current price */}
+      {/* Floating mini-restore button when controls are hidden on mobile */}
+      {!hideControls && !showControls && (
         <button
-          onClick={handleRefresh}
-          disabled={loading}
-          title="Refresh data & jump to current price"
-          className={`p-1.5 rounded-lg transition flex-shrink-0 ${btnInactive}`}
+          type="button"
+          onClick={() => setShowControls(true)}
+          title="Show chart toolbar"
+          className="absolute top-2 left-2 z-30 px-2 py-1 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-700 text-[11px] font-bold text-slate-200 shadow-md flex items-center gap-1.5 hover:bg-slate-800 cursor-pointer"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-blue-500' : ''}`} />
+          <SlidersHorizontal className="h-3 w-3 text-indigo-400" />
+          <span>{symbol} · {timeframe}</span>
+          <ChevronDown className="h-3 w-3 text-slate-400" />
         </button>
-
-        {/* Fullscreen */}
-        <button
-          onClick={() => setIsFullscreen(f => !f)}
-          title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-          className={`p-1.5 rounded-lg transition flex-shrink-0 ${btnInactive}`}
-        >
-          {isFullscreen ? <X className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-        </button>
-      </div>
       )}
 
       {/* ── Chart area ──────────────────────────────────────────────────── */}

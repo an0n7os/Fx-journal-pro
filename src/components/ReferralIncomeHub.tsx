@@ -68,8 +68,8 @@ export default function ReferralIncomeHub() {
   const [savingEditLink, setSavingEditLink] = useState(false);
   // Sent alongside the cookie, matching the rest of the app's fetches.
   const getAuthHeaders = (): Record<string, string> => {
-    const userId = sessionStorage.getItem('auth_user_id') || '';
-    const email = sessionStorage.getItem('auth_email') || '';
+    const userId = sessionStorage.getItem('auth_user_id') || localStorage.getItem('auth_user_id') || '';
+    const email = sessionStorage.getItem('auth_email') || localStorage.getItem('auth_email') || '';
     const headers: Record<string, string> = {};
     if (userId) headers['x-auth-user-id'] = userId;
     if (email) headers['x-auth-email'] = email;

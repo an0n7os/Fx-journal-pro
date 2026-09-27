@@ -8,7 +8,7 @@ import {
   Clock, Heart, Edit3, Image as ImageIcon, Eye, EyeOff, RefreshCw,
   Terminal, Globe, Bell, CreditCard, Info, Activity, Sun, Moon, Brain, Upload,
   FileSpreadsheet, FileText, Mail, Wrench, X, Newspaper, Trophy, Lock, MessageSquare, MoreHorizontal, Users,
-  Settings, Instagram, Phone, GraduationCap
+  Settings, Instagram, Phone, GraduationCap, Share2
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -36,6 +36,9 @@ import ProUpgradeModal from './components/ProUpgradeModal';
 import ProFeaturePanel from './components/ProFeaturePanel';
 import CustomAlertModal from './components/CustomAlertModal';
 import OnboardingWizardModal from './components/OnboardingWizardModal';
+import ShareJournalModal from './components/ShareJournalModal';
+import KnowYourTrades from './components/KnowYourTrades';
+const SharedJournalPage = React.lazy(() => import('./pages/SharedJournalPage'));
 
 // Screens that only ever render behind an activeTab check. Splitting them out
 // keeps the admin panel, the MT5 console and lightweight-charts out of the
@@ -521,6 +524,8 @@ export default function App() {
 
   // Export Journal modal
   const [showExportModal, setShowExportModal] = useState(false);
+  // Share Journal modal state (Pro)
+  const [showShareModal, setShowShareModal] = useState(false);
   const [exportPreset, setExportPreset] = useState('this-month');
   const [exportCustomStart, setExportCustomStart] = useState('');
   const [exportCustomEnd, setExportCustomEnd] = useState('');
@@ -832,13 +837,16 @@ export default function App() {
       }
       const path = location.pathname.toLowerCase();
       // Allow valid public landing & section routes without redirecting or stripping hashes
-      if (PUBLIC_PATHS.includes(path)) {
+      if (PUBLIC_PATHS.includes(path) || path.startsWith('/shared/') || path.startsWith('/share/')) {
         return;
       }
       // If visiting a protected dashboard route without auth, redirect to /login while preserving hash and query
       navigate({ pathname: '/login', hash: location.hash, search: location.search }, { replace: true });
     } else {
       // Authenticated user
+      if (location.pathname.startsWith('/shared/') || location.pathname.startsWith('/share/')) {
+        return;
+      }
       const pathRaw = location.pathname.replace(/^\//, '').toLowerCase();
       const mappedTab = TAB_ALIASES[pathRaw] || pathRaw;
 
@@ -4020,6 +4028,32 @@ export default function App() {
     );
   }
 
+  // Check if current route is a shared journal link (/shared/:token or /share/:token)
+  const sharedMatch = location.pathname.match(/^\/(?:shared|share)\/([a-zA-Z0-9_-]+)/i);
+  if (sharedMatch && sharedMatch[1]) {
+    return (
+      <React.Suspense
+        fallback={
+          <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+            <div className="text-center space-y-4 max-w-sm">
+              <Logo size={34} className="justify-center" />
+              <div className="flex items-center justify-center gap-2 text-violet-400 text-xs font-semibold">
+                <span className="h-2 w-2 rounded-full bg-violet-400 animate-ping" />
+                Loading shared journal...
+              </div>
+            </div>
+          </div>
+        }
+      >
+        <SharedJournalPage
+          token={sharedMatch[1]}
+          currentUser={user}
+          onNavigate={(path) => navigate(path)}
+        />
+      </React.Suspense>
+    );
+  }
+
   // No user - show login page
   if (!user) {
     return (
@@ -5304,6 +5338,24 @@ export default function App() {
 
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => {
+                          if (!isProActive) {
+                            showAlert('Sharing your journal and performance via secure links is an exclusive Pro feature. Upgrade to create custom links.', {
+                              type: 'pro',
+                              title: 'Unlock Journal Sharing'
+                            });
+                          } else {
+                            setShowShareModal(true);
+                          }
+                        }}
+                        className="border border-violet-300 dark:border-violet-700/60 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-violet-700 dark:text-violet-300 text-xs font-semibold rounded-lg px-3 py-2 transition flex items-center gap-1.5 bg-white dark:bg-[#0a0d14] shadow-xs"
+                        title="Share verified journal link (Pro)"
+                      >
+                        <Share2 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                        <span>Share</span>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-violet-100 dark:bg-violet-900/50 text-violet-600 dark:text-violet-300">PRO</span>
+                      </button>
+                      <button
                         onClick={refreshTrades}
                         disabled={tradesRefreshing}
                         title="Reload trades from Supabase"
@@ -5747,6 +5799,13 @@ export default function App() {
             {/* 5. PERFORMANCE ANALYTICS VIEW */}
             {activeTab === 'analytics' && (
               <div className="space-y-4 sm:space-y-6 md:space-y-8">
+                {/* KNOW YOUR TRADES: Trading Style & Behavior Analysis */}
+                <KnowYourTrades
+                  trades={trades}
+                  accounts={accounts}
+                  currency={activeAccount?.currency || 'USD'}
+                />
+
                 <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                   {/* Equity Curve Area Chart */}
                   <div className="lg:col-span-2 dx-panel p-4 sm:p-6 shadow-xs">
@@ -9952,6 +10011,14 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Share Journal Modal (Pro) */}
+      <ShareJournalModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        isPro={isProActive}
+        onUpgrade={() => setShowProModal(true)}
+      />
 
       {/* Pro Upgrade Modal */}
       <ProUpgradeModal

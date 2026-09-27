@@ -7787,6 +7787,116 @@ const writePayoutRequests = (rows: PartnerPayoutRequest[]) => {
   }
 };
 
+async function getPartnerData(userId: string): Promise<{
+  referralCode: string;
+  offerPrice: number;
+  links: ReferralLink[];
+  payoutDetails: any;
+  createdBy: string | null;
+  createdAt: string;
+}> {
+  let referralCode = '';
+  let offerPrice = 499;
+  let links: ReferralLink[] = [];
+  let payoutDetails: any = null;
+  let createdBy: string | null = null;
+  let createdAt = new Date().toISOString();
+
+  if (!useSupabase) {
+    const prof = readPartnerProfiles().find((p) => p.userId === userId);
+    if (prof) {
+      referralCode = prof.referralCode || '';
+      offerPrice = typeof prof.offerPrice === 'number' ? prof.offerPrice : 499;
+      links = Array.isArray(prof.links) ? prof.links : [];
+      payoutDetails = prof.payoutDetails || null;
+      createdBy = prof.createdBy || null;
+      createdAt = prof.createdAt || createdAt;
+    }
+  } else {
+    try {
+      const [{ data: profData }, { data: userData }] = await Promise.all([
+        supabase.from('partner_profiles').select('*').eq('user_id', userId).maybeSingle(),
+        supabase.from('users').select('preferences').eq('id', userId).maybeSingle(),
+      ]);
+
+      const userPrefs = userData?.preferences || {};
+      referralCode = profData?.referral_code || '';
+      createdBy = profData?.created_by || null;
+      createdAt = profData?.created_at || createdAt;
+
+      if (typeof profData?.offer_price === 'number') {
+        offerPrice = profData.offer_price;
+      } else if (typeof userPrefs?.partnerOfferPrice === 'number') {
+        offerPrice = userPrefs.partnerOfferPrice;
+      }
+
+      if (Array.isArray(profData?.links)) {
+        links = profData.links;
+      } else if (Array.isArray(userPrefs?.partnerLinks)) {
+        links = userPrefs.partnerLinks;
+      }
+
+      payoutDetails = profData?.payout_details || userPrefs?.payoutDetails || null;
+    } catch (err) {
+      console.warn('[getPartnerData] Error loading partner data:', err);
+    }
+  }
+
+  return { referralCode, offerPrice, links, payoutDetails, createdBy, createdAt };
+}
+
+async function savePartnerLinks(userId: string, links: ReferralLink[]) {
+  if (!useSupabase) {
+    const rows = readPartnerProfiles();
+    const p = rows.find((x) => x.userId === userId);
+    if (p) {
+      p.links = links;
+      writePartnerProfiles(rows);
+    }
+    return;
+  }
+
+  // 1. Always persist to users.preferences (guaranteed to succeed and persist in Supabase)
+  try {
+    const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
+    const nextPrefs = { ...(u?.preferences || {}), partnerLinks: links };
+    await supabase.from('users').update({ preferences: nextPrefs }).eq('id', userId);
+  } catch (err) {
+    console.warn('[savePartnerLinks] Error updating users.preferences:', err);
+  }
+
+  // 2. Also attempt updating partner_profiles in case the column exists or was added
+  try {
+    await supabase.from('partner_profiles').update({ links }).eq('user_id', userId);
+  } catch {}
+}
+
+async function savePartnerOfferPrice(userId: string, price: number) {
+  if (!useSupabase) {
+    const rows = readPartnerProfiles();
+    const p = rows.find((x) => x.userId === userId);
+    if (p) {
+      p.offerPrice = price;
+      writePartnerProfiles(rows);
+    }
+    return;
+  }
+
+  // 1. Always persist to users.preferences
+  try {
+    const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
+    const nextPrefs = { ...(u?.preferences || {}), partnerOfferPrice: price };
+    await supabase.from('users').update({ preferences: nextPrefs }).eq('id', userId);
+  } catch (err) {
+    console.warn('[savePartnerOfferPrice] Error updating users.preferences:', err);
+  }
+
+  // 2. Also attempt updating partner_profiles
+  try {
+    await supabase.from('partner_profiles').update({ offer_price: price }).eq('user_id', userId);
+  } catch {}
+}
+
 /** Finds the partner who owns a referral or coupon code. Searches primary code and custom campaign links. */
 const findPartnerByCode = async (rawCode: string): Promise<{
   userId: string;
@@ -7828,33 +7938,70 @@ const findPartnerByCode = async (rawCode: string): Promise<{
     return null;
   }
 
-  const { data } = await supabase
-    .from('partner_profiles').select('user_id, referral_code, offer_price, links').ilike('referral_code', code).maybeSingle();
-  if (data) {
-    return {
-      userId: data.user_id,
-      code: data.referral_code,
-      offerPrice: data.offer_price || 499,
-      isActive: true,
-    };
-  }
+  // 1. Check primary referral code in partner_profiles (safe column select)
+  try {
+    const { data: primaryMatch } = await supabase
+      .from('partner_profiles')
+      .select('user_id, referral_code')
+      .ilike('referral_code', code)
+      .maybeSingle();
 
-  // Check custom links stored in Supabase profiles
-  const { data: allP } = await supabase.from('partner_profiles').select('user_id, referral_code, offer_price, links');
-  for (const p of allP || []) {
-    const links = (p.links || []) as ReferralLink[];
-    const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
-    if (link) {
+    if (primaryMatch) {
+      const pData = await getPartnerData(primaryMatch.user_id);
       return {
-        userId: p.user_id,
-        code: link.code,
-        offerPrice: link.offerPrice || p.offer_price || 499,
-        isActive: link.isActive !== false,
-        linkId: link.id,
-        label: link.label,
+        userId: primaryMatch.user_id,
+        code: primaryMatch.referral_code,
+        offerPrice: pData.offerPrice || 499,
+        isActive: true,
       };
     }
+  } catch (err) {
+    console.warn('[findPartnerByCode] Error searching primary partner code:', err);
   }
+
+  // 2. Check custom links stored in users.preferences
+  try {
+    const { data: partnerUsers } = await supabase
+      .from('users')
+      .select('id, preferences')
+      .eq('role', 'PARTNER');
+
+    for (const u of partnerUsers || []) {
+      const links = (u.preferences?.partnerLinks || []) as ReferralLink[];
+      const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
+      if (link) {
+        return {
+          userId: u.id,
+          code: link.code,
+          offerPrice: link.offerPrice || u.preferences?.partnerOfferPrice || 499,
+          isActive: link.isActive !== false,
+          linkId: link.id,
+          label: link.label,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[findPartnerByCode] Error searching custom links in users:', err);
+  }
+
+  // 3. Fallback: check custom links in partner_profiles if column exists
+  try {
+    const { data: allP } = await supabase.from('partner_profiles').select('user_id, referral_code, links');
+    for (const p of allP || []) {
+      const links = (p.links || []) as ReferralLink[];
+      const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
+      if (link) {
+        return {
+          userId: p.user_id,
+          code: link.code,
+          offerPrice: link.offerPrice || 499,
+          isActive: link.isActive !== false,
+          linkId: link.id,
+          label: link.label,
+        };
+      }
+    }
+  } catch {}
 
   return null;
 };
@@ -7913,13 +8060,20 @@ async function linkReferral(req: any, userId: string, rawCode: string): Promise<
     await supabase.from('users')
       .update({ referred_by: partner.userId, referred_at: now })
       .eq('id', userId);
-    await supabase.from('sub_admin_assignments').insert({
-      id: `saa_${crypto.randomUUID()}`,
-      sub_admin_id: partner.userId,
-      user_id: userId,
-      assigned_by: null,
-      created_at: now,
-    });
+    try {
+      await supabase.from('sub_admin_assignments').upsert(
+        {
+          id: `saa_${crypto.randomUUID()}`,
+          sub_admin_id: partner.userId,
+          user_id: userId,
+          assigned_by: null,
+          created_at: now,
+        },
+        { onConflict: 'sub_admin_id, user_id' }
+      );
+    } catch (insertErr) {
+      console.warn('[linkReferral] sub_admin_assignments upsert error:', insertErr);
+    }
     return partner.userId;
   } catch (err) {
     console.error('[linkReferral] failed:', err);
@@ -8026,6 +8180,19 @@ async function savePartnerProfile(
   } catch (err) {
     console.warn('[savePartnerProfile] Supabase upsert error:', err);
   }
+
+  // Also persist offerPrice, links, payoutDetails to users.preferences for persistent fallback
+  try {
+    const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
+    const curPrefs = u?.preferences || {};
+    const nextPrefs: any = { ...curPrefs };
+    if (offerPrice !== undefined) nextPrefs.partnerOfferPrice = offerPrice;
+    if (links !== undefined) nextPrefs.partnerLinks = links;
+    if (payoutDetails !== undefined) nextPrefs.payoutDetails = payoutDetails;
+    await supabase.from('users').update({ preferences: nextPrefs }).eq('id', userId);
+  } catch (err) {
+    console.warn('[savePartnerProfile] Error syncing with users.preferences:', err);
+  }
 }
 
 // ── Partner: own profile, referral link, offer price and custom links ─────
@@ -8034,32 +8201,20 @@ app.get('/api/partner/me', async (req, res) => {
   if (!ctx) return;
   const userId = ctx.user?.id || '';
 
-  let profile: PartnerProfile | null = null;
-  if (!useSupabase) {
-    profile = readPartnerProfiles().find((p) => p.userId === userId) || null;
-  } else {
-    const { data } = await supabase
-      .from('partner_profiles').select('*').eq('user_id', userId).maybeSingle();
-    profile = data ? (toCamel(data) as any) : null;
-  }
+  const { referralCode: code, offerPrice, links } = await getPartnerData(userId);
+  let activeCode = code;
 
-  let code = profile?.referralCode || null;
-  let offerPrice = typeof profile?.offerPrice === 'number' ? profile.offerPrice : 499;
-  let links = profile?.links || [];
-
-  if (!code) {
-    code = generateReferralCode(ctx.user?.name || ctx.user?.email || '');
-    for (let i = 0; i < 5 && !(await isCodeAvailable(code, userId)); i++) {
-      code = generateReferralCode(ctx.user?.name || ctx.user?.email || '');
+  if (!activeCode) {
+    activeCode = generateReferralCode(ctx.user?.name || ctx.user?.email || '');
+    for (let i = 0; i < 5 && !(await isCodeAvailable(activeCode, userId)); i++) {
+      activeCode = generateReferralCode(ctx.user?.name || ctx.user?.email || '');
     }
-    await savePartnerProfile(userId, code, userId, 499, []);
-    offerPrice = 499;
-    links = [];
+    await savePartnerProfile(userId, activeCode, userId, 499, []);
   }
 
   const standardPrice = 499;
   const mentorEarns = Math.max(0, offerPrice - 199);
-  const formattedLinks = links.map((l) => ({
+  const formattedLinks = (links || []).map((l) => ({
     ...l,
     offerPrice: l.offerPrice || offerPrice,
     referralUrl: partnerReferralUrl(req, l.code),
@@ -8070,11 +8225,11 @@ app.get('/api/partner/me', async (req, res) => {
   res.json({
     partnerId: userId,
     name: ctx.user?.name || null,
-    referralCode: code,
+    referralCode: activeCode,
     offerPrice,
     standardPrice,
     mentorEarns,
-    referralUrl: partnerReferralUrl(req, code),
+    referralUrl: partnerReferralUrl(req, activeCode),
     links: formattedLinks,
   });
 });
@@ -8096,7 +8251,8 @@ app.put('/api/partner/code', async (req, res) => {
     return res.status(409).json({ error: 'That code is already taken. Please choose another.' });
   }
 
-  await savePartnerProfile(userId, code, userId);
+  const { offerPrice, links, payoutDetails } = await getPartnerData(userId);
+  await savePartnerProfile(userId, code, userId, offerPrice, links, payoutDetails);
   res.json({ referralCode: code, referralUrl: partnerReferralUrl(req, code) });
 });
 
@@ -8112,17 +8268,7 @@ app.put('/api/partner/offer-price', async (req, res) => {
   }
 
   const rounded = Math.round(price);
-  if (!useSupabase) {
-    const rows = readPartnerProfiles();
-    const existing = rows.find((p) => p.userId === userId);
-    if (!existing) {
-      return res.status(404).json({ error: 'Partner profile not found.' });
-    }
-    existing.offerPrice = rounded;
-    writePartnerProfiles(rows);
-  } else {
-    await supabase.from('partner_profiles').update({ offer_price: rounded }).eq('user_id', userId);
-  }
+  await savePartnerOfferPrice(userId, rounded);
 
   const mentorEarns = Math.max(0, rounded - 199);
   res.json({
@@ -8141,19 +8287,9 @@ app.get('/api/partner/links', async (req, res) => {
   if (!ctx) return;
   const userId = ctx.user?.id || '';
 
-  let links: ReferralLink[] = [];
-  let defaultOfferPrice = 499;
-  if (!useSupabase) {
-    const p = readPartnerProfiles().find((x) => x.userId === userId);
-    links = p?.links || [];
-    defaultOfferPrice = p?.offerPrice || 499;
-  } else {
-    const { data } = await supabase.from('partner_profiles').select('links, offer_price').eq('user_id', userId).maybeSingle();
-    links = (data?.links || []) as ReferralLink[];
-    defaultOfferPrice = data?.offer_price || 499;
-  }
+  const { links, offerPrice: defaultOfferPrice } = await getPartnerData(userId);
 
-  const enriched = links.map((l) => ({
+  const enriched = (links || []).map((l) => ({
     ...l,
     referralUrl: partnerReferralUrl(req, l.code),
     mentorEarns: Math.max(0, (l.offerPrice || defaultOfferPrice) - 199),
@@ -8204,30 +8340,9 @@ app.post('/api/partner/links', async (req, res) => {
     createdAt: new Date().toISOString(),
   };
 
-  if (!useSupabase) {
-    const rows = readPartnerProfiles();
-    let p = rows.find((x) => x.userId === userId);
-    if (!p) {
-      p = {
-        userId,
-        referralCode: generateReferralCode(ctx.user?.name || ''),
-        offerPrice: 499,
-        links: [newLink],
-        createdAt: new Date().toISOString(),
-        createdBy: userId,
-      };
-      rows.push(p);
-    } else {
-      p.links = p.links || [];
-      p.links.unshift(newLink);
-    }
-    writePartnerProfiles(rows);
-  } else {
-    const { data } = await supabase.from('partner_profiles').select('links').eq('user_id', userId).maybeSingle();
-    const curLinks = (data?.links || []) as ReferralLink[];
-    curLinks.unshift(newLink);
-    await supabase.from('partner_profiles').update({ links: curLinks }).eq('user_id', userId);
-  }
+  const { links: existingLinks } = await getPartnerData(userId);
+  const curLinks = [newLink, ...(existingLinks || [])];
+  await savePartnerLinks(userId, curLinks);
 
   res.json({
     success: true,
@@ -8249,51 +8364,8 @@ app.put('/api/partner/links/:id', async (req, res) => {
   const { id } = req.params;
 
   const patch = req.body || {};
-
-  if (!useSupabase) {
-    const rows = readPartnerProfiles();
-    const p = rows.find((x) => x.userId === userId);
-    if (!p || !p.links) return res.status(404).json({ error: 'Link not found' });
-    const target = p.links.find((l) => l.id === id);
-    if (!target) return res.status(404).json({ error: 'Link not found' });
-
-    if (patch.code) {
-      const code = String(patch.code).trim().toUpperCase();
-      if (!CODE_PATTERN.test(code)) {
-        return res.status(400).json({ error: 'Use 4-16 letters and numbers only.' });
-      }
-      if (code !== target.code && !(await isCodeAvailable(code, userId, id))) {
-        return res.status(409).json({ error: 'That code is already in use.' });
-      }
-      target.code = code;
-    }
-    if (patch.label !== undefined) target.label = String(patch.label).trim();
-    if (patch.offerPrice !== undefined) {
-      const pNum = Number(patch.offerPrice);
-      if (!isNaN(pNum) && pNum >= 199 && pNum <= 499) {
-        target.offerPrice = Math.round(pNum);
-      }
-    }
-    if (typeof patch.isActive === 'boolean') {
-      target.isActive = patch.isActive;
-    }
-    target.updatedAt = new Date().toISOString();
-    writePartnerProfiles(rows);
-
-    return res.json({
-      success: true,
-      link: {
-        ...target,
-        referralUrl: partnerReferralUrl(req, target.code),
-        mentorEarns: Math.max(0, target.offerPrice - 199),
-        studentSaves: Math.max(0, 499 - target.offerPrice),
-      },
-      message: target.isActive ? 'Link updated.' : 'Link revoked / deactivated.',
-    });
-  }
-
-  const { data } = await supabase.from('partner_profiles').select('links').eq('user_id', userId).maybeSingle();
-  const curLinks = (data?.links || []) as ReferralLink[];
+  const { links: existingLinks } = await getPartnerData(userId);
+  const curLinks = [...(existingLinks || [])];
   const target = curLinks.find((l) => l.id === id);
   if (!target) return res.status(404).json({ error: 'Link not found' });
 
@@ -8313,7 +8385,7 @@ app.put('/api/partner/links/:id', async (req, res) => {
   if (typeof patch.isActive === 'boolean') target.isActive = patch.isActive;
   target.updatedAt = new Date().toISOString();
 
-  await supabase.from('partner_profiles').update({ links: curLinks }).eq('user_id', userId);
+  await savePartnerLinks(userId, curLinks);
 
   res.json({
     success: true,
@@ -8334,18 +8406,10 @@ app.delete('/api/partner/links/:id', async (req, res) => {
   const userId = ctx.user?.id || '';
   const { id } = req.params;
 
-  if (!useSupabase) {
-    const rows = readPartnerProfiles();
-    const p = rows.find((x) => x.userId === userId);
-    if (!p || !p.links) return res.status(404).json({ error: 'Link not found' });
-    p.links = p.links.filter((l) => l.id !== id);
-    writePartnerProfiles(rows);
-    return res.json({ success: true, message: 'Referral link removed.' });
-  }
+  const { links: existingLinks } = await getPartnerData(userId);
+  const curLinks = (existingLinks || []).filter((l) => l.id !== id);
+  await savePartnerLinks(userId, curLinks);
 
-  const { data } = await supabase.from('partner_profiles').select('links').eq('user_id', userId).maybeSingle();
-  const curLinks = ((data?.links || []) as ReferralLink[]).filter((l) => l.id !== id);
-  await supabase.from('partner_profiles').update({ links: curLinks }).eq('user_id', userId);
   res.json({ success: true, message: 'Referral link removed.' });
 });
 
@@ -8503,10 +8567,68 @@ app.post('/api/user/link-partner', async (req, res) => {
   const rawCode = String(req.body?.code || '').trim().toUpperCase();
   if (!rawCode) return res.status(400).json({ error: 'Please enter a referral / mentor code.' });
 
-  const linked = await linkReferral(req, currentUser.id, rawCode);
-  if (!linked) return res.status(400).json({ error: 'Invalid mentor code or already linked.' });
-
   const partner = await findPartnerByCode(rawCode);
+  if (!partner) {
+    return res.status(404).json({ error: 'That mentor referral code does not exist. Please check the code and try again.' });
+  }
+  if (partner.isActive === false) {
+    return res.status(400).json({ error: 'This referral code has been deactivated by the mentor.' });
+  }
+  if (partner.userId === currentUser.id) {
+    return res.status(400).json({ error: 'You cannot link your own referral / mentor code to your account.' });
+  }
+
+  // Check if current user is already referred
+  let existingReferredBy: string | null = null;
+  if (!useSupabase) {
+    const existing = localFindUser((u: any) => u.id === currentUser.id);
+    existingReferredBy = existing?.referredBy || null;
+  } else {
+    const { data: existing } = await supabase
+      .from('users').select('referred_by').eq('id', currentUser.id).maybeSingle();
+    existingReferredBy = existing?.referred_by || null;
+  }
+
+  if (existingReferredBy) {
+    if (existingReferredBy === partner.userId) {
+      return res.status(400).json({ error: 'You are already linked to this mentor.' });
+    }
+    return res.status(400).json({ error: 'Your account is already linked to another mentor.' });
+  }
+
+  // Link the user to the partner
+  const now = new Date().toISOString();
+  if (!useSupabase) {
+    localPatchUser(currentUser.id, (row) => {
+      row.referredBy = partner.userId;
+      row.referredAt = now;
+      if (row.allowPartnerTradeView === undefined) row.allowPartnerTradeView = false;
+    });
+    const rows = readAssignments();
+    if (!rows.some((a) => a.subAdminId === partner.userId && a.userId === currentUser.id)) {
+      rows.push({ subAdminId: partner.userId, userId: currentUser.id, assignedBy: 'referral', createdAt: now });
+      writeAssignments(rows);
+    }
+  } else {
+    await supabase.from('users')
+      .update({ referred_by: partner.userId, referred_at: now })
+      .eq('id', currentUser.id);
+    try {
+      await supabase.from('sub_admin_assignments').upsert(
+        {
+          id: `saa_${crypto.randomUUID()}`,
+          sub_admin_id: partner.userId,
+          user_id: currentUser.id,
+          assigned_by: null,
+          created_at: now,
+        },
+        { onConflict: 'sub_admin_id, user_id' }
+      );
+    } catch (insertErr) {
+      console.warn('[link-partner] sub_admin_assignments upsert error:', insertErr);
+    }
+  }
+
   let partnerName = 'your partner';
   let partnerUsername = 'mentor';
   let partnerEmail: string | null = null;
@@ -8802,20 +8924,10 @@ app.put('/api/partner/payout-settings', async (req, res) => {
     bankName,
   };
 
-  let code = '';
-  let offerPrice = 499;
-  let links: any[] = [];
-  if (!useSupabase) {
-    const prof = readPartnerProfiles().find((p) => p.userId === userId);
-    code = prof?.referralCode || '';
-    offerPrice = prof?.offerPrice || 499;
-    links = prof?.links || [];
-  } else {
-    const { data } = await supabase.from('partner_profiles').select('*').eq('user_id', userId).maybeSingle();
-    code = data?.referral_code || '';
-    offerPrice = data?.offer_price || 499;
-    links = data?.links || [];
-  }
+  const pData = await getPartnerData(userId);
+  const code = pData.referralCode;
+  const offerPrice = pData.offerPrice;
+  const links = pData.links;
 
   await savePartnerProfile(userId, code, userId, offerPrice, links, payoutDetails);
   if (useSupabase) {
@@ -10839,6 +10951,382 @@ app.get('/api/reminders/whatsapp', (req, res) => {
   if (!currentUser) return res.status(401).json({ error: 'Not authenticated.' });
   const mine = whatsappReminders.filter(r => r.userId === currentUser.id);
   res.json({ reminders: mine });
+});
+
+// ==========================================
+// SHARED JOURNAL LINKS (PRO FEATURE)
+// ==========================================
+
+interface SharedJournalLink {
+  token: string;
+  userId: string;
+  userName: string;
+  sections: string[]; // 'dashboard', 'analysis', 'journal', 'calendar'
+  months: number | 'all';
+  active: boolean;
+  views: number;
+  createdAt: string;
+  revokedAt?: string | null;
+}
+
+// Helper: load shared links for a specific user
+async function getUserSharedLinks(userId: string): Promise<SharedJournalLink[]> {
+  const links: SharedJournalLink[] = [];
+  if (useSupabase) {
+    try {
+      const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
+      if (Array.isArray(u?.preferences?.sharedLinks)) {
+        links.push(...u.preferences.sharedLinks);
+      }
+      // Also try shared_journal_links table if present
+      const { data: rows } = await supabase.from('shared_journal_links').select('*').eq('user_id', userId);
+      if (Array.isArray(rows)) {
+        for (const r of rows) {
+          if (!links.some(l => l.token === r.token)) {
+            links.push({
+              token: r.token,
+              userId: r.user_id,
+              userName: r.user_name || 'Trader',
+              sections: Array.isArray(r.sections) ? r.sections : ['dashboard', 'journal'],
+              months: r.months === 'all' ? 'all' : (Number(r.months) || 3),
+              active: r.active !== false,
+              views: r.views || 0,
+              createdAt: r.created_at || new Date().toISOString(),
+            });
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('[getUserSharedLinks] Error loading from Supabase:', err?.message);
+    }
+  }
+  return links;
+}
+
+// Helper: save or update a shared link for a user
+async function saveUserSharedLink(userId: string, link: SharedJournalLink): Promise<void> {
+  if (useSupabase) {
+    try {
+      const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
+      const existing = Array.isArray(u?.preferences?.sharedLinks) ? u.preferences.sharedLinks : [];
+      const idx = existing.findIndex((l: any) => l.token === link.token);
+      let updated: SharedJournalLink[];
+      if (idx >= 0) {
+        updated = [...existing];
+        updated[idx] = { ...existing[idx], ...link };
+      } else {
+        updated = [link, ...existing];
+      }
+      const nextPrefs = { ...(u?.preferences || {}), sharedLinks: updated };
+      await supabase.from('users').update({ preferences: nextPrefs }).eq('id', userId);
+
+      // Best effort table upsert
+      try {
+        await supabase.from('shared_journal_links').upsert({
+          token: link.token,
+          user_id: link.userId,
+          user_name: link.userName,
+          sections: link.sections,
+          months: String(link.months),
+          active: link.active,
+          views: link.views || 0,
+          created_at: link.createdAt,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'token' });
+      } catch (_) {}
+    } catch (err: any) {
+      console.error('[saveUserSharedLink] Error saving shared link:', err?.message);
+    }
+  }
+}
+
+// Helper: find a shared link across all users by token
+async function findSharedLinkByToken(token: string): Promise<{ link: SharedJournalLink; ownerUser?: any } | null> {
+  if (!token) return null;
+  if (useSupabase) {
+    try {
+      // 1. Try table
+      const { data: row } = await supabase.from('shared_journal_links').select('*').eq('token', token).maybeSingle();
+      if (row) {
+        const { data: userRow } = await supabase.from('users').select('id, name, email, preferences').eq('id', row.user_id).maybeSingle();
+        return {
+          link: {
+            token: row.token,
+            userId: row.user_id,
+            userName: row.user_name || userRow?.name || 'Trader',
+            sections: Array.isArray(row.sections) ? row.sections : ['dashboard', 'journal'],
+            months: row.months === 'all' ? 'all' : (Number(row.months) || 3),
+            active: row.active !== false,
+            views: row.views || 0,
+            createdAt: row.created_at || new Date().toISOString(),
+          },
+          ownerUser: userRow
+        };
+      }
+
+      // 2. Scan users preferences
+      const { data: allUsers } = await supabase.from('users').select('id, name, email, preferences');
+      if (Array.isArray(allUsers)) {
+        for (const u of allUsers) {
+          const links = Array.isArray(u.preferences?.sharedLinks) ? u.preferences.sharedLinks : [];
+          const found = links.find((l: any) => l.token === token);
+          if (found) {
+            return {
+              link: {
+                ...found,
+                userName: found.userName || u.name || (u.email ? u.email.split('@')[0] : 'Trader')
+              },
+              ownerUser: u
+            };
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error('[findSharedLinkByToken] Error finding shared link:', err?.message);
+    }
+  }
+  return null;
+}
+
+// GET /api/shared-links – list current user's shared links
+app.get('/api/shared-links', async (req, res) => {
+  const currentUser = (req as any).currentUser;
+  if (!currentUser) return res.status(401).json({ error: 'Please log in to manage shared links.' });
+  const links = await getUserSharedLinks(currentUser.id);
+  res.json({ links });
+});
+
+// POST /api/shared-links – create a new share link (PRO exclusive)
+app.post('/api/shared-links', async (req, res) => {
+  const currentUser = (req as any).currentUser;
+  if (!currentUser) return res.status(401).json({ error: 'Please log in to create a share link.' });
+
+  // Verify Pro subscription/status
+  const isPro = !!(currentUser.isPro || currentUser.is_pro);
+  if (!isPro) {
+    return res.status(403).json({
+      error: 'Sharing your journal is an exclusive Pro feature. Please upgrade to Pro to create shareable links.'
+    });
+  }
+
+  const { sections, months } = req.body || {};
+  const allowedSections = ['dashboard', 'analysis', 'journal', 'calendar'];
+  const validSections = (Array.isArray(sections) ? sections : [])
+    .filter((s: string) => allowedSections.includes(s));
+  
+  if (validSections.length === 0) {
+    validSections.push('dashboard', 'journal');
+  }
+
+  let validMonths: number | 'all' = 'all';
+  if (months !== 'all') {
+    const num = Number(months);
+    if ([1, 3, 6, 12].includes(num)) {
+      validMonths = num;
+    } else {
+      validMonths = 3;
+    }
+  }
+
+  // Generate secure 12-char URL safe token
+  const token = crypto.randomBytes(9).toString('base64url');
+  const newLink: SharedJournalLink = {
+    token,
+    userId: currentUser.id,
+    userName: currentUser.name || (currentUser.email ? currentUser.email.split('@')[0] : 'Trader'),
+    sections: validSections,
+    months: validMonths,
+    active: true,
+    views: 0,
+    createdAt: new Date().toISOString()
+  };
+
+  await saveUserSharedLink(currentUser.id, newLink);
+
+  res.status(201).json({
+    success: true,
+    link: newLink,
+    shareUrl: `/shared/${token}`
+  });
+});
+
+// DELETE /api/shared-links/:token – disable/revoke a share link
+app.delete('/api/shared-links/:token', async (req, res) => {
+  const currentUser = (req as any).currentUser;
+  if (!currentUser) return res.status(401).json({ error: 'Please log in.' });
+
+  const { token } = req.params;
+  const links = await getUserSharedLinks(currentUser.id);
+  const target = links.find(l => l.token === token);
+
+  if (!target) {
+    return res.status(404).json({ error: 'Share link not found or belongs to another user.' });
+  }
+
+  target.active = false;
+  target.revokedAt = new Date().toISOString();
+  await saveUserSharedLink(currentUser.id, target);
+
+  res.json({ success: true, message: 'Share link disabled successfully.' });
+});
+
+// GET /api/shared/:token – PUBLIC endpoint to inspect shared journal data
+app.get('/api/shared/:token', async (req, res) => {
+  const { token } = req.params;
+  const match = await findSharedLinkByToken(token);
+
+  if (!match || !match.link || !match.link.active) {
+    return res.status(404).json({
+      error: 'This shared journal link does not exist, has expired, or was revoked by the trader.'
+    });
+  }
+
+  const { link } = match;
+
+  // Increment view counter asynchronously
+  link.views = (link.views || 0) + 1;
+  saveUserSharedLink(link.userId, link).catch(() => {});
+
+  // Fetch owner trades
+  let allTrades: any[] = [];
+  if (useSupabase) {
+    try {
+      const { data: rows } = await supabase
+        .from('trades')
+        .select('*')
+        .eq('user_id', link.userId)
+        .order('date', { ascending: false });
+      if (rows) allTrades = toCamel(rows);
+    } catch (err: any) {
+      console.error('[GET /api/shared/:token] Error loading trades:', err?.message);
+    }
+  }
+
+  // Filter out non-trading items (deposits, withdrawals)
+  let tradingTrades = allTrades.filter(t => t.type !== 'Deposit' && t.type !== 'Withdrawal');
+
+  // Filter by selected months
+  if (link.months !== 'all') {
+    const cutoffMs = Date.now() - (Number(link.months) * 30 * 24 * 60 * 60 * 1000);
+    tradingTrades = tradingTrades.filter(t => {
+      const d = new Date(t.date).getTime();
+      return !isNaN(d) && d >= cutoffMs;
+    });
+  }
+
+  // Compute summary stats
+  const totalTrades = tradingTrades.length;
+  const wins = tradingTrades.filter(t => (Number(t.profit) || Number(t.pnl) || 0) > 0);
+  const losses = tradingTrades.filter(t => (Number(t.profit) || Number(t.pnl) || 0) < 0);
+  const winRate = totalTrades > 0 ? (wins.length / totalTrades) * 100 : 0;
+  const netProfit = tradingTrades.reduce((acc, t) => acc + (Number(t.profit) || Number(t.pnl) || 0), 0);
+  const grossProfit = wins.reduce((acc, t) => acc + (Number(t.profit) || Number(t.pnl) || 0), 0);
+  const grossLoss = Math.abs(losses.reduce((acc, t) => acc + (Number(t.profit) || Number(t.pnl) || 0), 0));
+  const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : (grossProfit > 0 ? 99.9 : 0);
+  const avgWin = wins.length > 0 ? grossProfit / wins.length : 0;
+  const avgLoss = losses.length > 0 ? grossLoss / losses.length : 0;
+  const bestTrade = totalTrades > 0 ? Math.max(...tradingTrades.map(t => Number(t.profit) || Number(t.pnl) || 0)) : 0;
+  const worstTrade = totalTrades > 0 ? Math.min(...tradingTrades.map(t => Number(t.profit) || Number(t.pnl) || 0)) : 0;
+
+  // Cumulative equity curve data for charts
+  let runningEquity = 0;
+  const sortedChrono = [...tradingTrades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const equityCurve = sortedChrono.map((t, idx) => {
+    runningEquity += (Number(t.profit) || Number(t.pnl) || 0);
+    return {
+      tradeNum: idx + 1,
+      date: t.date ? String(t.date).slice(0, 10) : '',
+      pnl: Number(t.profit) || Number(t.pnl) || 0,
+      equity: Math.round(runningEquity * 100) / 100,
+    };
+  });
+
+  // Strict Privacy: Sanitize trade rows (strip private account ids, broker passwords, secret tags, emails)
+  // ONLY return full trade table fields if 'journal' was selected by owner!
+  // If 'calendar' is selected without 'journal', provide only basic date/profit for the calendar view.
+  const sanitizedTrades = link.sections.includes('journal')
+    ? tradingTrades.map(t => ({
+        id: t.id,
+        symbol: t.symbol,
+        type: t.type,
+        lotSize: t.lotSize ?? t.lots ?? 0,
+        entryPrice: t.entryPrice ?? 0,
+        exitPrice: t.exitPrice ?? 0,
+        date: t.date,
+        exitTime: t.exitTime || null,
+        profit: Number(t.profit) || Number(t.pnl) || 0,
+        pnl: Number(t.profit) || Number(t.pnl) || 0,
+        sl: t.sl || null,
+        tp: t.tp || null,
+        emotion: t.emotion || 'Calm',
+        strategy: t.strategy || '',
+        commission: t.commission || 0,
+        swap: t.swap || 0,
+        notes: t.notes ? String(t.notes).slice(0, 300) : '',
+      }))
+    : link.sections.includes('calendar')
+      ? tradingTrades.map(t => ({
+          id: t.id,
+          symbol: t.symbol,
+          type: t.type,
+          date: t.date,
+          exitTime: t.exitTime || null,
+          profit: Number(t.profit) || Number(t.pnl) || 0,
+          pnl: Number(t.profit) || Number(t.pnl) || 0,
+        }))
+      : [];
+
+  // Analysis Breakdown if 'analysis' is in sections
+  let analysisData = null;
+  if (link.sections.includes('analysis')) {
+    // Pairs performance breakdown
+    const pairMap: Record<string, { trades: number; wins: number; profit: number }> = {};
+    for (const t of tradingTrades) {
+      const sym = (t.symbol || 'OTHER').toUpperCase();
+      if (!pairMap[sym]) pairMap[sym] = { trades: 0, wins: 0, profit: 0 };
+      const p = Number(t.profit) || Number(t.pnl) || 0;
+      pairMap[sym].trades += 1;
+      if (p > 0) pairMap[sym].wins += 1;
+      pairMap[sym].profit += p;
+    }
+    const pairs = Object.entries(pairMap).map(([symbol, stat]) => ({
+      symbol,
+      trades: stat.trades,
+      winRate: Math.round((stat.wins / stat.trades) * 100),
+      profit: Math.round(stat.profit * 100) / 100,
+    })).sort((a, b) => b.trades - a.trades);
+
+    analysisData = { pairs };
+  }
+
+  // Check if current viewer is authenticated
+  const currentViewer = (req as any).currentUser;
+  const isViewerRegistered = !!currentViewer;
+
+  res.json({
+    valid: true,
+    ownerName: link.userName || 'Verified Trader',
+    sections: link.sections,
+    months: link.months,
+    createdAt: link.createdAt,
+    views: link.views || 1,
+    isViewerRegistered,
+    stats: {
+      totalTrades,
+      winRate: Math.round(winRate * 10) / 10,
+      netProfit: Math.round(netProfit * 100) / 100,
+      profitFactor: Math.round(profitFactor * 100) / 100,
+      winsCount: wins.length,
+      lossesCount: losses.length,
+      avgWin: Math.round(avgWin * 100) / 100,
+      avgLoss: Math.round(avgLoss * 100) / 100,
+      bestTrade: Math.round(bestTrade * 100) / 100,
+      worstTrade: Math.round(worstTrade * 100) / 100,
+    },
+    equityCurve,
+    trades: sanitizedTrades,
+    analysis: analysisData,
+  });
 });
 
 // ==========================================
