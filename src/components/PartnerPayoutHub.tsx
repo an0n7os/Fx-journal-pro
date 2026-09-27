@@ -239,10 +239,11 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
       const waUrl = `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`;
       setWaClaimUrl(waUrl);
 
-      // Attempt to open in a new tab; if popup blocked by browser, directly navigate
-      const popup = window.open(waUrl, '_blank', 'noopener,noreferrer');
-      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+      // Direct navigation to WhatsApp wa.me link (never blocked by popup blockers)
+      try {
         window.location.href = waUrl;
+      } catch {
+        window.open(waUrl, '_blank');
       }
 
       setWithdrawSuccess('Withdrawal registered! If WhatsApp did not open automatically, click the button below to send your claim.');
