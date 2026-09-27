@@ -3,7 +3,7 @@ import {
   FileText, Star, Archive, Trash2, Folder, Tag as TagIcon, Plus, ChevronDown,
   Search, Bold, Italic, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, CheckSquare, Quote, Code, Minus, Sparkles,
-  ArrowLeft, Download, X, Check, Smile, Image, Calendar
+  ArrowLeft, Download, X, Check, Smile, Image, Calendar, Eye, Edit3
 } from 'lucide-react';
 import { NotebookNote, User, TradingAccount } from '../types';
 
@@ -125,9 +125,9 @@ const TEMPLATES: Record<string, { title: string; folder: string; tags: string[];
   }
 };
 
-const DEFAULT_FOLDERS: string[] = [];
+const DEFAULT_FOLDERS: string[] = ['Daily Journal', 'Trading Plans', 'Psychology', 'Weekly Reviews'];
 
-const DEFAULT_TAGS: string[] = [];
+const DEFAULT_TAGS: string[] = ['review', 'setup', 'psychology', 'rule-break', 'lesson'];
 
 export default function NotebookTab({ user }: NotebookTabProps) {
   const storagePrefix = `fx_notebook_${user?.id || 'default'}`;
@@ -205,8 +205,17 @@ export default function NotebookTab({ user }: NotebookTabProps) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const saveTimeoutRef = useRef<any>(null);
 
-  // Textarea ref for rich formatting insertions
+  // Textarea ref & date picker ref
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
+  // Tag manager popover
+  const [tagMenuOpen, setTagMenuOpen] = useState(false);
+  const [newTagInput, setNewTagInput] = useState('');
+  const tagMenuRef = useRef<HTMLDivElement>(null);
+
+  // View mode: edit vs markdown preview
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
 
   // Persist notes
   useEffect(() => {
@@ -229,28 +238,45 @@ export default function NotebookTab({ user }: NotebookTabProps) {
     } catch (_) {}
   }, [customTags, storagePrefix]);
 
-  // Close template menu on outside click
+  // Close menus on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (templateMenuRef.current && !templateMenuRef.current.contains(event.target as Node)) {
         setTemplateMenuOpen(false);
+      }
+      if (tagMenuRef.current && !tagMenuRef.current.contains(event.target as Node)) {
+        setTagMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Distinct folders (defaults + custom + existing in notes)
+  const allAvailableFolders = useMemo(() => {
+    const set = new Set([...DEFAULT_FOLDERS, ...folders]);
+    notes.forEach(n => { if (n.folder) set.add(n.folder); });
+    return Array.from(set);
+  }, [folders, notes]);
+
+  // Distinct tags (defaults + custom + existing in notes)
+  const allAvailableTags = useMemo(() => {
+    const set = new Set([...DEFAULT_TAGS, ...customTags]);
+    notes.forEach(n => { n.tags?.forEach(t => set.add(t)); });
+    return Array.from(set);
+  }, [customTags, notes]);
+
   // Compute folder counts
   const folderCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    folders.forEach(f => { counts[f] = 0; });
+    allAvailableFolders.forEach(f => { counts[f] = 0; });
     notes.forEach(n => {
       if (!n.isTrash && !n.isArchived) {
         counts[n.folder] = (counts[n.folder] || 0) + 1;
       }
     });
     return counts;
-  }, [notes, folders]);
+  }, [notes, allAvailableFolders]);
 
   // Compute filter counts
   const navCounts = useMemo(() => {
@@ -512,11 +538,18 @@ export default function NotebookTab({ user }: NotebookTabProps) {
   // Toggle tag on active note
   const handleToggleTagOnNote = (tag: string) => {
     if (!currentNote) return;
-    const exists = currentNote.tags?.includes(tag);
+    const cleanTag = tag.trim().toLowerCase().replace(/^#/, '');
+    if (!cleanTag) return;
+    const exists = currentNote.tags?.includes(cleanTag);
     const updated = exists
-      ? currentNote.tags.filter(t => t !== tag)
-      : [...(currentNote.tags || []), tag];
+      ? (currentNote.tags || []).filter(t => t !== cleanTag)
+      : [...(currentNote.tags || []), cleanTag];
     handleUpdateNote('tags', updated);
+
+    // Also register in customTags if not already in available lists
+    if (!customTags.includes(cleanTag) && !DEFAULT_TAGS.includes(cleanTag)) {
+      setCustomTags(prev => [...prev, cleanTag]);
+    }
   };
 
   // Formatting helpers for rich text area
@@ -526,19 +559,48 @@ export default function NotebookTab({ user }: NotebookTabProps) {
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const text = currentNote.content;
-    const selected = text.substring(start, end) || defaultText;
+    const text = currentNote.content || '';
+    const selected = text.substring(start, end);
 
-    const before = text.substring(0, start);
-    const after = text.substring(end);
-    const newContent = `${before}${prefix}${selected}${suffix}${after}`;
+    let newContent = '';
+    let newCursorStart = start;
+    let newCursorEnd = end;
+
+    if (prefix === '\n---\n') {
+      newContent = `${text.substring(0, start)}\n\n---\n\n${text.substring(end)}`;
+      newCursorStart = newCursorEnd = start + 7;
+    } else if (
+      prefix.startsWith('#') ||
+      prefix.startsWith('- ') ||
+      prefix.startsWith('1. ') ||
+      prefix.startsWith('- [ ] ') ||
+      prefix.startsWith('> ')
+    ) {
+      if (selected) {
+        const lines = selected.split('\n');
+        const prefixed = lines.map((l, i) => prefix === '1. ' ? `${i + 1}. ${l}` : `${prefix}${l}`).join('\n');
+        newContent = `${text.substring(0, start)}${prefixed}${text.substring(end)}`;
+        newCursorStart = start;
+        newCursorEnd = start + prefixed.length;
+      } else {
+        const lastNewline = text.lastIndexOf('\n', start - 1);
+        const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
+        newContent = `${text.substring(0, lineStart)}${prefix}${text.substring(lineStart)}`;
+        newCursorStart = newCursorEnd = start + prefix.length;
+      }
+    } else {
+      const targetText = selected || defaultText;
+      newContent = `${text.substring(0, start)}${prefix}${targetText}${suffix}${text.substring(end)}`;
+      newCursorStart = start + prefix.length;
+      newCursorEnd = start + prefix.length + targetText.length;
+    }
 
     handleUpdateNote('content', newContent);
 
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
-    }, 50);
+      textarea.setSelectionRange(newCursorStart, newCursorEnd);
+    }, 10);
   };
 
   // Toggle checklist item interactive click
@@ -1118,40 +1180,60 @@ export default function NotebookTab({ user }: NotebookTabProps) {
 
                   {/* Note Meta Bar */}
                   <div className="px-5 py-2.5 border-b border-slate-800/80 bg-[#0a0e1b]/40 flex flex-wrap items-center justify-between gap-3 text-xs">
-                    <div className="flex items-center gap-2">
-                      <Folder className="h-3.5 w-3.5 text-blue-400" />
+                    {/* Folder Selector */}
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/40 border border-slate-700/50 hover:border-blue-500/40 transition-colors">
+                      <Folder className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                       <select
-                        value={currentNote.folder}
-                        onChange={e => handleUpdateNote('folder', e.target.value)}
-                        className="bg-transparent text-slate-300 font-medium focus:outline-none cursor-pointer border-none p-0 text-xs"
+                        value={currentNote.folder || 'Daily Journal'}
+                        onChange={e => {
+                          if (e.target.value === '__NEW__') {
+                            setIsAddingFolder(true);
+                          } else {
+                            handleUpdateNote('folder', e.target.value);
+                          }
+                        }}
+                        className="bg-transparent text-slate-200 font-semibold focus:outline-none cursor-pointer border-none p-0 text-xs"
                       >
-                        {folders.map(f => (
+                        {allAvailableFolders.map(f => (
                           <option key={f} value={f} className="bg-[#0f172a] text-slate-200">
                             {f}
                           </option>
                         ))}
+                        <option value="__NEW__" className="bg-[#0f172a] text-indigo-400 font-bold">
+                          + New Folder...
+                        </option>
                       </select>
                     </div>
 
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/40 border border-slate-700/50 hover:border-violet-500/40 transition-colors">
-                      <Calendar className="h-3.5 w-3.5 text-violet-400 shrink-0" />
-                      <span className="text-slate-400 text-[11px] font-medium">Date:</span>
+                    {/* Date Picker */}
+                    <div
+                      onClick={() => {
+                        try { dateInputRef.current?.showPicker?.(); }
+                        catch (_) { dateInputRef.current?.focus(); }
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/40 border border-slate-700/50 hover:border-violet-500/40 transition-colors cursor-pointer"
+                      title="Click to change date"
+                    >
+                      <Calendar className="h-3.5 w-3.5 text-violet-400 shrink-0 pointer-events-none" />
+                      <span className="text-slate-400 text-[11px] font-medium pointer-events-none">Date:</span>
                       <input
+                        ref={dateInputRef}
                         type="date"
+                        style={{ colorScheme: 'dark' }}
                         value={currentNote.date || (currentNote.createdAt ? currentNote.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10))}
                         onChange={e => handleUpdateNote('date', e.target.value)}
                         className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer border-none p-0 font-medium"
-                        title="Set custom note date"
                       />
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <Smile className="h-3.5 w-3.5 text-emerald-400" />
+                    {/* Mindset Selector */}
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/40 border border-slate-700/50 hover:border-emerald-500/40 transition-colors">
+                      <Smile className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                       <span className="text-slate-400 text-[11px]">Mindset:</span>
                       <select
                         value={currentNote.mood || 'Disciplined'}
                         onChange={e => handleUpdateNote('mood', e.target.value)}
-                        className="bg-transparent text-slate-300 font-medium focus:outline-none cursor-pointer border-none p-0 text-xs"
+                        className="bg-transparent text-slate-200 font-semibold focus:outline-none cursor-pointer border-none p-0 text-xs"
                       >
                         <option value="Disciplined" className="bg-[#0f172a] text-slate-200">🎯 Disciplined</option>
                         <option value="Calm" className="bg-[#0f172a] text-slate-200">🧘 Calm</option>
@@ -1163,46 +1245,135 @@ export default function NotebookTab({ user }: NotebookTabProps) {
                       </select>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <TagIcon className="h-3.5 w-3.5 text-violet-400" />
-                      {customTags.map(tag => {
-                        const hasTag = currentNote.tags?.includes(tag);
-                        return (
-                          <button
+                    {/* Interactive Tag Manager Popover */}
+                    <div className="relative flex items-center gap-1.5 flex-wrap" ref={tagMenuRef}>
+                      <div className="flex items-center gap-1 text-slate-400">
+                        <TagIcon className="h-3.5 w-3.5 text-violet-400 shrink-0" />
+                        <span className="text-[11px]">Tags:</span>
+                      </div>
+
+                      {/* Active tags on this note */}
+                      {currentNote.tags && currentNote.tags.length > 0 ? (
+                        currentNote.tags.map(tag => (
+                          <span
                             key={tag}
-                            onClick={() => handleToggleTagOnNote(tag)}
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-mono transition ${
-                              hasTag
-                                ? 'bg-violet-600/30 border border-violet-500/50 text-violet-200'
-                                : 'bg-slate-800/60 border border-slate-700/60 text-slate-400 hover:text-slate-200'
-                            }`}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-violet-600/30 border border-violet-500/40 text-violet-200"
                           >
                             #{tag}
-                          </button>
-                        );
-                      })}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleTagOnNote(tag)}
+                              className="text-violet-400 hover:text-white p-0.5"
+                              title="Remove tag"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[10px] text-slate-500 italic">No tags</span>
+                      )}
+
+                      {/* Tag button that toggles popover */}
+                      <button
+                        type="button"
+                        onClick={() => setTagMenuOpen(!tagMenuOpen)}
+                        className="px-2 py-0.5 rounded-lg text-[10px] font-bold border border-slate-700/60 bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white flex items-center gap-1 transition cursor-pointer"
+                        title="Add or remove tags"
+                      >
+                        <Plus className="h-3 w-3" /> Tag
+                      </button>
+
+                      {/* Tag Selector Popover */}
+                      {tagMenuOpen && (
+                        <div className="absolute top-full left-0 mt-2 z-50 w-64 rounded-xl bg-[#0f172a] border border-slate-700/90 shadow-2xl p-3 space-y-2.5 animate-in fade-in zoom-in-95 duration-100">
+                          <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                            <span>Select or Add Tag</span>
+                            <button type="button" onClick={() => setTagMenuOpen(false)} className="text-slate-500 hover:text-white">✕</button>
+                          </div>
+
+                          {/* Available tags chips */}
+                          <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                            {allAvailableTags.map(tag => {
+                              const active = currentNote.tags?.includes(tag);
+                              return (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  onClick={() => handleToggleTagOnNote(tag)}
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono transition cursor-pointer ${
+                                    active
+                                      ? 'bg-violet-600 text-white font-bold'
+                                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                                  }`}
+                                >
+                                  #{tag} {active ? '✓' : ''}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Custom Tag Input */}
+                          <div className="flex items-center gap-1 pt-1 border-t border-slate-800">
+                            <input
+                              type="text"
+                              value={newTagInput}
+                              onChange={e => setNewTagInput(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (newTagInput.trim()) {
+                                    handleToggleTagOnNote(newTagInput);
+                                    setNewTagInput('');
+                                  }
+                                }
+                              }}
+                              placeholder="New tag..."
+                              className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none focus:border-violet-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (newTagInput.trim()) {
+                                  handleToggleTagOnNote(newTagInput);
+                                  setNewTagInput('');
+                                }
+                              }}
+                              className="px-2 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-[11px] font-bold cursor-pointer"
+                            >
+                              Add
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Rich Formatting Toolbar */}
                   <div className="px-5 py-2 border-b border-slate-800/80 bg-[#070a12]/60 flex items-center gap-1 overflow-x-auto custom-scrollbar">
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('**', '**', 'bold text')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Bold (Ctrl+B)"
                     >
                       <Bold className="h-3.5 w-3.5" />
                     </button>
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('*', '*', 'italic text')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Italic (Ctrl+I)"
                     >
                       <Italic className="h-3.5 w-3.5" />
                     </button>
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('~~', '~~', 'strikethrough text')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Strikethrough"
                     >
                       <Strikethrough className="h-3.5 w-3.5" />
@@ -1211,7 +1382,7 @@ export default function NotebookTab({ user }: NotebookTabProps) {
                     <button
                       type="button"
                       onClick={() => imageInputRef.current?.click()}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Attach Image"
                     >
                       <Image className="h-3.5 w-3.5 text-emerald-400" />
@@ -1228,22 +1399,28 @@ export default function NotebookTab({ user }: NotebookTabProps) {
                     <div className="h-4 w-px bg-slate-800 mx-1" />
 
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('# ', '', 'Heading 1')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Heading 1"
                     >
                       <Heading1 className="h-3.5 w-3.5" />
                     </button>
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('## ', '', 'Heading 2')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Heading 2"
                     >
                       <Heading2 className="h-3.5 w-3.5" />
                     </button>
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('### ', '', 'Heading 3')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Heading 3"
                     >
                       <Heading3 className="h-3.5 w-3.5" />
@@ -1252,22 +1429,28 @@ export default function NotebookTab({ user }: NotebookTabProps) {
                     <div className="h-4 w-px bg-slate-800 mx-1" />
 
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('- ', '', 'List item')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Bullet List"
                     >
                       <List className="h-3.5 w-3.5" />
                     </button>
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('1. ', '', 'Numbered item')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Numbered List"
                     >
                       <ListOrdered className="h-3.5 w-3.5" />
                     </button>
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('- [ ] ', '', 'Task to complete')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Checklist / Todo"
                     >
                       <CheckSquare className="h-3.5 w-3.5 text-indigo-400" />
@@ -1276,26 +1459,58 @@ export default function NotebookTab({ user }: NotebookTabProps) {
                     <div className="h-4 w-px bg-slate-800 mx-1" />
 
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('> ', '', 'Trading quote or reminder')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Quote Block"
                     >
                       <Quote className="h-3.5 w-3.5" />
                     </button>
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('`', '`', 'code or formula')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Inline Code"
                     >
                       <Code className="h-3.5 w-3.5" />
                     </button>
                     <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertFormatting('\n---\n', '', '')}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
                       title="Divider Line"
                     >
                       <Minus className="h-3.5 w-3.5" />
                     </button>
+
+                    {/* Mode Switcher: Edit vs Markdown Preview */}
+                    <div className="ml-auto flex items-center pl-2 border-l border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setViewMode(viewMode === 'edit' ? 'preview' : 'edit')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                          viewMode === 'preview'
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                        }`}
+                        title={viewMode === 'edit' ? 'Switch to Markdown Preview' : 'Back to Editor'}
+                      >
+                        {viewMode === 'edit' ? (
+                          <>
+                            <Eye className="h-3.5 w-3.5" />
+                            <span>Preview</span>
+                          </>
+                        ) : (
+                          <>
+                            <Edit3 className="h-3.5 w-3.5" />
+                            <span>Edit</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Note Content Editor Area */}
@@ -1308,50 +1523,108 @@ export default function NotebookTab({ user }: NotebookTabProps) {
                       className="w-full bg-transparent text-xl sm:text-2xl font-extrabold text-white placeholder-slate-600 focus:outline-none mb-3 font-display"
                     />
 
-                    {/* Interactive Checklists Section (if any in content) */}
-                    {currentNote.content.includes('- [ ]') || currentNote.content.includes('- [x]') ? (
-                      <div className="mb-4 p-3 rounded-xl bg-[#0b101e] border border-indigo-500/20">
-                        <div className="text-[10px] font-mono uppercase tracking-wider text-indigo-400 font-semibold mb-2 flex items-center gap-1.5">
-                          <CheckSquare className="h-3 w-3" />
-                          <span>Interactive Checklist</span>
-                        </div>
-                        <div className="space-y-1.5">
-                          {currentNote.content.split('\n').map((line, idx) => {
-                            if (line.includes('- [ ]') || line.includes('- [x]')) {
-                              const isChecked = line.includes('- [x]');
-                              const label = line.replace(/- \[[ x]\]\s*/, '');
+                    {viewMode === 'preview' ? (
+                      /* Markdown Formatted Preview */
+                      <div className="flex-1 space-y-2.5 text-slate-200 text-sm leading-relaxed font-sans">
+                        {currentNote.content ? (
+                          currentNote.content.split('\n').map((line, idx) => {
+                            if (line.startsWith('# ')) {
+                              return <h1 key={idx} className="text-xl sm:text-2xl font-black text-white mt-4 mb-2 pb-1 border-b border-slate-800">{line.slice(2)}</h1>;
+                            }
+                            if (line.startsWith('## ')) {
+                              return <h2 key={idx} className="text-lg sm:text-xl font-bold text-white mt-3 mb-1.5">{line.slice(3)}</h2>;
+                            }
+                            if (line.startsWith('### ')) {
+                              return <h3 key={idx} className="text-base font-bold text-indigo-300 mt-2 mb-1">{line.slice(4)}</h3>;
+                            }
+                            if (line.startsWith('> ')) {
                               return (
-                                <label
-                                  key={idx}
-                                  className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer hover:text-white"
-                                >
+                                <blockquote key={idx} className="pl-3 py-1.5 my-2 border-l-4 border-indigo-500 bg-indigo-950/20 text-indigo-200 italic rounded-r-lg">
+                                  {line.slice(2)}
+                                </blockquote>
+                              );
+                            }
+                            if (line.startsWith('- [ ] ') || line.startsWith('- [x] ')) {
+                              const checked = line.startsWith('- [x] ');
+                              const label = line.slice(6);
+                              return (
+                                <label key={idx} className="flex items-center gap-2 text-xs py-0.5 cursor-pointer hover:text-white">
                                   <input
                                     type="checkbox"
-                                    checked={isChecked}
+                                    checked={checked}
                                     onChange={() => handleToggleChecklist(idx)}
-                                    className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0 focus:ring-offset-0 h-3.5 w-3.5 cursor-pointer"
+                                    className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0 h-3.5 w-3.5 cursor-pointer"
                                   />
-                                  <span className={isChecked ? 'line-through text-slate-500' : ''}>
-                                    {label}
-                                  </span>
+                                  <span className={checked ? 'line-through text-slate-500' : 'text-slate-300'}>{label}</span>
                                 </label>
                               );
                             }
-                            return null;
-                          })}
-                        </div>
+                            if (line.startsWith('- ')) {
+                              return <li key={idx} className="ml-4 list-disc text-slate-300">{line.slice(2)}</li>;
+                            }
+                            if (/^\d+\.\s/.test(line)) {
+                              return <li key={idx} className="ml-4 list-decimal text-slate-300">{line.replace(/^\d+\.\s/, '')}</li>;
+                            }
+                            if (line.trim() === '---') {
+                              return <hr key={idx} className="border-slate-800 my-4" />;
+                            }
+                            if (!line.trim()) {
+                              return <div key={idx} className="h-2" />;
+                            }
+                            return <p key={idx} className="text-slate-300">{line}</p>;
+                          })
+                        ) : (
+                          <p className="text-slate-500 italic text-sm">No notes written yet. Switch to Edit mode to write.</p>
+                        )}
                       </div>
-                    ) : null}
+                    ) : (
+                      <>
+                        {/* Interactive Checklists Section (if any in content) */}
+                        {currentNote.content.includes('- [ ]') || currentNote.content.includes('- [x]') ? (
+                          <div className="mb-4 p-3 rounded-xl bg-[#0b101e] border border-indigo-500/20">
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-indigo-400 font-semibold mb-2 flex items-center gap-1.5">
+                              <CheckSquare className="h-3 w-3" />
+                              <span>Interactive Checklist</span>
+                            </div>
+                            <div className="space-y-1.5">
+                              {currentNote.content.split('\n').map((line, idx) => {
+                                if (line.includes('- [ ]') || line.includes('- [x]')) {
+                                  const isChecked = line.includes('- [x]');
+                                  const label = line.replace(/- \[[ x]\]\s*/, '');
+                                  return (
+                                    <label
+                                      key={idx}
+                                      className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer hover:text-white"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => handleToggleChecklist(idx)}
+                                        className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0 focus:ring-offset-0 h-3.5 w-3.5 cursor-pointer"
+                                      />
+                                      <span className={isChecked ? 'line-through text-slate-500' : ''}>
+                                        {label}
+                                      </span>
+                                    </label>
+                                  );
+                                }
+                                return null;
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
 
-                    {/* Main Note Markdown Textarea */}
-                    <textarea
-                      ref={textareaRef}
-                      value={currentNote.content}
-                      onChange={e => handleUpdateNote('content', e.target.value)}
-                      placeholder="Write your trading notes, analysis, feelings, plans, and lessons here... (Markdown supported)"
-                      className="flex-1 w-full bg-transparent text-slate-200 text-sm leading-relaxed placeholder-slate-600 focus:outline-none resize-none font-sans"
-                      rows={16}
-                    />
+                        {/* Main Note Markdown Textarea */}
+                        <textarea
+                          ref={textareaRef}
+                          value={currentNote.content}
+                          onChange={e => handleUpdateNote('content', e.target.value)}
+                          placeholder="Write your trading notes, analysis, feelings, plans, and lessons here... (Markdown supported)"
+                          className="flex-1 w-full bg-transparent text-slate-200 text-sm leading-relaxed placeholder-slate-600 focus:outline-none resize-none font-sans"
+                          rows={16}
+                        />
+                      </>
+                    )}
 
                     {/* Attached Images */}
                     {currentNote.images && currentNote.images.length > 0 && (
