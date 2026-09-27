@@ -446,28 +446,13 @@ export const TraderRankCard: React.FC<TraderRankCardProps> = ({
         <div className="hidden sm:grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         {([
           {
-            key: 'growth',
-            label: isGrowth ? 'Growth' : 'Drawdown',
-            icon: isGrowth ? ArrowUpRight : ArrowDownRight,
-            value: `${isGrowth ? '+' : ''}${growthPct.toFixed(2)}%`,
-            sub: '',
-            tone: isGrowth ? 'positive' : 'negative',
-          },
-          {
-            key: 'initial',
-            label: 'Initial',
-            icon: Wallet,
-            value: fmtTile(initialBalance),
-            sub: '',
-            tone: 'neutral',
-          },
-          {
             key: 'current',
-            label: 'Current',
-            icon: Target,
+            label: 'Current Balance',
+            icon: Wallet,
             value: fmtTile(currentBalance),
             sub: '',
             tone: 'accent',
+            badge: 'Active',
           },
           {
             key: 'net',
@@ -478,55 +463,92 @@ export const TraderRankCard: React.FC<TraderRankCardProps> = ({
             tone: netProfitVal >= 0 ? 'positive' : 'negative',
           },
           {
+            key: 'growth',
+            label: isGrowth ? 'Account Growth' : 'Drawdown',
+            icon: isGrowth ? ArrowUpRight : ArrowDownRight,
+            value: `${isGrowth ? '+' : ''}${growthPct.toFixed(2)}%`,
+            sub: '',
+            tone: isGrowth ? 'positive' : 'negative',
+          },
+          {
+            key: 'initial',
+            label: 'Starting Capital',
+            icon: Target,
+            value: fmtTile(initialBalance),
+            sub: '',
+            tone: 'neutral',
+          },
+          {
             key: 'winrate',
             label: 'Win Rate',
             icon: PieChart,
             value: `${winRateVal.toFixed(1)}%`,
-            sub: `${winsVal}/${totalTradesVal}`,
+            sub: totalTradesVal > 0 ? `${winsVal}/${totalTradesVal}` : '',
             tone: 'neutral',
           },
           {
             key: 'trades',
-            label: 'Trades',
+            label: 'Total Trades',
             icon: Hash,
             value: String(totalTradesVal),
             sub: '',
             tone: 'neutral',
           },
-        ] as { key: string; label: string; icon: any; value: string; sub: string; tone: string }[]).map((m) => {
+        ] as { key: string; label: string; icon: any; value: string; sub: string; tone: string; badge?: string }[]).map((m) => {
           const accent = m.tone === 'accent';
+          const isPositive = m.tone === 'positive';
+          const isNegative = m.tone === 'negative';
           return (
             <div
               key={m.key}
-              className={`dx-glass-tile rounded-2xl border p-3 min-w-0 transition-colors ${
+              className={`rounded-2xl border p-3.5 min-w-0 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-default relative overflow-hidden ${
                 accent
-                  ? 'dx-glass-tile-accent border-violet-300 bg-gradient-to-br from-violet-100 via-violet-50 to-transparent'
-                  : 'border-slate-100 bg-slate-50/80 hover:border-slate-200'
+                  ? 'border-violet-400/50 dark:border-violet-500/50 bg-gradient-to-br from-violet-100 via-violet-50/80 to-white dark:from-violet-600/20 dark:via-violet-500/10 dark:to-slate-900/80 shadow-[0_0_20px_-3px_rgba(139,92,246,0.25)] ring-1 ring-violet-500/20'
+                  : isPositive
+                    ? 'border-emerald-300/60 dark:border-emerald-500/30 bg-gradient-to-br from-emerald-50/70 to-white dark:from-emerald-500/10 dark:to-slate-900/60 hover:border-emerald-400/80'
+                    : isNegative
+                      ? 'border-rose-300/60 dark:border-rose-500/30 bg-gradient-to-br from-rose-50/70 to-white dark:from-rose-500/10 dark:to-slate-900/60 hover:border-rose-400/80'
+                      : 'border-slate-200/80 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700'
               }`}
             >
-              <div className="flex items-center gap-2 mb-2">
-                <span
-                  className={`h-6 w-6 rounded-lg flex items-center justify-center shrink-0 ${
-                    accent
-                      ? 'bg-violet-500/20 text-violet-600 dark:bg-violet-500/25 dark:text-violet-200'
-                      : 'bg-slate-200/70 text-slate-500 dark:bg-white/[0.05] dark:text-slate-400'
-                  }`}
-                >
-                  <m.icon className="h-3 w-3" />
-                </span>
-                <span className="text-[9.5px] font-bold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500 whitespace-nowrap">
-                  {m.label}
-                </span>
+              <div className="flex items-center justify-between gap-1.5 mb-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className={`h-6 w-6 rounded-lg flex items-center justify-center shrink-0 ${
+                      accent
+                        ? 'bg-violet-600 text-white shadow-xs'
+                        : isPositive
+                          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                          : isNegative
+                            ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                            : 'bg-slate-200/70 text-slate-500 dark:bg-white/[0.06] dark:text-slate-400'
+                    }`}
+                  >
+                    <m.icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className={`text-[10px] font-bold uppercase tracking-[0.06em] truncate ${
+                    accent ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500 dark:text-slate-400'
+                  }`}>
+                    {m.label}
+                  </span>
+                </div>
+                {m.badge && (
+                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-violet-600/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 shrink-0">
+                    {m.badge}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-baseline gap-1.5 min-w-0">
                 <span
-                  className={`text-[19px] sm:text-xl font-black font-display tracking-tight tabular-nums whitespace-nowrap ${
-                    m.tone === 'positive'
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : m.tone === 'negative'
-                        ? 'text-rose-600 dark:text-rose-400'
-                        : 'text-slate-900 dark:text-white'
+                  className={`text-[19px] sm:text-[21px] font-black font-display tracking-tight tabular-nums whitespace-nowrap ${
+                    accent
+                      ? 'text-violet-950 dark:text-white'
+                      : isPositive
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : isNegative
+                          ? 'text-rose-600 dark:text-rose-400'
+                          : 'text-slate-900 dark:text-white'
                   }`}
                 >
                   {m.value}
@@ -544,13 +566,13 @@ export const TraderRankCard: React.FC<TraderRankCardProps> = ({
       </div>
 
       {/* Progress / Loading Position Bar */}
-      <div className="relative z-10 space-y-2">
+      <div className="relative z-10 space-y-2 pt-1">
         <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-300">
           <span className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 inline-block" />
-            Rank Progress Position
+            <span className="w-2 h-2 rounded-full bg-violet-500 inline-block animate-pulse" />
+            <span className="font-bold text-slate-700 dark:text-slate-200">Rank Progress</span>
           </span>
-          <span className="text-[11px] font-bold text-slate-400">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
             {rankData.targetRange}
           </span>
         </div>
@@ -561,15 +583,11 @@ export const TraderRankCard: React.FC<TraderRankCardProps> = ({
             initial={{ width: 0 }}
             animate={{ width: `${Math.max(5, rankData.progressPct)}%` }}
             transition={{ duration: 0.8, ease: 'easeOut' }}
-            className="h-full rounded-full bg-gradient-to-r from-violet-600 to-violet-400 shadow-[0_0_14px_-2px_rgba(139,92,246,0.7)]"
+            className={`h-full rounded-full ${rankData.barColor} shadow-[0_0_14px_-2px_rgba(139,92,246,0.7)]`}
           />
         </div>
 
         {/* Next Milestone Subtext */}
-        {/* Wraps on a phone instead of truncating: the sentence ends with the
-            amount still to go, so an ellipsis cut off the only number in it
-            ("Reach +5.0% Growth for Expert Trader (5.0% r…"). The percentage
-            that used to sit on the right of this line is now in the badge. */}
         <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 pt-0.5">
           {rankData.nextMilestone}
         </p>
