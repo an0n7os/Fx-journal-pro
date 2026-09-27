@@ -200,6 +200,14 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
     setShowWithdrawModal(true);
   };
 
+  const getWhatsAppClaimUrl = (req: PayoutRequest) => {
+    const partnerName = req.partnerName || partnerMe?.name || 'Partner';
+    const partnerCode = req.partnerCode || partnerMe?.referralCode || 'PARTNER';
+    const upiDisplay = req.payoutDetails?.upiId || (req.method === 'UPI' ? 'Share in WhatsApp chat' : `Bank (${req.payoutDetails?.bankName || ''})`);
+    const msg = `Hi FX Journal Pro Admin! 👋\nI want to claim my Partner Referral Earnings.\n\n🆔 Request ID: ${req.id}\n👤 Partner: ${partnerName}\n🎟️ Referral Code: ${partnerCode}\n💰 Claim Amount: ₹${req.amount}\n📱 Pay to UPI: ${upiDisplay}\n\n(Verify Request ID in Admin Panel). Thank you!`;
+    return `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+  };
+
   const handleWhatsAppClaim = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(withdrawAmount);
@@ -214,6 +222,14 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
     const rawUpi = (modalUpi || details.upiId || upiDraft || '').trim();
     const targetUpi = rawUpi || 'Direct on WhatsApp';
 
+    // Synchronously open window immediately within user gesture to avoid popup blocker
+    let popupWin: Window | null = null;
+    try {
+      popupWin = window.open('about:blank', '_blank');
+    } catch {
+      popupWin = null;
+    }
+
     setSubmittingWithdrawal(true);
     setWithdrawError(null);
 
@@ -226,7 +242,10 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
         body: JSON.stringify({ amount: amt, method: 'UPI', upiId: targetUpi }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit withdrawal request.');
+      if (!res.ok) {
+        if (popupWin && !popupWin.closed) popupWin.close();
+        throw new Error(data.error || 'Failed to submit withdrawal request.');
+      }
 
       // 2. Format claim message and generate WhatsApp link
       const partnerName = partnerMe?.name || 'Partner';
@@ -237,19 +256,17 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
       const waUrl = `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`;
       setWaClaimUrl(waUrl);
 
-      // Attempt popup first, then fallback to current tab navigation
-      try {
-        const win = window.open(waUrl, '_blank');
-        if (!win || win.closed || typeof win.closed === 'undefined') {
-          window.location.href = waUrl;
-        }
-      } catch {
+      // 3. Navigate the pre-opened popup or current window
+      if (popupWin && !popupWin.closed) {
+        popupWin.location.href = waUrl;
+      } else {
         window.location.href = waUrl;
       }
 
       setWithdrawSuccess('Withdrawal registered! If WhatsApp did not open automatically, click the button below to send your claim.');
       fetchPayoutData(true);
     } catch (err: any) {
+      if (popupWin && !popupWin.closed) popupWin.close();
       setWithdrawError(err.message || 'WhatsApp claim failed.');
     } finally {
       setSubmittingWithdrawal(false);
@@ -636,12 +653,13 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
                 <th className="py-3 px-4">Payout Method</th>
                 <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4">UTR / Transaction Ref</th>
+                <th className="py-3 px-4 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {requests.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-500">
+                  <td colSpan={6} className="py-8 text-center text-slate-500">
                     <p className="text-sm font-medium">No withdrawal requests yet.</p>
                     <p className="text-xs text-slate-600 mt-1">
                       When your available referral earnings reach ₹{earnings.minPayoutThreshold}, you can click "Request Withdrawal" to receive your payout.
@@ -715,6 +733,24 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
                         <span className="text-[11px] text-red-400/90 italic">
                           Note: {req.adminNotes}
                         </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-500">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      {req.status === 'PENDING' ? (
+                        <a
+                          href={getWhatsAppClaimUrl(req)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm shadow-emerald-600/30 cursor-pointer"
+                          title="Open WhatsApp chat with Admin to claim this payout"
+                        >
+                          <WhatsAppIcon className="h-3.5 w-3.5" />
+                          <span>Open WhatsApp</span>
+                        </a>
+                      ) : req.status === 'PAID' ? (
+                        <span className="text-[11px] font-bold text-emerald-400">Settled ✓</span>
                       ) : (
                         <span className="text-[11px] text-slate-500">—</span>
                       )}
