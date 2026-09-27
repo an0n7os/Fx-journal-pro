@@ -229,10 +229,11 @@ export default function PartnerPayoutHub({ partnerMe }: PartnerPayoutHubProps = 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to submit withdrawal request.');
 
-      // 2. Open WhatsApp with formatted claim
+      // 2. Open WhatsApp with formatted claim including official server Request ID
       const partnerName = partnerMe?.name || 'Partner';
       const partnerCode = partnerMe?.referralCode || 'PARTNER';
-      const msg = `Hi FX Journal Pro Admin! 👋\nI want to claim my Partner Referral Earnings.\n\n👤 Partner: ${partnerName}\n🎟️ Referral Code: ${partnerCode}\n💰 Claim Amount: ₹${amt}\n📱 Pay to UPI: ${targetUpi}\n\nPlease transfer via GPay/PhonePe and confirm. Thank you!`;
+      const reqId = data?.request?.id || 'PENDING';
+      const msg = `Hi FX Journal Pro Admin! 👋\nI want to claim my Partner Referral Earnings.\n\n🆔 Request ID: ${reqId}\n👤 Partner: ${partnerName}\n🎟️ Referral Code: ${partnerCode}\n💰 Claim Amount: ₹${amt}\n📱 Pay to UPI: ${targetUpi}\n\n(Verify Request ID in Admin Panel). Thank you!`;
       const waUrl = `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`;
       window.open(waUrl, '_blank');
 
