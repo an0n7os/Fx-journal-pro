@@ -6,9 +6,11 @@ import { memoryAdapter } from '@better-auth/memory-adapter';
 import { createRequire } from 'node:module';
 import path from 'path';
 import crypto from 'node:crypto';
-import pg from 'pg';
 
-const { Pool } = pg;
+// Use createRequire to load 'pg' as CommonJS at runtime.
+// A static ESM import causes esbuild to inline pg's CJS internals into the
+// ESM bundle, which then breaks with "Dynamic require of 'pg' is not
+// supported" when Node tries to execute it.
 const nodeRequire = createRequire(import.meta.url);
 
 const IS_SERVERLESS = !!(
@@ -38,6 +40,10 @@ function createMemoryStore(): Record<string, any[]> {
 function getDatabaseAdapter(): any {
   // If PostgreSQL / Supabase connection string is configured
   if (process.env.DATABASE_URL) {
+    // Load pg via createRequire so its CJS dynamic-require calls work even
+    // when this file is bundled as ESM (e.g. Vercel serverless).
+    const pgModule = nodeRequire('pg');
+    const Pool = pgModule.Pool ?? pgModule.default?.Pool;
     return new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
