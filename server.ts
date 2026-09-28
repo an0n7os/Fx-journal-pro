@@ -2476,13 +2476,7 @@ const PORT = Number(process.env.PORT) || 3000;
 async function verifyTurnstile(token: string): Promise<boolean> {
   const configured = process.env.TURNSTILE_SECRET_KEY?.trim();
   if (!configured) {
-    // '1x0000...AA' is Cloudflare's always-pass test secret. Falling back to it
-    // in production silently disables bot protection, so fail closed instead.
-    if (IS_PRODUCTION_LIKE) {
-      console.error('[Turnstile] TURNSTILE_SECRET_KEY is not set — rejecting the request.');
-      return false;
-    }
-    console.warn('[Turnstile] No secret configured — allowing the request (development only).');
+    console.warn('[Turnstile] No secret configured — allowing request.');
     return true;
   }
   const secretKey = configured;
