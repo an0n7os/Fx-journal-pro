@@ -636,7 +636,7 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SESSION_COOKIE = 'fx_auth_session';
 
 const SESSION_SECRET = (() => {
-  const explicit = process.env.SESSION_SECRET?.trim();
+  const explicit = process.env.SESSION_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim();
   if (explicit && explicit.length >= 32) return explicit;
   if (IS_PRODUCTION_LIKE) {
     if (explicit) {
