@@ -459,6 +459,7 @@ export default function App() {
   const [newAccMt5Server, setNewAccMt5Server] = useState('');
   const [newAccMt5InvestorPassword, setNewAccMt5InvestorPassword] = useState('');
   const [showInvestorPassword, setShowInvestorPassword] = useState(false);
+  const [showMt5PasswordInfo, setShowMt5PasswordInfo] = useState(false);
 
   // Edit Account form fields
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
@@ -1400,7 +1401,7 @@ export default function App() {
         return;
       }
       if (!newAccMt5InvestorPassword.trim()) {
-        showAlert('Please enter your MT5 Investor (read-only) Password.', { title: 'Required Field', type: 'warning' });
+        showAlert('Please enter your MT5 Password (trading password or investor password).', { title: 'Required Field', type: 'warning' });
         return;
       }
     }
@@ -8791,6 +8792,7 @@ export default function App() {
                 setNewAccMt5Server('');
                 setNewAccMt5InvestorPassword('');
                 setShowInvestorPassword(false);
+                setShowMt5PasswordInfo(false);
               }}
               className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 z-10"
             >
@@ -8827,7 +8829,7 @@ export default function App() {
                     <div className="bg-violet-100 dark:bg-violet-500/15 p-2 rounded-lg text-violet-600 dark:text-violet-300"><Terminal className="w-5 h-5" /></div>
                     <div>
                       <div className="font-bold text-slate-800 text-sm">MT5 Sync Account</div>
-                      <div className="text-[11px] text-slate-500">Connect directly using MT5 Login, Server, and Investor (read-only) Password.</div>
+                      <div className="text-[11px] text-slate-500">Connect directly using MT5 Login, Server, and Trading or Investor Password.</div>
                     </div>
                   </button>
                 </div>
@@ -8940,9 +8942,9 @@ export default function App() {
                   <button type="button" onClick={() => setAccountCreationMethod('select')} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs font-semibold">← Back</button>
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Connect MT5 Account (Investor Password)</h3>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Connect MT5 Account</h3>
                   <p className="text-[11px] text-slate-400">
-                    Enter your MT5 login, server, and Investor (read-only) password to sync your trades directly.
+                    Enter your MT5 login, server, and password to sync your trades directly.
                   </p>
                 </div>
 
@@ -9033,11 +9035,31 @@ export default function App() {
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Investor Password (Read-Only)</label>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 font-semibold">
-                      Read-Only Safe
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Trading Password</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowMt5PasswordInfo(prev => !prev)}
+                        className="text-slate-400 hover:text-violet-400 dark:hover:text-violet-300 transition-colors p-0.5 rounded cursor-pointer"
+                        title="Click for password information"
+                      >
+                        <Info className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 font-semibold flex items-center gap-1">
+                      <Shield className="w-2.5 h-2.5" /> Encrypted &amp; Safe
                     </span>
                   </div>
+
+                  {showMt5PasswordInfo && (
+                    <div className="mb-2 p-2.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-[11px] leading-relaxed text-violet-300 flex items-start gap-2">
+                      <Info className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />
+                      <div>
+                        You can enter your <strong>trading password</strong> or <strong>investor password</strong>. Stored passwords are encrypted in our system.
+                      </div>
+                    </div>
+                  )}
+
                   <div className="relative">
                     <input
                       type="text"
@@ -9067,7 +9089,7 @@ export default function App() {
                       <Shield className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      Always use your <strong className="text-emerald-200 font-semibold">Investor (read-only) Password</strong>, never your master trading password. Credentials are encrypted before storage.
+                      You can enter your <strong className="text-emerald-200 font-semibold">trading password</strong> or <strong className="text-emerald-200 font-semibold">investor password</strong>. Stored passwords are encrypted in our system.
                     </div>
                   </div>
                 </div>

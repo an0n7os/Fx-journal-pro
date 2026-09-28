@@ -231,6 +231,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const [cloudError, setCloudError] = useState('');
   const [showVideo, setShowVideo] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showPasswordTip, setShowPasswordTip] = useState(false);
   const [activeTab, setActiveTab] = useState<'ea' | 'investor'>('ea');
 
   useEffect(() => {
@@ -692,7 +693,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
               </div>
               <div className="flex items-center gap-1.5">
                 <h4 className="dx-section-title">
-                  Investor Password
+                  Trading Password
                 </h4>
                 <Crown className="h-3.5 w-3.5 text-amber-500 fill-amber-500/10 shrink-0" />
               </div>
@@ -876,7 +877,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-slate-500" />
-            <h3 className="dx-section-title">Cloud Sync with Investor Password</h3>
+            <h3 className="dx-section-title">Cloud Sync with Trading Password</h3>
           </div>
           {status?.syncMethod === 'CLOUD' && status.cloudConnected && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-1">
@@ -980,16 +981,26 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
             </div>
             <div>
               <div className="flex items-center gap-1.5 mb-1.5">
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400" htmlFor="cloudPassword">Investor Password</label>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400" htmlFor="cloudPassword">Trading Password</label>
                 <button
                   type="button"
-                  onClick={() => setShowInfoModal(true)}
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition shrink-0"
-                  title="How to find Investor Password"
+                  onClick={() => setShowPasswordTip(prev => !prev)}
+                  className="text-slate-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition shrink-0 cursor-pointer"
+                  title="Password Information"
                 >
                   <Info className="h-3.5 w-3.5" />
                 </button>
               </div>
+
+              {showPasswordTip && (
+                <div className="mb-2 p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-[11px] leading-relaxed text-indigo-700 dark:text-indigo-300 flex items-start gap-2">
+                  <Info className="h-3.5 w-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                  <div>
+                    You can enter your <strong>trading password</strong> or <strong>investor password</strong>. Stored passwords are encrypted in our system.
+                  </div>
+                </div>
+              )}
+
               <input
                 id="cloudPassword"
                 type="password"
@@ -1012,9 +1023,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-2">
               <ShieldCheck className="h-4 w-4 shrink-0 text-indigo-500" />
               <span>
-                Your Investor Password is encrypted with AES-256-GCM the moment you submit, never logged, and is only used
-                to establish the read-only connection. <strong className="text-slate-600 dark:text-slate-300">Use your Investor
-                password (read-only) — never your main trading password.</strong>
+                You can enter your <strong className="text-slate-700 dark:text-slate-200">trading password</strong> or <strong className="text-slate-700 dark:text-slate-200">investor password</strong>. Stored passwords are encrypted in our system.
               </span>
             </div>
           </form>
@@ -1303,8 +1312,8 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                   Enter your current main password, then set and confirm your new investor password.
                 </li>
               </ol>
-              <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-300 p-3 rounded-xl text-[11px] font-medium leading-relaxed">
-                <strong>Security Notice:</strong> Always use your investor password. Never enter your main trading password to protect your funds.
+              <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-800 dark:text-emerald-300 p-3 rounded-xl text-[11px] font-medium leading-relaxed">
+                <strong>Password Notice:</strong> You can enter your trading password or investor password. Stored passwords are encrypted in our system.
               </div>
             </div>
           </div>
