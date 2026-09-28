@@ -312,7 +312,7 @@ const security = [
 
 const faqs = [
   { q: 'Can I cancel Pro anytime?', a: 'Yes. Pro is billed monthly and you can cancel whenever you like — you keep access until the end of the period you have paid for, and your journal stays intact on the free plan afterwards.' },
-  { q: 'Is there a free plan?', a: 'Yes. The free plan covers one trading account with manual trade logging, full analytics, the calendar, FX news, live charts and the calculators — no card required. Pro adds unlimited accounts, MT5 automatic sync, the AI Mentor and full history export for ₹499 (about $5.90) per month.' },
+  { q: 'Is there a free plan?', a: 'Yes. The free plan covers one trading account with manual trade logging, full analytics, the calendar and FX news — no card required. Pro adds unlimited accounts, MT5 automatic sync, live charts, the AI Mentor and full history export for ₹499 (about $5.90) per 30 days.' },
   { q: 'What is a trading journal?', a: 'A trading journal is a record of your trades used to review performance, identify strengths and weaknesses, and improve consistency. FX Journal Pro automates this with MT5 auto-sync and AI-driven analysis.' },
   { q: 'Does FX Journal Pro work with MetaTrader 5?', a: 'Yes. MT5 automatic sync is a Pro feature: install the Expert Advisor once and your trades, balance and equity sync in real time. On the free plan you add trades manually, or paste an MT5 report.' },
   { q: 'Do I need to enter trades manually?', a: 'On the free plan, yes — logging a trade takes a few seconds. On Pro the MT5 Expert Advisor imports them automatically in real time, and you can still add or edit any trade by hand.' },
@@ -1559,7 +1559,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               <p className="font-display text-[40px] font-bold text-white leading-none tracking-[-0.03em] mt-3">₹0</p>
               <p className="text-[13px] text-slate-400 mt-2">For traders getting started. No card required.</p>
               <ul className="mt-6 space-y-2.5 flex-1">
-                {['One trading account', 'Manual trade logging', 'Full analytics & calendar', 'FX news, live charts & tools', 'Export the last 30 days'].map((f) => (
+                {['One trading account', 'Manual trade logging', 'Full analytics & calendar', 'FX news & tools', 'Export the last 30 days'].map((f) => (
                   <li key={f} className="flex items-start gap-2.5 text-[13px] text-slate-300">
                     <Check className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
                     {f}
@@ -1597,7 +1597,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 {PRO_PRICE_USD} billed internationally. One-time payment, no auto-renewal.
               </p>
               <ul className="mt-6 space-y-2.5 flex-1">
-                {['Unlimited trading accounts', 'MT5 automatic sync', 'AI Mentor on your own history', 'Export your full trade history'].map((f) => (
+                {['Unlimited trading accounts', 'MT5 automatic sync', 'Live charts & advanced tools', 'AI Mentor on your own history', 'Export your full trade history'].map((f) => (
                   <li key={f} className="flex items-start gap-2.5 text-[13px] text-white">
                     <Check className="h-4 w-4 text-violet-200 shrink-0 mt-0.5" />
                     {f}
