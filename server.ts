@@ -7016,21 +7016,17 @@ const readMentorAccess = async (userId: string): Promise<MentorAccess> => {
 
 const readTradeConsent = async (userId: string): Promise<boolean> => {
   if (userId === 'user_demo_pro' || userId.startsWith('user_demo_')) return true;
-  if (!useSupabase) {
-    const u = localFindUser((user: any) => user.id === userId);
-    if (!u) return false;
-    if (u.allowPartnerTradeView === false) return false;
-    if (u.mentorAccess && u.mentorAccess.analysis === false && u.mentorAccess.journal === false) return false;
+  const access = await readMentorAccess(userId);
+  if (access && (access.analysis || access.journal || access.dashboard || access.calendar || access.liveCharts)) {
     return true;
   }
-  const { data } = await supabase
-    .from('users').select('allow_partner_trade_view, mentor_access').eq('id', userId).maybeSingle();
-  if (!data) return false;
-  if (data.allow_partner_trade_view === false) return false;
-  if (data.mentor_access && (data.mentor_access as any).analysis === false && (data.mentor_access as any).journal === false) {
-    return false;
+  if (!useSupabase) {
+    const u = localFindUser((user: any) => user.id === userId);
+    return u?.allowPartnerTradeView === true;
   }
-  return true;
+  const { data } = await supabase
+    .from('users').select('allow_partner_trade_view').eq('id', userId).maybeSingle();
+  return data?.allow_partner_trade_view === true;
 };
 
 /**
@@ -8498,12 +8494,16 @@ app.patch('/api/user/mentor-access', async (req, res) => {
     }
   }
 
+  const allowTradeView = !!(next.dashboard || next.analysis || next.journal || next.calendar || next.liveCharts);
   if (!useSupabase) {
-    const patched = localPatchUser(currentUser.id, (row) => { row.mentorAccess = next; });
+    const patched = localPatchUser(currentUser.id, (row) => {
+      row.mentorAccess = next;
+      row.allowPartnerTradeView = allowTradeView;
+    });
     if (!patched) return res.status(404).json({ error: 'User not found' });
   } else {
     const { error } = await supabase
-      .from('users').update({ mentor_access: next }).eq('id', currentUser.id);
+      .from('users').update({ mentor_access: next, allow_partner_trade_view: allowTradeView }).eq('id', currentUser.id);
     if (error) {
       console.error('[PATCH /api/user/mentor-access] error:', error);
       return res.status(500).json({ error: 'Failed to update your sharing settings.' });
@@ -8522,12 +8522,14 @@ app.get('/api/user/partner-link', async (req, res) => {
   if (!useSupabase) {
     const row = localFindUser((u: any) => u.id === currentUser.id);
     referredBy = row?.referredBy || null;
-    allow = row?.allowPartnerTradeView === true;
+    const access = normaliseMentorAccess(row?.mentorAccess, row?.allowPartnerTradeView === true);
+    allow = row?.allowPartnerTradeView === true || !!(access.dashboard || access.analysis || access.journal || access.calendar || access.liveCharts);
   } else {
     const { data } = await supabase
-      .from('users').select('referred_by, allow_partner_trade_view').eq('id', currentUser.id).maybeSingle();
+      .from('users').select('referred_by, allow_partner_trade_view, mentor_access').eq('id', currentUser.id).maybeSingle();
     referredBy = data?.referred_by || null;
-    allow = data?.allow_partner_trade_view === true;
+    const access = normaliseMentorAccess(data?.mentor_access, data?.allow_partner_trade_view === true);
+    allow = data?.allow_partner_trade_view === true || !!(access.dashboard || access.analysis || access.journal || access.calendar || access.liveCharts);
   }
 
   if (!referredBy) return res.json({ hasPartner: false, allowPartnerTradeView: allow });

@@ -7244,11 +7244,11 @@ export default function App() {
                               <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between gap-1 border-t sm:border-t-0 border-slate-800 pt-3 sm:pt-0">
                                 <span className="text-[11px] text-slate-400 font-medium">Mentor Access:</span>
                                 <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-md ${
-                                  partnerLink.allowPartnerTradeView
+                                  partnerLink.allowPartnerTradeView || (mentorAccess && (mentorAccess.dashboard || mentorAccess.analysis || mentorAccess.journal || mentorAccess.calendar || mentorAccess.liveCharts))
                                     ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
                                     : 'bg-amber-500/15 text-amber-300 border border-amber-500/25'
                                 }`}>
-                                  {partnerLink.allowPartnerTradeView ? 'Trade Details Enabled' : 'Name & Plan Only'}
+                                  {partnerLink.allowPartnerTradeView || (mentorAccess && (mentorAccess.dashboard || mentorAccess.analysis || mentorAccess.journal || mentorAccess.calendar || mentorAccess.liveCharts)) ? 'Trade Details Enabled' : 'Name & Plan Only'}
                                 </span>
                               </div>
                             </div>
