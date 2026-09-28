@@ -50,12 +50,14 @@ const DEV_BYPASS = import.meta.env.DEV;
  * moment a sender exists.
  */
 const PRO_BENEFITS = [
-  'Unlimited portfolios',
-  'MT5 auto-sync & cloud',
-  'AI Mentor on your trades',
-  'Live Chart with markers',
-  'Excel & PDF reports',
-  'Trader Notebook & plans',
+  'Unlimited trading accounts',
+  'MT5 automatic sync',
+  'HEYZA — AI Trading Mentor',
+  'Export full trade history',
+  'Live chart',
+  'Share Your Trading Insights',
+  'Trader Notebook',
+  'News reminders',
 ];
 
 /** Shown as chips so the long list of methods stops crowding a table row. */

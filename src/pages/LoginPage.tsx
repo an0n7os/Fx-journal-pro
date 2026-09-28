@@ -1559,10 +1559,15 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               <p className="font-display text-[40px] font-bold text-white leading-none tracking-[-0.03em] mt-3">₹0</p>
               <p className="text-[13px] text-slate-400 mt-2">For traders getting started. No card required.</p>
               <ul className="mt-6 space-y-2.5 flex-1">
-                {['One trading account', 'Manual trade logging', 'Full analytics & calendar', 'FX news & tools', 'Export the last 30 days'].map((f) => (
+                {[
+                  'One trading account',
+                  'Manual trade logging',
+                  'Limited analytics & calendar',
+                  'Export the last 30 days'
+                ].map((f) => (
                   <li key={f} className="flex items-start gap-2.5 text-[13px] text-slate-300">
                     <Check className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
-                    {f}
+                    <span>{f}</span>
                   </li>
                 ))}
               </ul>
@@ -1597,12 +1602,43 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 {PRO_PRICE_USD} billed internationally.
               </p>
               <ul className="mt-6 space-y-2.5 flex-1">
-                {['Unlimited trading accounts', 'MT5 automatic sync', 'Live charts & advanced tools', 'AI Mentor on your own history', 'Export your full trade history'].map((f) => (
-                  <li key={f} className="flex items-start gap-2.5 text-[13px] text-white">
-                    <Check className="h-4 w-4 text-violet-200 shrink-0 mt-0.5" />
-                    {f}
-                  </li>
-                ))}
+                <li className="flex items-start gap-2.5 text-[13px] text-white">
+                  <Check className="h-4 w-4 text-violet-200 shrink-0 mt-0.5" />
+                  <span>Unlimited trading accounts</span>
+                </li>
+                <li className="flex items-start gap-2.5 text-[13px] text-white">
+                  <Check className="h-4 w-4 text-violet-200 shrink-0 mt-0.5" />
+                  <span>MT5 automatic sync</span>
+                </li>
+                <li className="flex items-start gap-2.5 text-[13px] text-white">
+                  <Check className="h-4 w-4 text-violet-200 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-violet-200">HEYZA — AI Trading Mentor</span>
+                    <p className="text-[11.5px] text-slate-400 mt-0.5 leading-normal">
+                      Trading insights, support &amp; smarter decisions.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-2.5 text-[13px] text-white">
+                  <Check className="h-4 w-4 text-violet-200 shrink-0 mt-0.5" />
+                  <span>Export full trade history</span>
+                </li>
+                <li className="flex items-start gap-2.5 text-[13px] text-white">
+                  <Check className="h-4 w-4 text-violet-200 shrink-0 mt-0.5" />
+                  <span>Live chart</span>
+                </li>
+                <li className="flex items-start gap-2.5 text-[13px] text-white">
+                  <Check className="h-4 w-4 text-violet-200 shrink-0 mt-0.5" />
+                  <span>Share Your Trading Insights</span>
+                </li>
+                <li className="flex items-start gap-2.5 text-[13px] text-white">
+                  <Check className="h-4 w-4 text-violet-200 shrink-0 mt-0.5" />
+                  <span>Notebook</span>
+                </li>
+                <li className="flex items-start gap-2.5 text-[13px] text-white">
+                  <Check className="h-4 w-4 text-violet-200 shrink-0 mt-0.5" />
+                  <span>News reminder</span>
+                </li>
               </ul>
               <button
                 onClick={() => openAuthModal('register')}
