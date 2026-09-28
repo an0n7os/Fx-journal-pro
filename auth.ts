@@ -83,9 +83,25 @@ function resolveAuthSecret(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+export function resolveBaseURL(): string {
+  if (process.env.BETTER_AUTH_URL?.trim()) {
+    return process.env.BETTER_AUTH_URL.trim();
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`;
+  }
+  if (process.env.VERCEL_URL?.trim()) {
+    return `https://${process.env.VERCEL_URL.trim()}`;
+  }
+  if (IS_SERVERLESS) {
+    return 'https://fx-journal-pro-pi.vercel.app';
+  }
+  return 'http://localhost:3000';
+}
+
 export const auth = betterAuth({
   database: getDatabaseAdapter(),
-  baseURL: process.env.BETTER_AUTH_URL || (IS_SERVERLESS ? 'https://fxjournalp.netlify.app' : 'http://localhost:3000'),
+  baseURL: resolveBaseURL(),
   secret: resolveAuthSecret(),
   emailAndPassword: {
     enabled: true,
@@ -277,8 +293,13 @@ export const auth = betterAuth({
   trustedOrigins: [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'https://fx-journal-pro-pi.vercel.app',
     'https://fxjournalp.netlify.app',
     'https://fxjournalpro.com',
+    ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL.trim()] : []),
+    ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL.trim()}`] : []),
+    ...(process.env.VERCEL_PROJECT_PRODUCTION_URL ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`] : []),
+    ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS ? process.env.BETTER_AUTH_TRUSTED_ORIGINS.split(',').map((s: string) => s.trim()) : []),
   ],
   account: {
     storeStateStrategy: 'cookie',
@@ -305,10 +326,10 @@ export const auth = betterAuth({
     },
   },
   advanced: {
-    useSecureCookies: (process.env.BETTER_AUTH_URL || '').startsWith('https://'),
+    useSecureCookies: resolveBaseURL().startsWith('https://'),
     defaultCookieAttributes: {
       sameSite: 'lax',
-      secure: (process.env.BETTER_AUTH_URL || '').startsWith('https://'),
+      secure: resolveBaseURL().startsWith('https://'),
     },
   },
   onAPIError: {
