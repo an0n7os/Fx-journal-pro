@@ -6268,7 +6268,27 @@ export default function App() {
                   </div>
                 </section>
 
-                {/* Summary Session Section */}
+                {/* Summary Session & Summary Pairs Section — Pro only */}
+                <div className="relative">
+                  {!isProActive && (
+                    <div className="absolute inset-0 z-20 backdrop-blur-xs bg-slate-900/60 dark:bg-slate-950/70 rounded-2xl flex flex-col items-center justify-center p-6 text-center border border-white/10">
+                      <div className="p-3.5 rounded-full bg-violet-600/30 border border-violet-500/40 text-violet-300 mb-3 shadow-xl">
+                        <Lock className="h-6 w-6" />
+                      </div>
+                      <h4 className="text-lg font-bold text-white mb-1.5">Session & Pair Analytics</h4>
+                      <p className="text-xs text-slate-300 max-w-md mb-4 leading-relaxed">
+                        Upgrade to <strong>FX Journal Pro</strong> to unlock comprehensive session breakdowns (London, NY, Asia) and traded currency pair metrics.
+                      </p>
+                      <button
+                        onClick={() => setShowProModal(true)}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg transition flex items-center gap-2"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" /> Upgrade to PRO — ₹499/mo
+                      </button>
+                    </div>
+                  )}
+
+                  <div className={`space-y-6 ${!isProActive ? 'filter blur-[3px] opacity-60 pointer-events-none select-none' : ''}`}>
                 <section className="dx-panel p-5 sm:p-6 shadow-xs">
                   <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Summary Session</h3>
@@ -6511,8 +6531,30 @@ export default function App() {
                     </table>
                   </div>
                 </section>
+                  </div>
+                </div>
 
-                {/* Win & Loss Performance Section */}
+                {/* Win & Loss Performance Section — Pro only */}
+                <div className="relative">
+                  {!isProActive && (
+                    <div className="absolute inset-0 z-20 backdrop-blur-xs bg-slate-900/60 dark:bg-slate-950/70 rounded-2xl flex flex-col items-center justify-center p-6 text-center border border-white/10">
+                      <div className="p-3.5 rounded-full bg-violet-600/30 border border-violet-500/40 text-violet-300 mb-3 shadow-xl">
+                        <Lock className="h-6 w-6" />
+                      </div>
+                      <h4 className="text-lg font-bold text-white mb-1.5">Win & Loss Performance</h4>
+                      <p className="text-xs text-slate-300 max-w-md mb-4 leading-relaxed">
+                        Upgrade to <strong>FX Journal Pro</strong> to unlock advanced winning and losing streak analytics, cumulative curves, and volume breakdowns.
+                      </p>
+                      <button
+                        onClick={() => setShowProModal(true)}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg transition flex items-center gap-2"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" /> Upgrade to PRO — ₹499/mo
+                      </button>
+                    </div>
+                  )}
+
+                  <div className={!isProActive ? 'filter blur-[3px] opacity-60 pointer-events-none select-none' : ''}>
                 <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Win Performance Card */}
                   <div className="dx-panel p-5 sm:p-6 shadow-xs flex flex-col justify-between">
@@ -6686,6 +6728,8 @@ export default function App() {
                     </div>
                   </div>
                 </section>
+                  </div>
+                </div>
 
                 {/* Best & Worst Day Statistics (based on daily net P&L) */}
                 <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
