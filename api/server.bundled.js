@@ -698,6 +698,12 @@ function createMemoryStore() {
   };
 }
 function getDatabaseAdapter() {
+  if (IS_SERVERLESS) {
+    if (process.env.DATABASE_URL) {
+      console.log("[Better Auth] Serverless detected \u2014 using memory adapter (DATABASE_URL is ignored on serverless to prevent connection hangs).");
+    }
+    return memoryAdapter(createMemoryStore());
+  }
   if (process.env.DATABASE_URL) {
     const pgModule = nodeRequire("pg");
     const Pool = pgModule.Pool ?? pgModule.default?.Pool;
@@ -706,9 +712,6 @@ function getDatabaseAdapter() {
       ssl: process.env.DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false },
       connectionTimeoutMillis: 5e3
     });
-  }
-  if (IS_SERVERLESS) {
-    return memoryAdapter(createMemoryStore());
   }
   try {
     const sqliteModule = nodeRequire("node:sqlite");

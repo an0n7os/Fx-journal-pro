@@ -38,10 +38,23 @@ function createMemoryStore(): Record<string, any[]> {
 }
 
 function getDatabaseAdapter(): any {
-  // If PostgreSQL / Supabase connection string is configured
+  // On Serverless (Vercel / Netlify), ALWAYS use memory adapter.
+  // Attempting a PostgreSQL connection from a cold-start serverless function
+  // causes the entire function to hang until the TCP timeout fires, which
+  // makes every auth endpoint (including Google OAuth) appear to freeze.
+  // Sessions are ephemeral per-instance anyway on serverless, so memory
+  // is the correct choice. Set DATABASE_URL only on self-hosted deployments.
+  if (IS_SERVERLESS) {
+    if (process.env.DATABASE_URL) {
+      console.log('[Better Auth] Serverless detected — using memory adapter (DATABASE_URL is ignored on serverless to prevent connection hangs).');
+    }
+    return memoryAdapter(createMemoryStore());
+  }
+
+  // Non-serverless: use PostgreSQL if DATABASE_URL is set
   if (process.env.DATABASE_URL) {
     // Load pg via createRequire so its CJS dynamic-require calls work even
-    // when this file is bundled as ESM (e.g. Vercel serverless).
+    // when this file is bundled as ESM.
     const pgModule = nodeRequire('pg');
     const Pool = pgModule.Pool ?? pgModule.default?.Pool;
     return new Pool({
@@ -49,11 +62,6 @@ function getDatabaseAdapter(): any {
       ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
       connectionTimeoutMillis: 5000,
     });
-  }
-
-  // On Serverless (Netlify Functions / Vercel), local SQLite disk is read-only and missing native bindings
-  if (IS_SERVERLESS) {
-    return memoryAdapter(createMemoryStore());
   }
 
   // Local development: load SQLite dynamically so serverless bundlers never fail
