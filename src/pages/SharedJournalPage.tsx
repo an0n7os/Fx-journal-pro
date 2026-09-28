@@ -155,6 +155,22 @@ export default function SharedJournalPage({
     }).format(val);
   };
 
+  const formatDateTime = (val: string | null | undefined): string => {
+    if (!val) return '—';
+    try {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return String(val);
+      const p = (n: number) => String(n).padStart(2, '0');
+      const dateStr = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+      const hasTime = String(val).includes(':') || String(val).includes('T');
+      if (!hasTime) return dateStr;
+      const timeStr = `${p(d.getHours())}:${p(d.getMinutes())}`;
+      return `${dateStr} ${timeStr}`;
+    } catch {
+      return String(val);
+    }
+  };
+
   const navigateTo = (path: string) => {
     if (onNavigate) {
       onNavigate(path);
@@ -651,7 +667,8 @@ export default function SharedJournalPage({
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 text-[11px] font-semibold">
-                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4 whitespace-nowrap">Entry Time</th>
+                    <th className="py-3 px-4 whitespace-nowrap">Exit Time</th>
                     <th className="py-3 px-4">Symbol</th>
                     <th className="py-3 px-4">Type</th>
                     <th className="py-3 px-4 text-center">Volume</th>
@@ -664,7 +681,7 @@ export default function SharedJournalPage({
                 <tbody className="divide-y divide-slate-800/40">
                   {paginatedTrades.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
+                      <td colSpan={9} className="py-12 text-center text-xs text-slate-500">
                         No trade records match the chosen filter.
                       </td>
                     </tr>
@@ -673,8 +690,11 @@ export default function SharedJournalPage({
                       const isProfit = (Number(t.profit) || Number(t.pnl) || 0) >= 0;
                       return (
                         <tr key={t.id} className="hover:bg-slate-800/40 transition">
-                          <td className="py-3 px-4 text-slate-300 whitespace-nowrap">
-                            {t.date ? String(t.date).slice(0, 10) : '—'}
+                          <td className="py-3 px-4 text-slate-300 whitespace-nowrap font-mono text-[11px]">
+                            {formatDateTime(t.date || t.openTime || t.entryTime)}
+                          </td>
+                          <td className="py-3 px-4 text-slate-300 whitespace-nowrap font-mono text-[11px]">
+                            {formatDateTime(t.exitTime || t.closeTime)}
                           </td>
                           <td className="py-3 px-4 font-bold text-white">{t.symbol}</td>
                           <td className="py-3 px-4">
