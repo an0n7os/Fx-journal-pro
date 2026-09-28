@@ -6,8 +6,10 @@ import { memoryAdapter } from '@better-auth/memory-adapter';
 import { createRequire } from 'node:module';
 import path from 'path';
 import crypto from 'node:crypto';
+import pg from 'pg';
 
-const dynamicRequire = typeof require !== 'undefined' ? require : createRequire(path.join(process.cwd(), 'package.json'));
+const { Pool } = pg;
+const nodeRequire = createRequire(import.meta.url);
 
 const IS_SERVERLESS = !!(
   process.env.VERCEL ||
@@ -36,7 +38,6 @@ function createMemoryStore(): Record<string, any[]> {
 function getDatabaseAdapter(): any {
   // If PostgreSQL / Supabase connection string is configured
   if (process.env.DATABASE_URL) {
-    const { Pool } = dynamicRequire('pg');
     return new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
@@ -50,7 +51,7 @@ function getDatabaseAdapter(): any {
 
   // Local development: load SQLite dynamically so serverless bundlers never fail
   try {
-    const sqliteModule = dynamicRequire('node:' + 'sqlite');
+    const sqliteModule = nodeRequire('node:sqlite');
     return new sqliteModule.DatabaseSync(DB_PATH);
   } catch (e) {
     console.warn('[Better Auth] Could not load SQLite, falling back to in-memory adapter:', e);

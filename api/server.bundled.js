@@ -1,10 +1,3 @@
-var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-}) : x)(function(x) {
-  if (typeof require !== "undefined") return require.apply(this, arguments);
-  throw Error('Dynamic require of "' + x + '" is not supported');
-});
-
 // server.ts
 import "dotenv/config";
 import express from "express";
@@ -686,7 +679,9 @@ import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createRequire } from "node:module";
 import path from "path";
 import crypto from "node:crypto";
-var dynamicRequire = typeof __require !== "undefined" ? __require : createRequire(path.join(process.cwd(), "package.json"));
+import pg from "pg";
+var { Pool } = pg;
+var nodeRequire = createRequire(import.meta.url);
 var IS_SERVERLESS = !!(process.env.VERCEL || process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
 var DB_PATH = path.join(process.cwd(), "auth.sqlite");
 function createMemoryStore() {
@@ -706,7 +701,6 @@ function createMemoryStore() {
 }
 function getDatabaseAdapter() {
   if (process.env.DATABASE_URL) {
-    const { Pool } = dynamicRequire("pg");
     return new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false }
@@ -716,7 +710,7 @@ function getDatabaseAdapter() {
     return memoryAdapter(createMemoryStore());
   }
   try {
-    const sqliteModule = dynamicRequire("node:sqlite");
+    const sqliteModule = nodeRequire("node:sqlite");
     return new sqliteModule.DatabaseSync(DB_PATH);
   } catch (e) {
     console.warn("[Better Auth] Could not load SQLite, falling back to in-memory adapter:", e);
