@@ -2419,10 +2419,20 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             <button type="button" disabled={actionLoading}
               onClick={async () => {
                 setActionLoading(true); setAuthError(null);
+                // Persist referral code in sessionStorage now so it survives the OAuth round-trip.
+                // Also embed it in callbackURL as a query param as a belt-and-suspenders fallback.
+                const pendingRef = referralCode.trim() || sessionStorage.getItem('fx_referral_code') || '';
+                if (pendingRef) {
+                  try { sessionStorage.setItem('fx_referral_code', pendingRef); } catch { /* private mode */ }
+                }
+                const callbackBase = window.location.origin + '/dashboard';
+                const callbackURL = pendingRef
+                  ? `${callbackBase}?ref=${encodeURIComponent(pendingRef)}`
+                  : callbackBase;
                 try {
                   await signIn.social({
                     provider: 'google',
-                    callbackURL: window.location.origin + '/dashboard',
+                    callbackURL,
                   });
                 } catch (err: any) { setAuthError(`Google error: ${err?.message || err}`); setActionLoading(false); }
               }}
@@ -2479,10 +2489,20 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             <button type="button" disabled={actionLoading}
               onClick={async () => {
                 setActionLoading(true); setAuthError(null);
+                // Persist referral code in sessionStorage now so it survives the OAuth round-trip.
+                // Also embed it in callbackURL as a query param as a belt-and-suspenders fallback.
+                const pendingRef = referralCode.trim() || sessionStorage.getItem('fx_referral_code') || '';
+                if (pendingRef) {
+                  try { sessionStorage.setItem('fx_referral_code', pendingRef); } catch { /* private mode */ }
+                }
+                const callbackBase = window.location.origin + '/dashboard';
+                const callbackURL = pendingRef
+                  ? `${callbackBase}?ref=${encodeURIComponent(pendingRef)}`
+                  : callbackBase;
                 try {
                   await signIn.social({
                     provider: 'google',
-                    callbackURL: window.location.origin + '/dashboard',
+                    callbackURL,
                   });
                 } catch (err: any) { setAuthError(`Google error: ${err?.message || err}`); setActionLoading(false); }
               }}

@@ -3585,6 +3585,44 @@ app.post("/api/auth/register", authIpBackstopLimiter, authRateLimiter, async (re
     res.status(500).json({ error: `Server register error: ${err?.message || err}` });
   }
 });
+app.post("/api/auth/link-referral", authRateLimiter, async (req, res) => {
+  try {
+    const uid = req.headers["x-auth-user-id"] || "";
+    const email = req.headers["x-auth-email"] || "";
+    const { referralCode } = req.body;
+    if (!referralCode || typeof referralCode !== "string") {
+      return res.status(400).json({ error: "referralCode is required." });
+    }
+    let userId = uid;
+    if (!userId && email) {
+      if (useSupabase) {
+        const { data } = await supabase.from("users").select("id").eq("email", email.toLowerCase().trim()).maybeSingle();
+        userId = data?.id || "";
+      }
+    }
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
+    let alreadyReferred = false;
+    if (useSupabase) {
+      const { data } = await supabase.from("users").select("referred_by").eq("id", userId).maybeSingle();
+      alreadyReferred = !!data?.referred_by;
+    }
+    if (alreadyReferred) {
+      return res.json({ success: false, message: "User already has a referral attributed." });
+    }
+    const partnerId = await linkReferral(req, userId, referralCode.trim());
+    if (partnerId) {
+      console.log(`[link-referral] Linked user ${userId} to partner ${partnerId} via code ${referralCode}`);
+      return res.json({ success: true, message: "Referral linked successfully." });
+    } else {
+      return res.status(404).json({ success: false, error: "Referral code not found or invalid." });
+    }
+  } catch (err) {
+    console.error("[link-referral] Error:", err?.message || err);
+    res.status(500).json({ error: "Failed to link referral." });
+  }
+});
 app.post("/api/auth/login", authIpBackstopLimiter, authRateLimiter, async (req, res) => {
   try {
     const { email, password, id, userId, turnstileToken } = req.body;

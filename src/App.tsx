@@ -230,6 +230,27 @@ export default function App() {
   const bootstrapDoneRef = React.useRef(false);
   const isFetchingAccountsRef = React.useRef(false);
 
+  // On initial load, capture any ?ref= query param from the URL.
+  // This fires when Google OAuth redirects back to /dashboard?ref=CODE — the
+  // referral code embedded in callbackURL is extracted and saved to
+  // sessionStorage so bootstrapSession can pick it up and call link-referral.
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const refCode = params.get('ref');
+      if (refCode && refCode.trim()) {
+        const code = refCode.trim().toUpperCase();
+        const existing = sessionStorage.getItem('fx_referral_code');
+        if (!existing) {
+          sessionStorage.setItem('fx_referral_code', code);
+        }
+        // Remove ?ref= from the URL so it's not visible in the address bar
+        const cleanUrl = window.location.pathname + (params.toString().replace(/[?&]?ref=[^&]*/g, '').replace(/^&/, '?') || '');
+        window.history.replaceState(null, '', cleanUrl || window.location.pathname);
+      }
+    } catch { /* private mode or SSR */ }
+  }, []);
+
   // FIX #1: Actually persist the session IDs to sessionStorage so that
   // authFetch can inject them as headers on every subsequent API call,
   // including after a page refresh where the React state is empty.
@@ -1044,6 +1065,37 @@ export default function App() {
     });
   };
 
+  // After any sign-in (including Google OAuth), check if there is a pending
+  // referral code in sessionStorage and link it to the authenticated user.
+  // This is the key fix for Google sign-ups: the code is saved to sessionStorage
+  // before the OAuth redirect and read back here once /dashboard loads.
+  const linkPendingReferral = async (userId: string, userEmail: string) => {
+    try {
+      const code = sessionStorage.getItem('fx_referral_code');
+      if (!code || !code.trim()) return;
+      const res = await fetch('/api/auth/link-referral', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-user-id': userId,
+          'x-auth-email': userEmail,
+        },
+        body: JSON.stringify({ referralCode: code.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        console.log('[FXJournal] Referral linked via Google OAuth post-signup:', code);
+        sessionStorage.removeItem('fx_referral_code');
+      } else {
+        // Non-fatal — also clear stale codes that don't match any partner
+        if (res.status === 404) sessionStorage.removeItem('fx_referral_code');
+      }
+    } catch (e) {
+      console.warn('[FXJournal] Non-fatal: could not link referral code:', e);
+    }
+  };
+
   useEffect(() => {
     const bootstrapSession = async () => {
       try {
@@ -1053,6 +1105,8 @@ export default function App() {
             // Mark bootstrap in-progress so onAuthStateChange SIGNED_IN (which
             // fires concurrently) knows not to double-fetch.
             await syncSupabaseUser(session.user, session.access_token);
+            // Link any pending referral code from a Google OAuth signup
+            await linkPendingReferral(session.user.id, session.user.email || '');
             bootstrapDoneRef.current = true;
             return;
           }
@@ -1081,6 +1135,8 @@ export default function App() {
             const isCompleted = !!(data.user.onboardingCompleted || (data.user as any).onboarding_completed);
             setShowOnboardingWizard(!isCompleted);
             await fetchAccountData();
+            // Link any pending referral code from a Google OAuth signup
+            await linkPendingReferral(data.user.id, data.user.email);
             // Check admin status after session restore
             try {
               const adminHeaders = {

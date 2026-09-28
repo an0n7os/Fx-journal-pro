@@ -3261,6 +3261,58 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
   }
 });
 
+// ── Link a referral code to an already-authenticated user ──────────────────
+// Called by the frontend after a Google OAuth sign-up completes. The referral
+// code survives the OAuth round-trip in sessionStorage (saved before redirect,
+// read back on /dashboard), then POST-ed here so it can be attributed to the
+// partner even though Better Auth's OAuth callback never touches our register
+// endpoint.
+app.post('/api/auth/link-referral', authRateLimiter, async (req, res) => {
+  try {
+    const uid = req.headers['x-auth-user-id'] as string || '';
+    const email = req.headers['x-auth-email'] as string || '';
+    const { referralCode } = req.body;
+
+    if (!referralCode || typeof referralCode !== 'string') {
+      return res.status(400).json({ error: 'referralCode is required.' });
+    }
+
+    // Resolve current user — must be authenticated
+    let userId = uid;
+    if (!userId && email) {
+      if (useSupabase) {
+        const { data } = await supabase.from('users').select('id').eq('email', email.toLowerCase().trim()).maybeSingle();
+        userId = data?.id || '';
+      }
+    }
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
+    // Check user hasn't already been referred (first-referral-wins policy)
+    let alreadyReferred = false;
+    if (useSupabase) {
+      const { data } = await supabase.from('users').select('referred_by').eq('id', userId).maybeSingle();
+      alreadyReferred = !!(data?.referred_by);
+    }
+
+    if (alreadyReferred) {
+      return res.json({ success: false, message: 'User already has a referral attributed.' });
+    }
+
+    const partnerId = await linkReferral(req, userId, referralCode.trim());
+    if (partnerId) {
+      console.log(`[link-referral] Linked user ${userId} to partner ${partnerId} via code ${referralCode}`);
+      return res.json({ success: true, message: 'Referral linked successfully.' });
+    } else {
+      return res.status(404).json({ success: false, error: 'Referral code not found or invalid.' });
+    }
+  } catch (err: any) {
+    console.error('[link-referral] Error:', err?.message || err);
+    res.status(500).json({ error: 'Failed to link referral.' });
+  }
+});
+
 app.post('/api/auth/login', authIpBackstopLimiter, authRateLimiter, async (req, res) => {
   try {
     const { email, password, id, userId, turnstileToken } = req.body;
