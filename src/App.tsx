@@ -1790,7 +1790,7 @@ export default function App() {
     }
   };
 
-  const handleInspectUser = async (targetUser: any) => {
+  const handleInspectUser = async (targetUser: any, defaultTab: string = 'analytics') => {
     try {
       setActionLoading(true);
       const res = await authFetch(`/api/admin/inspect-user/${targetUser.id}`);
@@ -1828,8 +1828,8 @@ export default function App() {
         setSelectedAccountId('');
       }
 
-      // Redirect mentor directly to user trading journal to inspect all trades
-      setActiveTab('journal');
+      // Redirect mentor to inspect trader performance analytics or journal
+      setActiveTab(defaultTab || 'analytics');
     } catch (err: any) {
       console.error('Error inspecting trader:', err);
       showAlert('Failed to inspect trader: ' + (err?.message || err), { title: 'Trader Inspection', type: 'error' });

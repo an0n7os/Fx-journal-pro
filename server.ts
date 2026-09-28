@@ -6833,7 +6833,7 @@ const tradeVisibleUserIds = async (role: string, adminUserId: string | null): Pr
 
   if (!useSupabase) {
     return localAllUsers()
-      .filter((u: any) => ids.includes(u.id) && (u.id === 'user_demo_pro' || u.id.startsWith('user_demo_') || u.allowPartnerTradeView === true))
+      .filter((u: any) => ids.includes(u.id) && (u.id === 'user_demo_pro' || u.id.startsWith('user_demo_') || u.allowPartnerTradeView !== false))
       .map((u: any) => u.id);
   }
   const { data, error } = await supabase
@@ -6844,7 +6844,7 @@ const tradeVisibleUserIds = async (role: string, adminUserId: string | null): Pr
     return [];
   }
   return (data || [])
-    .filter((r: any) => r.id === 'user_demo_pro' || r.id.startsWith('user_demo_') || r.allow_partner_trade_view === true)
+    .filter((r: any) => r.id === 'user_demo_pro' || r.id.startsWith('user_demo_') || r.allow_partner_trade_view !== false)
     .map((r: any) => r.id);
 };
 
@@ -7016,10 +7016,21 @@ const readMentorAccess = async (userId: string): Promise<MentorAccess> => {
 
 const readTradeConsent = async (userId: string): Promise<boolean> => {
   if (userId === 'user_demo_pro' || userId.startsWith('user_demo_')) return true;
-  if (!useSupabase) return localFindUser((u: any) => u.id === userId)?.allowPartnerTradeView === true;
+  if (!useSupabase) {
+    const u = localFindUser((user: any) => user.id === userId);
+    if (!u) return false;
+    if (u.allowPartnerTradeView === false) return false;
+    if (u.mentorAccess && u.mentorAccess.analysis === false && u.mentorAccess.journal === false) return false;
+    return true;
+  }
   const { data } = await supabase
-    .from('users').select('allow_partner_trade_view').eq('id', userId).maybeSingle();
-  return data?.allow_partner_trade_view === true;
+    .from('users').select('allow_partner_trade_view, mentor_access').eq('id', userId).maybeSingle();
+  if (!data) return false;
+  if (data.allow_partner_trade_view === false) return false;
+  if (data.mentor_access && (data.mentor_access as any).analysis === false && (data.mentor_access as any).journal === false) {
+    return false;
+  }
+  return true;
 };
 
 /**

@@ -21,7 +21,7 @@ interface PartnerUser {
 }
 
 interface PartnerUserRegistryProps {
-  onInspectUser?: (user: any) => void;
+  onInspectUser?: (user: any, tab?: string) => void;
 }
 
 function formatDateTime(iso?: string | null): string {
@@ -231,7 +231,7 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
                       </span>
                       <button
                         type="button"
-                        onClick={() => onInspectUser?.(u)}
+                        onClick={() => onInspectUser?.(u, 'journal')}
                         className="px-2.5 py-1 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-mono font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm hover:scale-105 active:scale-95"
                         title="Click to inspect all trades & journal"
                       >
@@ -272,7 +272,7 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
                   <td className="py-3.5 px-4 text-right">
                     <button
                       type="button"
-                      onClick={() => onInspectUser?.(u)}
+                      onClick={() => onInspectUser?.(u, 'analytics')}
                       className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:via-purple-500 hover:to-indigo-500 text-white font-black text-xs inline-flex items-center gap-1.5 transition-all shadow-md shadow-violet-500/30 hover:scale-105 active:scale-95 shrink-0 border border-violet-400/30 cursor-pointer"
                       title="Inspect Trader Journal & Analysis"
                     >

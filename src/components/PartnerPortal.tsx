@@ -12,7 +12,7 @@ interface PartnerMe {
 }
 
 interface PartnerPortalProps {
-  onInspectUser?: (user: any) => void;
+  onInspectUser?: (user: any, tab?: string) => void;
 }
 
 export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}) {

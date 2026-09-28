@@ -6282,14 +6282,14 @@ var tradeVisibleUserIds = async (role, adminUserId) => {
   const ids = scope || [];
   if (ids.length === 0) return [];
   if (!useSupabase) {
-    return localAllUsers().filter((u) => ids.includes(u.id) && (u.id === "user_demo_pro" || u.id.startsWith("user_demo_") || u.allowPartnerTradeView === true)).map((u) => u.id);
+    return localAllUsers().filter((u) => ids.includes(u.id) && (u.id === "user_demo_pro" || u.id.startsWith("user_demo_") || u.allowPartnerTradeView !== false)).map((u) => u.id);
   }
   const { data, error } = await supabase.from("users").select("id, allow_partner_trade_view").in("id", ids);
   if (error) {
     console.error("[tradeVisibleUserIds] consent lookup failed:", error.message);
     return [];
   }
-  return (data || []).filter((r) => r.id === "user_demo_pro" || r.id.startsWith("user_demo_") || r.allow_partner_trade_view === true).map((r) => r.id);
+  return (data || []).filter((r) => r.id === "user_demo_pro" || r.id.startsWith("user_demo_") || r.allow_partner_trade_view !== false).map((r) => r.id);
 };
 var canSeeTrades = (visible, userId) => visible === null || visible.includes(userId);
 var mentorAccessByUser = async (role, adminUserId) => {
@@ -6367,9 +6367,20 @@ var readMentorAccess = async (userId) => {
 };
 var readTradeConsent = async (userId) => {
   if (userId === "user_demo_pro" || userId.startsWith("user_demo_")) return true;
-  if (!useSupabase) return localFindUser((u) => u.id === userId)?.allowPartnerTradeView === true;
-  const { data } = await supabase.from("users").select("allow_partner_trade_view").eq("id", userId).maybeSingle();
-  return data?.allow_partner_trade_view === true;
+  if (!useSupabase) {
+    const u = localFindUser((user) => user.id === userId);
+    if (!u) return false;
+    if (u.allowPartnerTradeView === false) return false;
+    if (u.mentorAccess && u.mentorAccess.analysis === false && u.mentorAccess.journal === false) return false;
+    return true;
+  }
+  const { data } = await supabase.from("users").select("allow_partner_trade_view, mentor_access").eq("id", userId).maybeSingle();
+  if (!data) return false;
+  if (data.allow_partner_trade_view === false) return false;
+  if (data.mentor_access && data.mentor_access.analysis === false && data.mentor_access.journal === false) {
+    return false;
+  }
+  return true;
 };
 app.use("/api/admin", async (req, res, next) => {
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
