@@ -148,7 +148,7 @@ const SOCIAL_LINKS: { label: string; href: string; icon: any }[] = [
   { label: 'Instagram', href: 'https://www.instagram.com/fx_journalpro/', icon: Instagram },
   { label: 'Telegram Support', href: 'https://t.me/Contact_fxjournalpro', icon: Send },
   // { label: 'Discord Server', href: 'https://discord.gg/fxjournalpro', icon: MessageSquare },
-  // { label: 'X (Twitter)', href: 'https://twitter.com/fxjournalpro', icon: Twitter },
+  { label: 'X (Twitter)', href: 'https://x.com/FXJOURNALPRO', icon: Twitter },
   // { label: 'YouTube Channel', href: 'https://youtube.com/@fxjournalpro', icon: Youtube },
 ];
 

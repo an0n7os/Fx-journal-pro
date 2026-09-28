@@ -679,8 +679,6 @@ import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createRequire } from "node:module";
 import path from "path";
 import crypto from "node:crypto";
-import pg from "pg";
-var { Pool } = pg;
 var nodeRequire = createRequire(import.meta.url);
 var IS_SERVERLESS = !!(process.env.VERCEL || process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
 var DB_PATH = path.join(process.cwd(), "auth.sqlite");
@@ -701,6 +699,8 @@ function createMemoryStore() {
 }
 function getDatabaseAdapter() {
   if (process.env.DATABASE_URL) {
+    const pgModule = nodeRequire("pg");
+    const Pool = pgModule.Pool ?? pgModule.default?.Pool;
     return new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false },
