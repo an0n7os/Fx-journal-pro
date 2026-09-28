@@ -1594,7 +1594,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 selling point.
               */}
               <p className="text-[13px] text-slate-300/90 mt-2">
-                {PRO_PRICE_USD} billed internationally. One-time payment, no auto-renewal.
+                {PRO_PRICE_USD} billed internationally.
               </p>
               <ul className="mt-6 space-y-2.5 flex-1">
                 {['Unlimited trading accounts', 'MT5 automatic sync', 'Live charts & advanced tools', 'AI Mentor on your own history', 'Export your full trade history'].map((f) => (

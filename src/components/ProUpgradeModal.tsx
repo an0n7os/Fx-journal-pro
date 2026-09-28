@@ -530,7 +530,7 @@ export default function ProUpgradeModal({
                   ))}
                 </div>
                 <p className="mt-3 pt-3 border-t border-white/[0.05] text-[11.5px] text-slate-400">
-                  One-time payment · 30 days of Pro · no auto-renewal
+                  30 days of Pro access
                 </p>
               </div>
 
