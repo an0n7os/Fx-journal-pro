@@ -1,5 +1,7 @@
 // Verifies normal app behaviour still works after the auth rework, and that
 // cross-user isolation holds.
+import { signInOrRegister } from './auth-helper.mjs';
+
 const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const check = (n, p, d = '') => out.push({ n, p, d });
@@ -19,8 +21,8 @@ async function api(path, { method = 'GET', body, cookie } = {}) {
 }
 
 async function signIn(email) {
-  const r = await api('/api/auth/login', { method: 'POST', body: { email, password: 'GoodPass1234' } });
-  return { cookie: r.setCookie?.split(';')[0] || '', user: r.json?.user };
+  const r = await signInOrRegister(BASE, email, 'GoodPass1234');
+  return { cookie: r.cookie, user: r.user };
 }
 
 const alice = await signIn(`alice_${Date.now()}@example.com`);

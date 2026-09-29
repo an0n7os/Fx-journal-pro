@@ -4,6 +4,8 @@
 //
 // Runs against the dev server on :3000. When Supabase is not configured the
 // server uses its in-memory store, which exercises the same code paths.
+import { signInOrRegister } from './auth-helper.mjs';
+
 const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const ok = (n, p, d = '') => out.push({ n, p, d });
@@ -20,12 +22,8 @@ async function api(path, { method = 'GET', body, cookie } = {}) {
 }
 
 async function signIn(email) {
-  const res = await fetch(BASE + '/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: 'SubAdminTest12345' }),
-  });
-  return res.headers.get('set-cookie')?.split(';')[0] || '';
+  const r = await signInOrRegister(BASE, email, 'SubAdminTest12345');
+  return r.cookie;
 }
 
 const stamp = Date.now();

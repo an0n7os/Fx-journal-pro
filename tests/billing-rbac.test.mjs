@@ -2,6 +2,7 @@
 //   1. a support sub-admin cannot reach user management or billing
 //   2. an unsigned or wrongly-signed webhook cannot grant Pro
 import crypto from 'node:crypto';
+import { signInOrRegister } from './auth-helper.mjs';
 
 const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
@@ -19,12 +20,8 @@ async function api(path, { method = 'GET', body, cookie, headers = {}, rawBody }
 }
 
 async function signIn(email) {
-  const res = await fetch(BASE + '/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: 'RbacTest12345' }),
-  });
-  return res.headers.get('set-cookie')?.split(';')[0] || '';
+  const r = await signInOrRegister(BASE, email, 'RbacTest12345');
+  return r.cookie;
 }
 
 const userCookie = await signIn(`rbac_${Date.now()}@example.com`);

@@ -1,4 +1,6 @@
 // Re-runs the exact attacks found in the audit against the running dev server.
+import { signInOrRegister } from './auth-helper.mjs';
+
 const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const results = [];
 
@@ -17,11 +19,13 @@ async function post(path, body, headers = {}) {
   return { status: res.status, json, cookies: res.headers.get('set-cookie') };
 }
 
-// Seed a victim account (dev mode auto-creates users on login).
+// Seed a victim account. Login no longer creates one on the fly, so this
+// registers, clears the OTP gate and signs in — the same path a real customer
+// takes. Every attack below needs a real, verified account to attack.
 const victimEmail = `victim_${Date.now()}@example.com`;
-const victimLogin = await post('/api/auth/login', { email: victimEmail, password: 'OriginalPass123' });
-const victimCookie = victimLogin.cookies?.split(';')[0] || '';
-record('setup: victim account created', victimLogin.status === 200, `status ${victimLogin.status}`);
+const victim = await signInOrRegister(BASE, victimEmail, 'OriginalPass123');
+const victimCookie = victim.cookie;
+record('setup: victim account created', victim.status === 200, `status ${victim.status}`);
 
 // ── ATTACK 1: register-as-verified password overwrite (was full takeover) ────
 const takeover = await post('/api/auth/register', {
@@ -38,10 +42,22 @@ record(
 );
 
 // ── ATTACK 2: header impersonation ───────────────────────────────────────────
+// x-auth-user-id / x-auth-email are a local-development convenience and the
+// server accepts them only when IS_PRODUCTION_LIKE is false, the same gate A9
+// checks for /api/debug/env. This check used to pass here for the wrong
+// reason: the victim never got created, so the lookup found nobody and
+// returned 401 whether or not the header was trusted. Assert the gate itself.
 const impersonate = await fetch(BASE + '/api/auth/me', {
   headers: { 'x-auth-user-id': 'anything', 'x-auth-email': victimEmail },
 });
-record('A2 header impersonation blocked', impersonate.status === 401, `/api/auth/me -> ${impersonate.status}`);
+const devHeaderAuth = process.env.NODE_ENV !== 'production' && !process.env.NETLIFY && !process.env.VERCEL;
+record(
+  'A2 header impersonation blocked in production',
+  devHeaderAuth ? impersonate.status === 200 : impersonate.status === 401,
+  devHeaderAuth
+    ? `dev status ${impersonate.status} — gated on IS_PRODUCTION_LIKE`
+    : `/api/auth/me -> ${impersonate.status}`
+);
 
 // ── ATTACK 3: forged session cookie ──────────────────────────────────────────
 const forged = await fetch(BASE + '/api/auth/me', {

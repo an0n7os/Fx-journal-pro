@@ -5,6 +5,8 @@
 // with proRequired is.
 //
 // Runs against the dev server on :3000.
+import { signInOrRegister } from './auth-helper.mjs';
+
 const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const ok = (n, p, d = '') => out.push({ n, p, d });
@@ -21,15 +23,8 @@ async function api(path, { method = 'GET', body, cookie } = {}) {
 }
 
 async function signIn(email, password = 'PlanTest12345') {
-  const res = await fetch(BASE + '/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  const cookie = res.headers.get('set-cookie')?.split(';')[0] || '';
-  let json = null;
-  try { json = await res.json(); } catch {}
-  return { cookie, user: json?.user || null };
+  const r = await signInOrRegister(BASE, email, password);
+  return { cookie: r.cookie, user: r.user };
 }
 
 const stamp = Date.now();

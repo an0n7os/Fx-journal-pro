@@ -1,5 +1,7 @@
 // Pre-launch sweep: exercises every user-facing API path and reports what
 // actually works, not what is supposed to.
+import { signInOrRegister } from './auth-helper.mjs';
+
 const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const ok = (n, p, d = '') => out.push({ n, p, d });
@@ -17,8 +19,8 @@ async function api(path, { method = 'GET', body, cookie, raw } = {}) {
 }
 
 const email = `golive_${Date.now()}@example.com`;
-const login = await api('/api/auth/login', { method: 'POST', body: { email, password: 'GoLiveTest123' } });
-const cookie = login.setCookie?.split(';')[0] || '';
+const login = await signInOrRegister(BASE, email, 'GoLiveTest123');
+const cookie = login.cookie;
 ok('auth: sign in', login.status === 200);
 
 const acc = await api('/api/accounts', { cookie });
