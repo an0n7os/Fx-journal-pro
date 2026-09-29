@@ -68,6 +68,20 @@ const NotebookTab = React.lazy(() => import('./components/NotebookTab'));
 const ADD_TRADE_TABS = new Set(['dashboard', 'journal', 'accounts', 'calendar']);
 
 /**
+ * A public shared-journal link: /shared/<token>, or the older /share/<token>.
+ *
+ * Every route effect has to know about these, and one of them did not: the
+ * effect that keeps the URL in step with the active tab saw a path that was
+ * not a dashboard tab and replaced it with the viewer's own tab. A signed-in
+ * visitor opening someone's shared journal was therefore bounced to their own
+ * dashboard — the link only ever worked for signed-out visitors, which is the
+ * opposite of who it is usually sent to.
+ */
+const SHARED_JOURNAL_PATH = /^\/(?:shared|share)\/([a-zA-Z0-9_-]+)/i;
+const sharedJournalToken = (pathname: string): string | null =>
+  pathname.match(SHARED_JOURNAL_PATH)?.[1] ?? null;
+
+/**
  * Placeholder shown while a lazily-loaded tab's chunk arrives.
  *
  * Deliberately quiet and roughly the height of a card, so switching tabs on a
@@ -885,16 +899,25 @@ export default function App() {
   // Keep URL pathname in sync with activeTab when user switches tabs
   useEffect(() => {
     if (!user) return;
+    // A shared journal is not a tab. Without this the effect below saw a path
+    // that matched no tab and replaced it with the viewer's own active tab.
+    if (sharedJournalToken(location.pathname)) return;
     const currentPath = location.pathname.replace(/^\//, '').toLowerCase();
     const mappedCurrent = TAB_ALIASES[currentPath] || currentPath;
     if (activeTab && DASHBOARD_TABS.includes(activeTab) && mappedCurrent !== activeTab) {
       navigate(`/${activeTab}`);
     }
-  }, [user, activeTab]);
+    // location.pathname is read here, so it belongs in the deps: without it the
+    // effect ran on a stale path and the shared-journal guard above could be
+    // skipped on the very render that lands on the link.
+  }, [user, activeTab, location.pathname]);
 
   // Synchronize document.title with activeTab when user is logged in
   useEffect(() => {
     if (!user) return;
+    // SharedJournalPage sets its own title; leaving this to run put
+    // "Dashboard | FX Journal Pro" on someone else's shared journal.
+    if (sharedJournalToken(location.pathname)) return;
     const tabTitles: Record<string, string> = {
       dashboard: 'Dashboard | FX Journal Pro',
       journal: 'Trading Journal | FX Journal Pro',
@@ -4086,8 +4109,8 @@ export default function App() {
   }
 
   // Check if current route is a shared journal link (/shared/:token or /share/:token)
-  const sharedMatch = location.pathname.match(/^\/(?:shared|share)\/([a-zA-Z0-9_-]+)/i);
-  if (sharedMatch && sharedMatch[1]) {
+  const sharedToken = sharedJournalToken(location.pathname);
+  if (sharedToken) {
     return (
       <React.Suspense
         fallback={
@@ -4103,7 +4126,7 @@ export default function App() {
         }
       >
         <SharedJournalPage
-          token={sharedMatch[1]}
+          token={sharedToken}
           currentUser={user}
           onNavigate={(path) => navigate(path)}
         />

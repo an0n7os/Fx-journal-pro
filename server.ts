@@ -11244,8 +11244,20 @@ interface SharedJournalLink {
 }
 
 // Helper: load shared links for a specific user
+//
+// The three helpers below each had a Supabase branch and no other, so on the
+// local db.json store creating a share link silently stored nothing and every
+// /shared/<token> answered 404. That made the feature impossible to exercise
+// without a cloud project, which is how the redirect bug in App.tsx survived.
+// The local branches keep the same preferences.sharedLinks shape.
 async function getUserSharedLinks(userId: string): Promise<SharedJournalLink[]> {
   const links: SharedJournalLink[] = [];
+  if (!useSupabase) {
+    const row = localFindUser((u: any) => u.id === userId);
+    const stored = row?.preferences?.sharedLinks;
+    if (Array.isArray(stored)) links.push(...stored);
+    return links;
+  }
   if (useSupabase) {
     try {
       const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
@@ -11279,6 +11291,18 @@ async function getUserSharedLinks(userId: string): Promise<SharedJournalLink[]> 
 
 // Helper: save or update a shared link for a user
 async function saveUserSharedLink(userId: string, link: SharedJournalLink): Promise<void> {
+  if (!useSupabase) {
+    localPatchUser(userId, (row: any) => {
+      const prefs = row.preferences && typeof row.preferences === 'object' ? row.preferences : {};
+      const existing = Array.isArray(prefs.sharedLinks) ? prefs.sharedLinks : [];
+      const idx = existing.findIndex((l: any) => l.token === link.token);
+      prefs.sharedLinks = idx >= 0
+        ? existing.map((l: any, i: number) => (i === idx ? { ...l, ...link } : l))
+        : [link, ...existing];
+      row.preferences = prefs;
+    });
+    return;
+  }
   if (useSupabase) {
     try {
       const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
@@ -11317,6 +11341,14 @@ async function saveUserSharedLink(userId: string, link: SharedJournalLink): Prom
 // Helper: find a shared link across all users by token
 async function findSharedLinkByToken(token: string): Promise<{ link: SharedJournalLink; ownerUser?: any } | null> {
   if (!token) return null;
+  if (!useSupabase) {
+    for (const u of localAllUsers()) {
+      const links = Array.isArray(u?.preferences?.sharedLinks) ? u.preferences.sharedLinks : [];
+      const found = links.find((l: any) => l.token === token);
+      if (found) return { link: { ...found, userId: found.userId || u.id }, ownerUser: u };
+    }
+    return null;
+  }
   if (useSupabase) {
     try {
       // 1. Try table
@@ -11461,9 +11493,19 @@ app.get('/api/shared/:token', async (req, res) => {
   link.views = (link.views || 0) + 1;
   saveUserSharedLink(link.userId, link).catch(() => {});
 
-  // Fetch owner trades
+  // Fetch owner trades. Reads the link owner's rows, never the caller's —
+  // this endpoint is public and the viewer's own session must not change what
+  // it returns.
   let allTrades: any[] = [];
-  if (useSupabase) {
+  if (!useSupabase) {
+    const ownerDb = await ensureUserDbLoaded(link.userId, match.ownerUser?.email || '');
+    const ownerAccountIds = new Set(
+      (ownerDb?.accounts || []).filter((a: any) => a.userId === link.userId).map((a: any) => a.id),
+    );
+    allTrades = (ownerDb?.trades || [])
+      .filter((t: any) => t.userId === link.userId || (t.accountId && ownerAccountIds.has(t.accountId)))
+      .sort((a: any, b: any) => String(b.date || '').localeCompare(String(a.date || '')));
+  } else {
     try {
       const { data: rows } = await supabase
         .from('trades')
