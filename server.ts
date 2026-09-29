@@ -7704,17 +7704,29 @@ const referralEarningsByReferrer = (
 
 /** Every local copy of one user row: the file's, and each cached database's. */
 const localUserRows = (userId: string): { rows: any[]; fileDb: any | null } => {
+  // Deduplicated by identity, not by position. One database object is cached
+  // under both the user's id and their email — registration does
+  // `userDatabases.set(email, db); userDatabases.set(uid, db)` — so the same
+  // row object comes back twice from this map. Every caller so far assigned
+  // fields, which is the same answer whether it runs once or twice; the first
+  // patch that appended to a list wrote its entry two or three times.
+  const seen = new Set<any>();
   const rows: any[] = [];
+  const add = (row: any) => {
+    if (!row || seen.has(row)) return;
+    seen.add(row);
+    rows.push(row);
+  };
+
   let fileDb: any = null;
   try {
     fileDb = loadDatabaseFromFile();
     const fileRow = (fileDb?.users || []).find((u: any) => u.id === userId);
-    if (fileRow) rows.push(fileRow);
+    if (fileRow) add(fileRow);
     else fileDb = null;
   } catch { fileDb = null; }
   for (const cached of userDatabases.values()) {
-    const row = (cached?.users || []).find((u: any) => u.id === userId);
-    if (row) rows.push(row);
+    add((cached?.users || []).find((u: any) => u.id === userId));
   }
   return { rows, fileDb };
 };
@@ -8837,6 +8849,65 @@ app.delete('/api/admin/users/:id/partner', async (req, res) => {
 
 // ── Partner: Withdrawal & Payout Management ──────────────────────────────
 
+/**
+ * A manual credit or correction an admin has applied to a partner's balance.
+ *
+ * Referral income is derived, not stored: it is the sum of every captured
+ * payment from a referred user, less PARTNER_PLATFORM_FLOOR_INR. So there is
+ * no column to write when a partner is owed something the payment history
+ * cannot show — a bonus, a correction, or a referral settled outside Razorpay.
+ * Without this the only way to move the number was to insert a customer row
+ * and a captured payment row that never happened, which also inflates platform
+ * revenue and is indistinguishable from a real sale afterwards.
+ *
+ * Signed: a negative amount takes money back off a balance credited by
+ * mistake. Every entry carries who did it and why, and is written to the audit
+ * log as well.
+ *
+ * Stored on users.preferences, the JSONB column the payout requests already
+ * use, so this needs no migration — partner_payout_requests is not in the
+ * schema on the current project and the code already falls back to here.
+ */
+type PartnerAdjustment = {
+  id: string;
+  amount: number;
+  reason: string;
+  createdAt: string;
+  createdBy: string | null;
+  createdByEmail: string | null;
+};
+
+/** Ceiling on one entry, so a slipped decimal point cannot credit a fortune. */
+const MAX_PARTNER_ADJUSTMENT_INR = 1_000_000;
+
+const asAdjustmentList = (raw: any): PartnerAdjustment[] =>
+  Array.isArray(raw) ? raw.filter((a) => a && Number.isFinite(Number(a.amount))) : [];
+
+const sumAdjustments = (list: PartnerAdjustment[]): number =>
+  list.reduce((sum, a) => sum + Number(a.amount), 0);
+
+const readPartnerAdjustments = async (userId: string): Promise<PartnerAdjustment[]> => {
+  if (!useSupabase) {
+    const row = localFindUser((u: any) => u.id === userId);
+    return asAdjustmentList(row?.preferences?.partnerAdjustments);
+  }
+  const { data } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
+  return asAdjustmentList((data as any)?.preferences?.partnerAdjustments);
+};
+
+/** Every partner's adjustment total in one read, for the admin roster. */
+const adjustmentTotalsByPartner = async (): Promise<Record<string, number>> => {
+  const out: Record<string, number> = {};
+  const rows = useSupabase
+    ? ((await supabase.from('users').select('id, preferences')).data || [])
+    : localAllUsers();
+  for (const row of rows as any[]) {
+    const list = asAdjustmentList(row?.preferences?.partnerAdjustments);
+    if (list.length) out[row.id] = sumAdjustments(list);
+  }
+  return out;
+};
+
 async function getPartnerPayoutData(userId: string, partnerCode: string) {
   let totalEarned = 0;
   if (!useSupabase) {
@@ -8870,6 +8941,13 @@ async function getPartnerPayoutData(userId: string, partnerCode: string) {
       console.warn('[getPartnerPayoutData] Supabase fetch error:', err);
     }
   }
+
+  // Manual credits land in the same total the partner withdraws against, so
+  // the portal shows one balance rather than two numbers that have to be added
+  // up by hand.
+  const adjustments = await readPartnerAdjustments(userId);
+  const adjustmentTotal = sumAdjustments(adjustments);
+  totalEarned += adjustmentTotal;
 
   let allRequests: PartnerPayoutRequest[] = [];
   if (useSupabase) {
@@ -8928,6 +9006,8 @@ async function getPartnerPayoutData(userId: string, partnerCode: string) {
     totalWithdrawn,
     totalPending,
     availableBalance,
+    adjustmentTotal,
+    adjustments,
     minPayoutThreshold: 500,
     requests: allRequests,
   };
@@ -8965,7 +9045,11 @@ app.get('/api/partner/payout', async (req, res) => {
       totalPending: payoutData.totalPending,
       availableBalance: payoutData.availableBalance,
       minPayoutThreshold: payoutData.minPayoutThreshold,
+      // Sent so a partner can see why their balance is not simply their
+      // referral count times the commission, rather than reading it as a bug.
+      adjustmentTotal: payoutData.adjustmentTotal,
     },
+    adjustments: payoutData.adjustments,
     requests: payoutData.requests,
   });
 });
@@ -9302,6 +9386,107 @@ app.post('/api/admin/payouts/:id/process', async (req, res) => {
   });
 });
 
+// ── Admin: credit or correct a partner's balance by hand ──────────────────
+// Referral income is derived from captured payments, so a partner owed
+// something the payment history cannot show — a bonus, a correction, a
+// referral settled outside Razorpay — had no way to be paid except by
+// inventing a customer and a payment. This writes a signed, reasoned entry
+// instead, which the payout balance picks up and the audit log records.
+//
+// 'partner.manage' is SUPER_ADMIN only. An ADMIN runs the product; moving
+// money is not part of that.
+app.post('/api/admin/partners/:id/adjustment', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.manage');
+  if (!ctx) return;
+  const { id } = req.params;
+
+  const amount = Number(req.body?.amount);
+  const reason = String(req.body?.reason || '').trim();
+
+  if (!Number.isFinite(amount) || amount === 0) {
+    return res.status(400).json({ error: 'Amount must be a non-zero number of rupees.' });
+  }
+  if (Math.abs(amount) > MAX_PARTNER_ADJUSTMENT_INR) {
+    return res.status(400).json({
+      error: `A single adjustment is capped at ₹${MAX_PARTNER_ADJUSTMENT_INR.toLocaleString('en-IN')}.`,
+    });
+  }
+  if (reason.length < 3) {
+    return res.status(400).json({
+      error: 'A reason is required. It is shown in the payout history and the audit log.',
+    });
+  }
+  // Rupees and paise only. Anything finer is a slip, and it would show up as a
+  // balance that never settles to a round figure.
+  const rounded = Math.round(amount * 100) / 100;
+
+  let target: any = null;
+  if (!useSupabase) {
+    target = localFindUser((u: any) => u.id === id);
+  } else {
+    const { data } = await supabase.from('users').select('id, email, name, role, preferences').eq('id', id).maybeSingle();
+    target = data;
+  }
+  if (!target) return res.status(404).json({ error: 'User not found.' });
+  if (String(target.role || '').toUpperCase() !== 'PARTNER') {
+    return res.status(400).json({ error: 'This user is not a partner, so they have no payout balance.' });
+  }
+
+  const entry: PartnerAdjustment = {
+    id: `adj_${crypto.randomUUID()}`,
+    amount: rounded,
+    reason: reason.slice(0, 500),
+    createdAt: new Date().toISOString(),
+    createdBy: ctx.user?.id || null,
+    createdByEmail: ctx.user?.email || null,
+  };
+
+  // Read-modify-write on a JSONB column is not atomic, so two admins crediting
+  // the same partner in the same instant could lose one entry. Both would be
+  // in the audit log, which is what a reconciliation would go by.
+  if (!useSupabase) {
+    const patched = localPatchUser(id, (row: any) => {
+      const prefs = row.preferences && typeof row.preferences === 'object' ? row.preferences : {};
+      prefs.partnerAdjustments = [entry, ...asAdjustmentList(prefs.partnerAdjustments)];
+      row.preferences = prefs;
+    });
+    if (!patched) return res.status(404).json({ error: 'User not found.' });
+  } else {
+    const prefs = (target.preferences && typeof target.preferences === 'object') ? target.preferences : {};
+    const next = { ...prefs, partnerAdjustments: [entry, ...asAdjustmentList(prefs.partnerAdjustments)] };
+    const { error } = await supabase.from('users').update({ preferences: next }).eq('id', id);
+    if (error) {
+      console.error('[admin/partners/adjustment] write failed:', error);
+      return res.status(500).json({ error: 'Failed to save the adjustment.' });
+    }
+  }
+
+  await writeAuditLog(req, ctx, 'partner.balance_adjusted', 'partner', id, {
+    amount: rounded,
+    reason: entry.reason,
+    partnerEmail: target.email,
+  });
+
+  const adjustments = await readPartnerAdjustments(id);
+  res.json({
+    success: true,
+    message: rounded > 0
+      ? `Credited ₹${rounded.toLocaleString('en-IN')} to ${target.email}.`
+      : `Deducted ₹${Math.abs(rounded).toLocaleString('en-IN')} from ${target.email}.`,
+    adjustment: entry,
+    adjustmentTotal: sumAdjustments(adjustments),
+    adjustments,
+  });
+});
+
+// ── Admin: the adjustment history behind one partner's balance ────────────
+app.get('/api/admin/partners/:id/adjustments', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.manage');
+  if (!ctx) return;
+  const adjustments = await readPartnerAdjustments(req.params.id);
+  res.json({ adjustments, adjustmentTotal: sumAdjustments(adjustments) });
+});
+
 // ── Admin: every partner and how big their network is ─────────────────────
 app.get('/api/admin/partners', async (req, res) => {
   const ctx = await requirePermission(req, res, 'partner.manage');
@@ -9369,6 +9554,11 @@ app.get('/api/admin/partners', async (req, res) => {
     }
   }
 
+  // Manual credits count here too, or this roster and the partner's own
+  // payout screen would report different balances for the same person — the
+  // exact mismatch referralEarningsByReferrer was written to end.
+  const adjustments = await adjustmentTotalsByPartner();
+
   res.json({
     partners: partners.map((p) => ({
       id: p.id,
@@ -9382,7 +9572,10 @@ app.get('/api/admin/partners', async (req, res) => {
       linkedUsers: counts[p.id] || 0,
       sharingTrades: sharing[p.id] || 0,
       paidReferrals: paidCounts[p.id] || 0,
-      referralIncome: Math.round((income[p.id] || 0) * 100) / 100,
+      referralIncome: Math.round(((income[p.id] || 0) + (adjustments[p.id] || 0)) * 100) / 100,
+      // Split out so the roster can show "of which manual" rather than a
+      // figure that does not reconcile against paidReferrals.
+      adjustmentTotal: Math.round((adjustments[p.id] || 0) * 100) / 100,
     })).sort((a, b) => b.referralIncome - a.referralIncome || b.linkedUsers - a.linkedUsers),
     totals: {
       partners: partners.length,
