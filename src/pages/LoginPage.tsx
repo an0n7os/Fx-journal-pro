@@ -2054,7 +2054,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
               {/* Social Icons */}
               <div>
-                <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500 mb-2.5">Join Community</p>
+                <p className="text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-2.5">Join Community</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   {SOCIAL_LINKS.map((s) => (
                     <a
@@ -2114,7 +2114,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                   </li>
                 ))}
                 <li>
-                  <span className="text-[11px] font-mono text-slate-500 block pt-1">
+                  <span className="text-[11px] font-mono text-slate-400 block pt-1">
                     Razorpay Official Merchant Partner
                   </span>
                 </li>
@@ -2173,7 +2173,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
 
           {/* Bottom Copyright & Sessions Bar */}
-          <div className="border-t border-white/[0.06] pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="border-t border-white/[0.06] pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
             <p>&copy; {new Date().getFullYear()} FX Journal Pro. Operated by Akshayraj (FX Journal Pro). All rights reserved.</p>
             <div className="flex items-center gap-4 text-[11px] font-mono">
               <span className="text-slate-400">

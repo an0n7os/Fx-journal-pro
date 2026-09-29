@@ -51,7 +51,7 @@ export default function LegalFooter() {
               href="https://brandliftonline.in"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-violet-500 hover:text-violet-400 font-semibold underline decoration-violet-500/40 hover:decoration-violet-400 transition-colors inline-flex items-center gap-0.5"
+              className="text-violet-700 dark:text-violet-500 hover:text-violet-800 dark:hover:text-violet-400 font-semibold underline decoration-violet-500/40 hover:decoration-violet-400 transition-colors inline-flex items-center gap-0.5"
             >
               Brandlift
               <ArrowUpRight className="h-2.5 w-2.5" />

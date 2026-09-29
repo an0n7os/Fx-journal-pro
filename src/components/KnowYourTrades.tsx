@@ -223,7 +223,14 @@ export default function KnowYourTrades({
   const modes = [modeStats.scalping, modeStats.intraday, modeStats.dayHolding];
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    // dx-dark-surface: this component is written dark-only — hardcoded dark
+    // card backgrounds and text-white headings, with no light variants. The
+    // class hands it to the light-mode layer in index.css, which remaps those
+    // surfaces and their text together. Without it the section stayed a black
+    // island on a white page, and the global light-mode rules that darken
+    // muted text then applied ON the black card: "P&L TREND" at 2.98:1 and
+    // the "Know Your Trades" heading at 1.04:1, effectively invisible.
+    <div className="dx-dark-surface space-y-4 sm:space-y-6">
       {/* Header with Title and Dropdowns */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -298,7 +305,7 @@ export default function KnowYourTrades({
           {modes.map((mode) => {
             const isProfit = mode.totalPnl >= 0;
             const hasTrades = mode.count > 0;
-            const winRateColor = mode.winRate >= 50 ? 'text-emerald-400' : 'text-rose-500';
+            const winRateColor = mode.winRate >= 50 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-500';
 
             return (
               <div

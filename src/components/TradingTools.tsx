@@ -145,7 +145,7 @@ function PipCalculator() {
         </div>
         <div className="flex gap-2 pt-1">
           <button onClick={handleCalculate}
-            className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs rounded-xl py-2.5 px-4 transition shadow-sm flex items-center justify-center gap-1.5">
+            className="flex-1 bg-violet-700 hover:bg-violet-800 text-white font-semibold text-xs rounded-xl py-2.5 px-4 transition shadow-sm flex items-center justify-center gap-1.5">
             <Calculator className="h-3.5 w-3.5" /> Calculate
           </button>
           <button onClick={handleReset} title="Reset"

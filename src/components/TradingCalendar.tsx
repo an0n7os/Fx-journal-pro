@@ -397,13 +397,13 @@ export default function TradingCalendar({ trades, currency }: TradingCalendarPro
               </div>
               <div className="grid grid-cols-2 gap-3 border-t border-slate-100 dark:border-slate-800 pt-3">
                 <div>
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500 block flex items-center gap-1">
+                  <span className="text-[11px] text-slate-600 dark:text-slate-500 block flex items-center gap-1">
                     <TrendingUp className="h-3 w-3 text-emerald-500" /> Profitable Days
                   </span>
                   <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{winDays}</span>
                 </div>
                 <div>
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500 block flex items-center gap-1">
+                  <span className="text-[11px] text-slate-600 dark:text-slate-500 block flex items-center gap-1">
                     <TrendingDown className="h-3 w-3 text-rose-500" /> Loss Days
                   </span>
                   <span className="text-sm font-bold text-rose-600 dark:text-rose-400">{lossDays}</span>

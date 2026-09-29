@@ -4976,7 +4976,7 @@ export default function App() {
                                         {breached ? 'Breached' : 'Active'}
                                       </span>
                                     </div>
-                                    <p className={`mt-0.5 sm:mt-1 ${breached ? 'text-rose-700/90 dark:text-rose-300/80' : 'text-emerald-700/90 dark:text-emerald-300/80'}`}>
+                                    <p className={`mt-0.5 sm:mt-1 ${breached ? 'text-rose-800 dark:text-rose-300/80' : 'text-emerald-800 dark:text-emerald-300/80'}`}>
                                       {breached
                                         ? `Today's cumulative loss is ${formatValue(todayLoss)}, exceeding your limit of ${formatValue(limit)}!`
                                         : `Today's loss is ${formatValue(todayLoss)} (Limit: ${formatValue(limit)}). Safe.`
@@ -5005,7 +5005,7 @@ export default function App() {
                                         {breached ? 'Breached' : 'Active'}
                                       </span>
                                     </div>
-                                    <p className={`mt-0.5 sm:mt-1 ${breached ? 'text-rose-700/90 dark:text-rose-300/80' : 'text-emerald-700/90 dark:text-emerald-300/80'}`}>
+                                    <p className={`mt-0.5 sm:mt-1 ${breached ? 'text-rose-800 dark:text-rose-300/80' : 'text-emerald-800 dark:text-emerald-300/80'}`}>
                                       {breached
                                         ? `Executed ${todayTradesCount} trades today, breaching your limit of ${limit}!`
                                         : `Executed ${todayTradesCount} of ${limit} maximum daily positions. Safe.`
@@ -6639,8 +6639,11 @@ export default function App() {
                               <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${winShowVolume ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
                             </button>
                           </label>
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/60 border border-emerald-500/40 text-emerald-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                          {/* Light variants: bg-emerald-950/60 composites to
+                              near-white on a light page, leaving emerald-400
+                              text at 2.17:1 — the chip read as a faint smudge. */}
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-600/30 dark:bg-emerald-950/60 dark:border-emerald-500/40 dark:text-emerald-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400"></span>
                             Wins
                           </span>
                         </div>
@@ -6725,8 +6728,8 @@ export default function App() {
                               <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${lossShowVolume ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
                             </button>
                           </label>
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-950/60 border border-rose-500/40 text-rose-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-600/30 dark:bg-rose-950/60 dark:border-rose-500/40 dark:text-rose-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-600 dark:bg-rose-400"></span>
                             Losses
                           </span>
                         </div>

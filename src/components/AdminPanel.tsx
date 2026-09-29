@@ -589,7 +589,9 @@ Their referral link stops working and ` +
               activeTab === tab.id 
                 ? 'bg-violet-600/20 text-violet-300 border-violet-500/40 shadow-sm shadow-violet-500/10' 
                 : tab.highlight
-                  ? 'border-violet-500/20 text-violet-400/90 hover:bg-violet-600/10'
+                  // text-violet-700 in light: violet-400 at 90% on the white
+                  // console surface measured 2.54:1.
+                  ? 'border-violet-500/20 text-violet-700 dark:text-violet-400/90 hover:bg-violet-600/10'
                   : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
             }`}
           >

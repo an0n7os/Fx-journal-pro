@@ -3144,7 +3144,13 @@ html.dark .dx-sentiment-neutral {
 :root:not(.dark) .dx-dark-surface [class*="bg-[#0b0f19]"],
 :root:not(.dark) .dx-dark-surface [class*="bg-[#0b101d]"],
 :root:not(.dark) .dx-dark-surface [class*="bg-[#0b101e]"],
-:root:not(.dark) .dx-dark-surface [class*="bg-[#0c0e15]"] {
+:root:not(.dark) .dx-dark-surface [class*="bg-[#0c0e15]"],
+/* Know Your Trades. Its cards were hardcoded dark with no light variant, so in
+   light mode they stayed black islands on a white page — and the blanket
+   `html:not(.dark) main .text-slate-400/500` rules further down then darkened
+   their text to near-black ON that black card. "P&L TREND" measured 2.98:1
+   and the section heading 1.04:1. */
+:root:not(.dark) .dx-dark-surface [class*="bg-[#09101d]"] {
   background-color: #ffffff;
 }
 
@@ -3153,7 +3159,9 @@ html.dark .dx-sentiment-neutral {
 :root:not(.dark) .dx-dark-surface .bg-slate-700,
 :root:not(.dark) .dx-dark-surface [class*="bg-[#0f172a]"],
 :root:not(.dark) .dx-dark-surface [class*="bg-[#0d1322]"],
-:root:not(.dark) .dx-dark-surface [class*="bg-[#15233e]"] {
+:root:not(.dark) .dx-dark-surface [class*="bg-[#15233e]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#0e1626]"],
+:root:not(.dark) .dx-dark-surface [class*="bg-[#121c32]"] {
   background-color: #f1f5f9;
 }
 
