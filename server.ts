@@ -6883,9 +6883,14 @@ const tradeVisibleUserIds = async (role: string, adminUserId: string | null): Pr
   const ids = scope || [];
   if (ids.length === 0) return [];
 
+  // `!== false` read a column that has never been written as a yes, so every
+  // user who had not touched the setting — which is every new signup — was
+  // handed to their mentor. Consent is an opt-in: only an explicit true counts.
+  // The `user_demo_` bypass went with the demo accounts themselves; any row
+  // whose id started with that prefix was shared unconditionally.
   if (!useSupabase) {
     return localAllUsers()
-      .filter((u: any) => ids.includes(u.id) && (u.id === 'user_demo_pro' || u.id.startsWith('user_demo_') || u.allowPartnerTradeView !== false))
+      .filter((u: any) => ids.includes(u.id) && u.allowPartnerTradeView === true)
       .map((u: any) => u.id);
   }
   const { data, error } = await supabase
@@ -6896,7 +6901,7 @@ const tradeVisibleUserIds = async (role: string, adminUserId: string | null): Pr
     return [];
   }
   return (data || [])
-    .filter((r: any) => r.id === 'user_demo_pro' || r.id.startsWith('user_demo_') || r.allow_partner_trade_view !== false)
+    .filter((r: any) => r.allow_partner_trade_view === true)
     .map((r: any) => r.id);
 };
 
@@ -6927,10 +6932,7 @@ const mentorAccessByUser = async (
   if (!useSupabase) {
     for (const u of localAllUsers()) {
       if (!ids.includes(u.id)) continue;
-      const demo = u.id === 'user_demo_pro' || String(u.id).startsWith('user_demo_');
-      out.set(u.id, demo
-        ? normaliseMentorAccess({ notebook: true }, true)
-        : normaliseMentorAccess(u.mentorAccess, u.allowPartnerTradeView === true));
+      out.set(u.id, normaliseMentorAccess(u.mentorAccess, u.allowPartnerTradeView === true));
     }
     return out;
   }
@@ -6942,10 +6944,7 @@ const mentorAccessByUser = async (
     return out;
   }
   for (const r of data || []) {
-    const demo = (r as any).id === 'user_demo_pro' || String((r as any).id).startsWith('user_demo_');
-    out.set((r as any).id, demo
-      ? normaliseMentorAccess({ notebook: true }, true)
-      : normaliseMentorAccess((r as any).mentor_access, (r as any).allow_partner_trade_view === true));
+    out.set((r as any).id, normaliseMentorAccess((r as any).mentor_access, (r as any).allow_partner_trade_view === true));
   }
   return out;
 };
@@ -7021,14 +7020,22 @@ const MENTOR_ACCESS_BOOLEAN_SECTIONS = [
  * exception: the spec has it off by default, and it was never covered by the
  * old switch, so it stays off until the student turns it on.
  */
-const normaliseMentorAccess = (raw: any, _legacyAllow?: boolean): MentorAccess => {
+const normaliseMentorAccess = (raw: any, legacyAllow?: boolean): MentorAccess => {
+  // The legacy boolean is what an unset map means. Reading it as an implicit
+  // "all on" instead made every section readable the moment someone signed up
+  // through a referral link: a new row has mentor_access null and
+  // allow_partner_trade_view false, so the student's own screen showed sharing
+  // OFF while the mentor could open their dashboard, journal and calendar. It
+  // also made the switch impossible to turn back off — clearing the boolean
+  // left the map null, which resolved to all-on again.
+  const legacy = legacyAllow === true;
   const base: MentorAccess = {
-    dashboard: true,
-    analysis: true,
+    dashboard: legacy,
+    analysis: legacy,
     accounts: null,
-    calendar: true,
-    liveCharts: true,
-    journal: true,
+    calendar: legacy,
+    liveCharts: legacy,
+    journal: legacy,
     notebook: false,
   };
   if (!raw || typeof raw !== 'object') return base;
@@ -7054,9 +7061,6 @@ const mentorCanSee = (access: MentorAccess, section: keyof MentorAccess): boolea
 
 /** Reads one user's map, applying the same fallback everywhere. */
 const readMentorAccess = async (userId: string): Promise<MentorAccess> => {
-  if (userId === 'user_demo_pro' || userId.startsWith('user_demo_')) {
-    return normaliseMentorAccess({ notebook: true }, true);
-  }
   if (!useSupabase) {
     const row = localFindUser((u: any) => u.id === userId);
     return normaliseMentorAccess(row?.mentorAccess, row?.allowPartnerTradeView === true);
@@ -7067,7 +7071,6 @@ const readMentorAccess = async (userId: string): Promise<MentorAccess> => {
 };
 
 const readTradeConsent = async (userId: string): Promise<boolean> => {
-  if (userId === 'user_demo_pro' || userId.startsWith('user_demo_')) return true;
   const access = await readMentorAccess(userId);
   if (access && (access.analysis || access.journal || access.dashboard || access.calendar || access.liveCharts)) {
     return true;
@@ -7427,8 +7430,11 @@ app.get('/api/subadmin/overview', async (req, res) => {
     // that governs them. tradeAccess stays for the existing console, and is
     // true when anything at all is shared.
     const tradesVisible = canSeeTrades(visible, u.id) && access.dashboard;
-    const sharesAnything = MENTOR_ACCESS_BOOLEAN_SECTIONS.some((k) => access[k] === true)
-      || mentorCanSee(access, 'accounts');
+    // Only the section switches decide this. `accounts` is a scope — null means
+    // "whichever accounts the shared sections cover", which is also its value
+    // on a row that shares nothing — so folding it in here reported every new
+    // referral as sharing.
+    const sharesAnything = MENTOR_ACCESS_BOOLEAN_SECTIONS.some((k) => access[k] === true);
     return {
       id: u.id,
       name: u.name || (u.email || '').split('@')[0],
@@ -7504,8 +7510,11 @@ app.get('/api/subadmin/user/:id', async (req, res) => {
     ? await readMentorAccess(id)
     : normaliseMentorAccess(null, true);
 
+  // Section switches only — `accounts` is a scope and its "all" value is null,
+  // which is also what a row that shares nothing carries, so it can never be
+  // the thing that opens this door.
   const sharesAnything = ctx.role !== 'PARTNER' || MENTOR_ACCESS_BOOLEAN_SECTIONS
-    .some((k) => access[k] === true) || mentorCanSee(access, 'accounts');
+    .some((k) => access[k] === true);
 
   if (!sharesAnything) {
     return res.status(403).json({
@@ -8474,12 +8483,25 @@ app.patch('/api/user/partner-visibility', async (req, res) => {
   if (!currentUser?.id) return res.status(401).json({ error: 'Not signed in' });
   const allow = req.body?.allow === true;
 
+  // The master switch has to move the per-section map as well, not just the
+  // boolean. Writing the boolean alone left a stored map untouched, so a
+  // student who had ever opened the per-section screen could not switch
+  // sharing off again — the map still said yes and every read went through it.
+  // Off writes an explicit all-off map; on clears the map back to null, which
+  // the legacy boolean then resolves to the default sections.
+  const sections = allow
+    ? null
+    : { dashboard: false, analysis: false, accounts: [] as string[], calendar: false, liveCharts: false, journal: false, notebook: false };
+
   if (!useSupabase) {
-    const patched = localPatchUser(currentUser.id, (row) => { row.allowPartnerTradeView = allow; });
+    const patched = localPatchUser(currentUser.id, (row) => {
+      row.allowPartnerTradeView = allow;
+      row.mentorAccess = sections;
+    });
     if (!patched) return res.status(404).json({ error: 'User not found' });
   } else {
     const { error } = await supabase
-      .from('users').update({ allow_partner_trade_view: allow }).eq('id', currentUser.id);
+      .from('users').update({ allow_partner_trade_view: allow, mentor_access: sections }).eq('id', currentUser.id);
     if (error) {
       console.error('[PATCH /api/user/partner-visibility] error:', error);
       return res.status(500).json({ error: 'Failed to update the setting.' });
