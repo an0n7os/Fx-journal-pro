@@ -1859,6 +1859,17 @@ function recomputeMt5TradesForAccount(account: any, deals: any[], skipBalanceTic
 
     const inDeal = inDeals[0] || outDeals[0];
     const lastOut = outDeals[outDeals.length - 1];
+
+    // MT5 closes a position with the OPPOSITE deal: a long is closed by a sell
+    // deal and a short by a buy deal. Reading the closing deal's type directly
+    // labelled every synced trade backwards — a long showed as Sell and a
+    // short as Buy — so the journal, the long/short split and every filter on
+    // direction were wrong for anyone using MT5 sync. The direction is the
+    // ENTRY deal's type; with no entry deal in the batch, the close is
+    // inverted to recover it.
+    const direction: 'Buy' | 'Sell' = inDeals.length > 0
+      ? (inDeals[0].type === DEAL_TYPE_SELL ? 'Sell' : 'Buy')
+      : (lastOut.type === DEAL_TYPE_SELL ? 'Buy' : 'Sell');
     const totalProfit = list.reduce((s: number, d: any) => s + d.profit, 0);
     const totalComm = list.reduce((s: number, d: any) => s + d.commission, 0);
     const totalSwap = list.reduce((s: number, d: any) => s + d.swap, 0);
@@ -1869,7 +1880,7 @@ function recomputeMt5TradesForAccount(account: any, deals: any[], skipBalanceTic
       date: new Date(inDeal.time * 1000).toISOString(),
       exitTime: new Date(lastOut.time * 1000).toISOString(),
       symbol: lastOut.symbol || inDeal.symbol || 'UNKNOWN',
-      type: (lastOut.type === DEAL_TYPE_SELL ? 'Sell' : 'Buy') as any,
+      type: direction as any,
       lotSize: lastOut.volume || inDeal.volume || 0.01,
       entryPrice: inDeal.price,
       exitPrice: lastOut.price,
