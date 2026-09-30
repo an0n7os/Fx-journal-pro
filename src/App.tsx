@@ -7561,12 +7561,11 @@ export default function App() {
                               </div>
                             </div>
 
-                            {/* Said rather than left to be discovered: the notebook
-                                never leaves this browser, so there is nothing for the
-                                server to withhold. */}
+                            {/* The notebook is saved to the account now, so this
+                                switch is the thing that actually governs it. */}
                             <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 border-t border-slate-200/70 dark:border-white/[0.07] pt-3.5">
-                              Your notebook is stored only on this device and is never uploaded, so a mentor
-                              cannot open it whatever this setting says. Live charts show market data; only the
+                              Your notebook is saved to your account so it follows you between devices. It stays
+                              private unless you switch Notebook on above. Live charts show market data; only the
                               trade markers drawn on them come from your account.
                             </p>
                           </div>
@@ -8551,7 +8550,7 @@ export default function App() {
               />
             )}
             {activeTab === 'notebook' && isProActive && (
-              <NotebookTab key={user?.id || 'guest'} user={user} account={activeAccount} />
+              <NotebookTab key={user?.id || 'guest'} user={user} account={activeAccount} authFetch={authFetch} />
             )}
 
 

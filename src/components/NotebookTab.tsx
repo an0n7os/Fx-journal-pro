@@ -10,6 +10,8 @@ import { NotebookNote, User, TradingAccount } from '../types';
 interface NotebookTabProps {
   user?: User;
   account?: TradingAccount;
+  /** Session-aware fetch, so the notebook reaches the account it belongs to. */
+  authFetch?: (url: string, init?: RequestInit) => Promise<Response>;
 }
 
 // Built-in starter trading templates
@@ -129,7 +131,7 @@ const DEFAULT_FOLDERS: string[] = ['Daily Journal', 'Trading Plans', 'Psychology
 
 const DEFAULT_TAGS: string[] = ['review', 'setup', 'psychology', 'rule-break', 'lesson'];
 
-export default function NotebookTab({ user }: NotebookTabProps) {
+export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
   const storagePrefix = `fx_notebook_${user?.id || 'default'}`;
 
   // State: Notes
@@ -201,9 +203,27 @@ export default function NotebookTab({ user }: NotebookTabProps) {
   // Inline confirm for permanent delete
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // Save indicator
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
+  // Save indicator. 'saved' now means saved to the account, not to this
+  // browser — the badge said "Saved" for a notebook that never left the device.
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'offline' | 'error'>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
   const saveTimeoutRef = useRef<any>(null);
+
+  // Sync bookkeeping. `syncReady` gates the autosave effect so the first server
+  // load does not immediately echo itself back, and `baseUpdatedAt` is the copy
+  // this tab started from, which the server compares against to catch a save
+  // made from another device.
+  const [syncReady, setSyncReady] = useState(false);
+  const baseUpdatedAtRef = useRef<string | null>(null);
+  const autosaveTimerRef = useRef<any>(null);
+  const skipNextAutosaveRef = useRef(false);
+
+  // App rebuilds authFetch on every render, so keying an effect on it re-runs
+  // that effect on every render — the first version of this fetched the
+  // notebook dozens of times per visit. Held in a ref and read at call time,
+  // with the effects below keyed on the user instead.
+  const authFetchRef = useRef(authFetch);
+  authFetchRef.current = authFetch;
 
   // Textarea ref & date picker ref
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -237,6 +257,120 @@ export default function NotebookTab({ user }: NotebookTabProps) {
       localStorage.setItem(`${storagePrefix}_tags`, JSON.stringify(customTags));
     } catch (_) {}
   }, [customTags, storagePrefix]);
+
+  // ── Load from the account, once per user ────────────────────────────────
+  //
+  // localStorage stays as the offline cache and as what renders first, so the
+  // editor is never blank while the request is in flight. The server copy wins
+  // when it has one; when it does not, whatever is already in this browser is
+  // pushed up, which is how an existing notebook written before any of this
+  // existed reaches the account instead of being dropped.
+  useEffect(() => {
+    const fetcher = authFetchRef.current;
+    if (!user?.id || !fetcher) {
+      setSyncReady(false);
+      return;
+    }
+    let cancelled = false;
+    setSyncReady(false);
+
+    (async () => {
+      try {
+        const res = await fetcher('/api/notebook');
+        if (cancelled) return;
+        if (!res.ok) {
+          // 403 means the plan does not include the notebook; there is nothing
+          // to sync and the local copy is all there is.
+          setSaveStatus(res.status === 403 ? 'idle' : 'offline');
+          setSyncReady(false);
+          return;
+        }
+        const doc = await res.json();
+        if (cancelled) return;
+
+        const serverHasSomething = Array.isArray(doc.notes) && doc.notes.length > 0;
+        if (serverHasSomething) {
+          skipNextAutosaveRef.current = true;
+          setNotes(doc.notes);
+          if (Array.isArray(doc.folders) && doc.folders.length) setFolders(doc.folders);
+          if (Array.isArray(doc.tags) && doc.tags.length) setCustomTags(doc.tags);
+          baseUpdatedAtRef.current = doc.updatedAt || null;
+        } else {
+          baseUpdatedAtRef.current = doc.updatedAt || null;
+        }
+        setSyncReady(true);
+      } catch (_) {
+        if (!cancelled) {
+          setSaveStatus('offline');
+          setSyncReady(false);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  // ── Autosave to the account ─────────────────────────────────────────────
+  //
+  // Debounced, because this fires on every keystroke through the notes state.
+  useEffect(() => {
+    if (!syncReady || !authFetchRef.current) return;
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(async () => {
+      setSaveStatus('saving');
+      setSaveError(null);
+      try {
+        const res = await authFetchRef.current!('/api/notebook', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            notes,
+            folders,
+            tags: customTags,
+            baseUpdatedAt: baseUpdatedAtRef.current,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (res.status === 409 && data?.server) {
+          // Someone saved from another device. Take their copy rather than
+          // overwrite it, and say so — silently losing the other device's
+          // notes is the failure this whole change exists to prevent.
+          skipNextAutosaveRef.current = true;
+          setNotes(data.server.notes || []);
+          if (Array.isArray(data.server.folders) && data.server.folders.length) setFolders(data.server.folders);
+          if (Array.isArray(data.server.tags) && data.server.tags.length) setCustomTags(data.server.tags);
+          baseUpdatedAtRef.current = data.server.updatedAt || null;
+          setSaveStatus('error');
+          setSaveError('Updated from another device — your notes were reloaded.');
+          return;
+        }
+
+        if (!res.ok) {
+          setSaveStatus('error');
+          setSaveError(data?.error || 'Could not save to your account.');
+          return;
+        }
+
+        baseUpdatedAtRef.current = data.updatedAt || baseUpdatedAtRef.current;
+        setSaveStatus('saved');
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch (_) {
+        setSaveStatus('offline');
+        setSaveError('Offline — kept on this device and will save when you are back.');
+      }
+    }, 1200);
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [notes, folders, customTags, syncReady]);
 
   // Close menus on outside click
   useEffect(() => {
@@ -404,12 +538,9 @@ export default function NotebookTab({ user }: NotebookTabProps) {
       return n;
     }));
 
-    // Trigger save indicator
-    setSaveStatus('saved');
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-      setSaveStatus('idle');
-    }, 2000);
+    // The badge is driven by the autosave effect now. Flipping it to "Saved"
+    // here meant it said so the instant a key was pressed, before anything had
+    // been written anywhere but this browser.
   };
 
   // Toggle favorite
@@ -947,7 +1078,7 @@ export default function NotebookTab({ user }: NotebookTabProps) {
           <div className="pt-4 border-t border-slate-800/60 text-[11px] text-slate-500 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <Sparkles className="h-3 w-3 text-indigo-400" />
-              <span>Offline & Auto-Saved</span>
+              <span>{syncReady ? 'Synced to your account' : 'Saved on this device'}</span>
             </span>
             <span className="font-mono text-[10px] text-slate-600">{notes.length} notes</span>
           </div>
@@ -1112,9 +1243,22 @@ export default function NotebookTab({ user }: NotebookTabProps) {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
+                      {saveStatus === 'saving' && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-slate-300 bg-slate-500/10 border border-slate-500/20 px-2 py-0.5 rounded-full">
+                          Saving…
+                        </span>
+                      )}
                       {saveStatus === 'saved' && (
                         <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full animate-fade-in">
-                          <Check className="h-3 w-3" /> Saved
+                          <Check className="h-3 w-3" /> Saved to your account
+                        </span>
+                      )}
+                      {(saveStatus === 'offline' || saveStatus === 'error') && (
+                        <span
+                          title={saveError || undefined}
+                          className="inline-flex items-center gap-1 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-full"
+                        >
+                          {saveStatus === 'offline' ? 'On this device only' : 'Not saved'}
                         </span>
                       )}
 

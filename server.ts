@@ -11497,6 +11497,123 @@ async function findSharedLinkByToken(token: string): Promise<{ link: SharedJourn
   return null;
 }
 
+// ==========================================
+// TRADER NOTEBOOK
+// ==========================================
+//
+// The notebook lived entirely in localStorage: three keys in one browser, no
+// route on this server and no table behind it. Notes written on a phone were
+// not on the laptop, clearing site data destroyed them with no copy anywhere,
+// and the editor showed a "saved" badge the whole time — on a Pro feature. It
+// is now stored against the account.
+//
+// Kept in users.preferences rather than its own table on purpose: three
+// migrations this project already needs have not been run, and a table that
+// does not exist is how shared_journal_links ended up silently falling back to
+// preferences anyway. One path that works today beats two where the primary
+// is dead. A dedicated table is a clean upgrade later.
+
+/** Ceiling on one notebook, so a single account cannot bloat its user row. */
+const NOTEBOOK_MAX_BYTES = 1_000_000;
+
+type NotebookDoc = {
+  notes: any[];
+  folders: string[];
+  tags: string[];
+  updatedAt: string | null;
+};
+
+const EMPTY_NOTEBOOK: NotebookDoc = { notes: [], folders: [], tags: [], updatedAt: null };
+
+const asNotebookDoc = (raw: any): NotebookDoc => {
+  if (!raw || typeof raw !== 'object') return { ...EMPTY_NOTEBOOK };
+  return {
+    notes: Array.isArray(raw.notes) ? raw.notes : [],
+    folders: Array.isArray(raw.folders) ? raw.folders.filter((f: any) => typeof f === 'string') : [],
+    tags: Array.isArray(raw.tags) ? raw.tags.filter((t: any) => typeof t === 'string') : [],
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
+  };
+};
+
+const readNotebook = async (userId: string): Promise<NotebookDoc> => {
+  if (!useSupabase) {
+    const row = localFindUser((u: any) => u.id === userId);
+    return asNotebookDoc(prefsValue(row?.preferences, 'notebook'));
+  }
+  const { data } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
+  return asNotebookDoc(prefsValue((data as any)?.preferences, 'notebook'));
+};
+
+const writeNotebook = async (userId: string, doc: NotebookDoc): Promise<string | null> => {
+  if (!useSupabase) {
+    const patched = localPatchUser(userId, (row: any) => {
+      const prefs = row.preferences && typeof row.preferences === 'object' ? row.preferences : {};
+      setPrefsValue(prefs, 'notebook', doc);
+      row.preferences = prefs;
+    });
+    return patched ? null : 'User not found';
+  }
+  const { data } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
+  const next = setPrefsValue({ ...((data as any)?.preferences || {}) }, 'notebook', doc);
+  const { error } = await supabase.from('users').update({ preferences: next }).eq('id', userId);
+  if (error) {
+    console.error('[notebook] write failed:', error);
+    return 'Failed to save the notebook.';
+  }
+  return null;
+};
+
+// GET /api/notebook – the signed-in trader's own notebook
+app.get('/api/notebook', async (req, res) => {
+  if (!requirePro(req, res, 'notebook')) return;
+  const userId = (req as any).currentUser.id;
+  res.json(await readNotebook(userId));
+});
+
+// PUT /api/notebook – replace it
+//
+// The whole document goes up together because that is how the editor holds it:
+// notes, folders and tags change as one, and a per-note API would need three
+// endpoints to express a single rename. `baseUpdatedAt` is the copy the client
+// started from — if the stored copy is newer, someone saved from another
+// device and this write is refused with the server's version rather than
+// quietly overwriting it.
+app.put('/api/notebook', async (req, res) => {
+  if (!requirePro(req, res, 'notebook')) return;
+  const userId = (req as any).currentUser.id;
+
+  const body = req.body || {};
+  if (!Array.isArray(body.notes) || !Array.isArray(body.folders) || !Array.isArray(body.tags)) {
+    return res.status(400).json({ error: 'notes, folders and tags must all be arrays.' });
+  }
+
+  const doc = asNotebookDoc({ ...body, updatedAt: new Date().toISOString() });
+
+  const size = Buffer.byteLength(JSON.stringify({ notes: doc.notes, folders: doc.folders, tags: doc.tags }), 'utf8');
+  if (size > NOTEBOOK_MAX_BYTES) {
+    return res.status(413).json({
+      error: `This notebook is ${Math.round(size / 1024)} KB, over the ${Math.round(NOTEBOOK_MAX_BYTES / 1024)} KB limit. Delete or export a few long notes.`,
+      code: 'NOTEBOOK_TOO_LARGE',
+      bytes: size,
+    });
+  }
+
+  const current = await readNotebook(userId);
+  const base = typeof body.baseUpdatedAt === 'string' ? body.baseUpdatedAt : null;
+  if (current.updatedAt && base && current.updatedAt > base) {
+    return res.status(409).json({
+      error: 'This notebook was changed somewhere else since you loaded it.',
+      code: 'NOTEBOOK_CONFLICT',
+      server: current,
+    });
+  }
+
+  const failure = await writeNotebook(userId, doc);
+  if (failure) return res.status(500).json({ error: failure });
+
+  res.json({ success: true, updatedAt: doc.updatedAt, counts: { notes: doc.notes.length } });
+});
+
 // GET /api/shared-links – list current user's shared links
 app.get('/api/shared-links', async (req, res) => {
   const currentUser = (req as any).currentUser;
