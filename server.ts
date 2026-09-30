@@ -483,6 +483,32 @@ function createEmptyUserDb(userId?: string, email?: string, injectDummyUser = fa
   };
 }
 
+/**
+ * Columns whose value is free-form JSON rather than a record of columns.
+ *
+ * These converters walk a row to rename its COLUMNS. A JSONB column's contents
+ * are not columns — they are data the application addresses by exact key — so
+ * recursing into them rewrote that data. `preferences` is where a partner's
+ * referral links, their offer price, payout details, payout requests, shared
+ * journal links and manual balance adjustments all live: on the user's next
+ * login, saveDatabase upserted the row through toSnake and `partnerLinks`
+ * became `partner_links`, `isActive` became `is_active`, and every reader
+ * looking for the camelCase key found nothing. A partner created a referral
+ * link, signed out, signed back in, and it was gone — still in the database,
+ * under a name nothing reads.
+ *
+ * `mentor_access` was bitten by the same thing first: normaliseMentorAccess
+ * carries an explicit `live_charts` fallback, which is this bug fossilised.
+ *
+ * The key is still renamed. Only its value is left alone.
+ */
+const OPAQUE_JSON_KEYS = new Set([
+  'preferences',
+  'mentor_access', 'mentorAccess',
+  'payout_details', 'payoutDetails',
+  'detail',
+]);
+
 // Helper to convert snake_case object to camelCase
 function toCamel(obj: any): any {
   if (Array.isArray(obj)) return obj.map(toCamel);
@@ -490,7 +516,7 @@ function toCamel(obj: any): any {
     const n: any = {};
     Object.keys(obj).forEach(k => {
       const camelKey = k.replace(/_([a-z])/g, g => g[1].toUpperCase());
-      n[camelKey] = toCamel(obj[k]);
+      n[camelKey] = OPAQUE_JSON_KEYS.has(k) ? obj[k] : toCamel(obj[k]);
     });
     return n;
   }
@@ -504,11 +530,43 @@ function toSnake(obj: any): any {
     const n: any = {};
     Object.keys(obj).forEach(k => {
       const snakeKey = k.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-      n[snakeKey] = toSnake(obj[k]);
+      n[snakeKey] = OPAQUE_JSON_KEYS.has(k) ? obj[k] : toSnake(obj[k]);
     });
     return n;
   }
   return obj;
+}
+
+/**
+ * Reads one key out of a users.preferences blob.
+ *
+ * Rows written before OPAQUE_JSON_KEYS existed hold snake_cased keys, and the
+ * values inside them are snake_cased too, so a partner's links are under
+ * `partner_links` with `is_active` and `offer_price` fields. Checking both
+ * spellings and running the value back through toCamel recovers those rows
+ * without a migration; on a row that was never mangled both steps are no-ops.
+ */
+function prefsValue(prefs: any, camelKey: string): any {
+  if (!prefs || typeof prefs !== 'object') return undefined;
+  if (prefs[camelKey] !== undefined) return toCamel(prefs[camelKey]);
+  const snakeKey = camelKey.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`);
+  if (prefs[snakeKey] !== undefined) return toCamel(prefs[snakeKey]);
+  return undefined;
+}
+
+/**
+ * Writes one key into a preferences blob and drops the mangled twin.
+ *
+ * Without the delete a recovered row keeps both `partnerLinks` and
+ * `partner_links` forever, and the next reader to check the wrong one gets
+ * stale data. Returns the same object for chaining.
+ */
+function setPrefsValue(prefs: any, camelKey: string, value: any): any {
+  const target = prefs && typeof prefs === 'object' ? prefs : {};
+  const snakeKey = camelKey.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`);
+  if (snakeKey !== camelKey) delete target[snakeKey];
+  target[camelKey] = value;
+  return target;
 }
 
 // ==========================================
@@ -7932,17 +7990,17 @@ async function getPartnerData(userId: string): Promise<{
 
       if (typeof profData?.offer_price === 'number') {
         offerPrice = profData.offer_price;
-      } else if (typeof userPrefs?.partnerOfferPrice === 'number') {
-        offerPrice = userPrefs.partnerOfferPrice;
+      } else if (typeof prefsValue(userPrefs, 'partnerOfferPrice') === 'number') {
+        offerPrice = prefsValue(userPrefs, 'partnerOfferPrice');
       }
 
       if (Array.isArray(profData?.links)) {
         links = profData.links;
-      } else if (Array.isArray(userPrefs?.partnerLinks)) {
-        links = userPrefs.partnerLinks;
+      } else if (Array.isArray(prefsValue(userPrefs, 'partnerLinks'))) {
+        links = prefsValue(userPrefs, 'partnerLinks');
       }
 
-      payoutDetails = profData?.payout_details || userPrefs?.payoutDetails || null;
+      payoutDetails = profData?.payout_details || prefsValue(userPrefs, 'payoutDetails') || null;
     } catch (err) {
       console.warn('[getPartnerData] Error loading partner data:', err);
     }
@@ -7965,7 +8023,7 @@ async function savePartnerLinks(userId: string, links: ReferralLink[]) {
   // 1. Always persist to users.preferences (guaranteed to succeed and persist in Supabase)
   try {
     const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
-    const nextPrefs = { ...(u?.preferences || {}), partnerLinks: links };
+    const nextPrefs = setPrefsValue({ ...(u?.preferences || {}) }, 'partnerLinks', links);
     await supabase.from('users').update({ preferences: nextPrefs }).eq('id', userId);
   } catch (err) {
     console.warn('[savePartnerLinks] Error updating users.preferences:', err);
@@ -8073,13 +8131,13 @@ const findPartnerByCode = async (rawCode: string): Promise<{
       .eq('role', 'PARTNER');
 
     for (const u of partnerUsers || []) {
-      const links = (u.preferences?.partnerLinks || []) as ReferralLink[];
+      const links = (prefsValue(u.preferences, 'partnerLinks') || []) as ReferralLink[];
       const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
       if (link) {
         return {
           userId: u.id,
           code: link.code,
-          offerPrice: link.offerPrice || u.preferences?.partnerOfferPrice || 499,
+          offerPrice: link.offerPrice || prefsValue(u.preferences, 'partnerOfferPrice') || 499,
           isActive: link.isActive !== false,
           linkId: link.id,
           label: link.label,
@@ -8292,9 +8350,9 @@ async function savePartnerProfile(
     const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
     const curPrefs = u?.preferences || {};
     const nextPrefs: any = { ...curPrefs };
-    if (offerPrice !== undefined) nextPrefs.partnerOfferPrice = offerPrice;
-    if (links !== undefined) nextPrefs.partnerLinks = links;
-    if (payoutDetails !== undefined) nextPrefs.payoutDetails = payoutDetails;
+    if (offerPrice !== undefined) setPrefsValue(nextPrefs, 'partnerOfferPrice', offerPrice);
+    if (links !== undefined) setPrefsValue(nextPrefs, 'partnerLinks', links);
+    if (payoutDetails !== undefined) setPrefsValue(nextPrefs, 'payoutDetails', payoutDetails);
     await supabase.from('users').update({ preferences: nextPrefs }).eq('id', userId);
   } catch (err) {
     console.warn('[savePartnerProfile] Error syncing with users.preferences:', err);
@@ -8921,10 +8979,10 @@ const sumAdjustments = (list: PartnerAdjustment[]): number =>
 const readPartnerAdjustments = async (userId: string): Promise<PartnerAdjustment[]> => {
   if (!useSupabase) {
     const row = localFindUser((u: any) => u.id === userId);
-    return asAdjustmentList(row?.preferences?.partnerAdjustments);
+    return asAdjustmentList(prefsValue(row?.preferences, 'partnerAdjustments'));
   }
   const { data } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
-  return asAdjustmentList((data as any)?.preferences?.partnerAdjustments);
+  return asAdjustmentList(prefsValue((data as any)?.preferences, 'partnerAdjustments'));
 };
 
 /** Every partner's adjustment total in one read, for the admin roster. */
@@ -8934,7 +8992,7 @@ const adjustmentTotalsByPartner = async (): Promise<Record<string, number>> => {
     ? ((await supabase.from('users').select('id, preferences')).data || [])
     : localAllUsers();
   for (const row of rows as any[]) {
-    const list = asAdjustmentList(row?.preferences?.partnerAdjustments);
+    const list = asAdjustmentList(prefsValue(row?.preferences, 'partnerAdjustments'));
     if (list.length) out[row.id] = sumAdjustments(list);
   }
   return out;
@@ -9008,8 +9066,9 @@ async function getPartnerPayoutData(userId: string, partnerCode: string) {
         }));
       } else {
         const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
-        if (Array.isArray(u?.preferences?.payoutRequests)) {
-          allRequests = u.preferences.payoutRequests;
+        const stored = prefsValue(u?.preferences, 'payoutRequests');
+        if (Array.isArray(stored)) {
+          allRequests = stored;
         } else {
           allRequests = readPayoutRequests().filter((r) => r.partnerId === userId);
         }
@@ -9063,7 +9122,7 @@ app.get('/api/partner/payout', async (req, res) => {
       supabase.from('users').select('preferences').eq('id', userId).maybeSingle(),
     ]);
     profile = profData ? (toCamel(profData) as any) : null;
-    payoutDetails = profile?.payoutDetails || userData?.preferences?.payoutDetails || null;
+    payoutDetails = profile?.payoutDetails || prefsValue(userData?.preferences, 'payoutDetails') || null;
   }
 
   const partnerCode = profile?.referralCode || '';
@@ -9155,7 +9214,7 @@ app.post('/api/partner/payout-request', async (req, res) => {
       supabase.from('users').select('preferences').eq('id', userId).maybeSingle(),
     ]);
     profile = profData ? (toCamel(profData) as any) : null;
-    payoutDetails = profile?.payoutDetails || userData?.preferences?.payoutDetails || null;
+    payoutDetails = profile?.payoutDetails || prefsValue(userData?.preferences, 'payoutDetails') || null;
   }
 
   const method = req.body?.method === 'BANK' ? 'BANK' : 'UPI';
@@ -9233,9 +9292,10 @@ app.post('/api/partner/payout-request', async (req, res) => {
     }
     try {
       const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
-      const existingReqs = Array.isArray(u?.preferences?.payoutRequests) ? u.preferences.payoutRequests : [];
+      const storedReqs = prefsValue(u?.preferences, 'payoutRequests');
+      const existingReqs = Array.isArray(storedReqs) ? storedReqs : [];
       existingReqs.unshift(newRequest);
-      const nextPrefs = { ...(u?.preferences || {}), payoutRequests: existingReqs };
+      const nextPrefs = setPrefsValue({ ...(u?.preferences || {}) }, 'payoutRequests', existingReqs);
       await supabase.from('users').update({ preferences: nextPrefs }).eq('id', userId);
     } catch { }
   }
@@ -9297,8 +9357,9 @@ app.get('/api/admin/payouts', async (req, res) => {
         const pMap = new Map<string, any>((profs || []).map((p: any) => [p.user_id, p.referral_code]));
         const prefReqs: any[] = [];
         for (const u of users || []) {
-          if (Array.isArray(u?.preferences?.payoutRequests)) {
-            for (const r of u.preferences.payoutRequests) {
+          const reqs = prefsValue(u?.preferences, 'payoutRequests');
+          if (Array.isArray(reqs)) {
+            for (const r of reqs) {
               prefReqs.push({
                 ...r,
                 partnerName: r.partnerName || u.name || 'Partner',
@@ -9388,8 +9449,9 @@ app.post('/api/admin/payouts/:id/process', async (req, res) => {
     try {
       const { data: users } = await supabase.from('users').select('id, preferences');
       for (const u of users || []) {
-        if (Array.isArray(u?.preferences?.payoutRequests)) {
-          const matched = u.preferences.payoutRequests.find((r: any) => r.id === id);
+        const reqs = prefsValue(u?.preferences, 'payoutRequests');
+        if (Array.isArray(reqs)) {
+          const matched = reqs.find((r: any) => r.id === id);
           if (matched) {
             matched.status = action;
             matched.utrNumber = utrNumber || undefined;
@@ -9479,13 +9541,13 @@ app.post('/api/admin/partners/:id/adjustment', async (req, res) => {
   if (!useSupabase) {
     const patched = localPatchUser(id, (row: any) => {
       const prefs = row.preferences && typeof row.preferences === 'object' ? row.preferences : {};
-      prefs.partnerAdjustments = [entry, ...asAdjustmentList(prefs.partnerAdjustments)];
+      setPrefsValue(prefs, 'partnerAdjustments', [entry, ...asAdjustmentList(prefsValue(prefs, 'partnerAdjustments'))]);
       row.preferences = prefs;
     });
     if (!patched) return res.status(404).json({ error: 'User not found.' });
   } else {
     const prefs = (target.preferences && typeof target.preferences === 'object') ? target.preferences : {};
-    const next = { ...prefs, partnerAdjustments: [entry, ...asAdjustmentList(prefs.partnerAdjustments)] };
+    const next = setPrefsValue({ ...prefs }, 'partnerAdjustments', [entry, ...asAdjustmentList(prefsValue(prefs, 'partnerAdjustments'))]);
     const { error } = await supabase.from('users').update({ preferences: next }).eq('id', id);
     if (error) {
       console.error('[admin/partners/adjustment] write failed:', error);
@@ -11290,15 +11352,16 @@ async function getUserSharedLinks(userId: string): Promise<SharedJournalLink[]> 
   const links: SharedJournalLink[] = [];
   if (!useSupabase) {
     const row = localFindUser((u: any) => u.id === userId);
-    const stored = row?.preferences?.sharedLinks;
+    const stored = prefsValue(row?.preferences, 'sharedLinks');
     if (Array.isArray(stored)) links.push(...stored);
     return links;
   }
   if (useSupabase) {
     try {
       const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
-      if (Array.isArray(u?.preferences?.sharedLinks)) {
-        links.push(...u.preferences.sharedLinks);
+      const storedShared = prefsValue(u?.preferences, 'sharedLinks');
+      if (Array.isArray(storedShared)) {
+        links.push(...storedShared);
       }
       // Also try shared_journal_links table if present
       const { data: rows } = await supabase.from('shared_journal_links').select('*').eq('user_id', userId);
@@ -11330,11 +11393,12 @@ async function saveUserSharedLink(userId: string, link: SharedJournalLink): Prom
   if (!useSupabase) {
     localPatchUser(userId, (row: any) => {
       const prefs = row.preferences && typeof row.preferences === 'object' ? row.preferences : {};
-      const existing = Array.isArray(prefs.sharedLinks) ? prefs.sharedLinks : [];
+      const stored = prefsValue(prefs, 'sharedLinks');
+      const existing = Array.isArray(stored) ? stored : [];
       const idx = existing.findIndex((l: any) => l.token === link.token);
-      prefs.sharedLinks = idx >= 0
+      setPrefsValue(prefs, 'sharedLinks', idx >= 0
         ? existing.map((l: any, i: number) => (i === idx ? { ...l, ...link } : l))
-        : [link, ...existing];
+        : [link, ...existing]);
       row.preferences = prefs;
     });
     return;
@@ -11342,7 +11406,8 @@ async function saveUserSharedLink(userId: string, link: SharedJournalLink): Prom
   if (useSupabase) {
     try {
       const { data: u } = await supabase.from('users').select('preferences').eq('id', userId).maybeSingle();
-      const existing = Array.isArray(u?.preferences?.sharedLinks) ? u.preferences.sharedLinks : [];
+      const storedShared = prefsValue(u?.preferences, 'sharedLinks');
+      const existing = Array.isArray(storedShared) ? storedShared : [];
       const idx = existing.findIndex((l: any) => l.token === link.token);
       let updated: SharedJournalLink[];
       if (idx >= 0) {
@@ -11351,7 +11416,7 @@ async function saveUserSharedLink(userId: string, link: SharedJournalLink): Prom
       } else {
         updated = [link, ...existing];
       }
-      const nextPrefs = { ...(u?.preferences || {}), sharedLinks: updated };
+      const nextPrefs = setPrefsValue({ ...(u?.preferences || {}) }, 'sharedLinks', updated);
       await supabase.from('users').update({ preferences: nextPrefs }).eq('id', userId);
 
       // Best effort table upsert
@@ -11379,7 +11444,8 @@ async function findSharedLinkByToken(token: string): Promise<{ link: SharedJourn
   if (!token) return null;
   if (!useSupabase) {
     for (const u of localAllUsers()) {
-      const links = Array.isArray(u?.preferences?.sharedLinks) ? u.preferences.sharedLinks : [];
+      const stored = prefsValue(u?.preferences, 'sharedLinks');
+          const links = Array.isArray(stored) ? stored : [];
       const found = links.find((l: any) => l.token === token);
       if (found) return { link: { ...found, userId: found.userId || u.id }, ownerUser: u };
     }
@@ -11410,7 +11476,8 @@ async function findSharedLinkByToken(token: string): Promise<{ link: SharedJourn
       const { data: allUsers } = await supabase.from('users').select('id, name, email, preferences');
       if (Array.isArray(allUsers)) {
         for (const u of allUsers) {
-          const links = Array.isArray(u.preferences?.sharedLinks) ? u.preferences.sharedLinks : [];
+          const stored = prefsValue(u.preferences, 'sharedLinks');
+          const links = Array.isArray(stored) ? stored : [];
           const found = links.find((l: any) => l.token === token);
           if (found) {
             return {
