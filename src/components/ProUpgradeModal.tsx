@@ -331,7 +331,12 @@ export default function ProUpgradeModal({
       aria-labelledby="pro-upgrade-title"
     >
       <div
-        className="relative w-full max-w-lg bg-[#0b0d13] border border-white/[0.07] rounded-2xl shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)] overflow-hidden my-6 text-slate-200"
+        // One narrow column on every width left a desktop reader scrolling a
+        // tall modal with empty space either side, and pushed the pay button
+        // below the fold. From lg it widens and splits: what you get on the
+        // left, what you do about it on the right, both in view at once.
+        // Below lg it is unchanged — same order, same single column.
+        className="relative w-full max-w-lg lg:max-w-4xl bg-[#0b0d13] border border-white/[0.07] rounded-2xl shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)] overflow-hidden my-6 text-slate-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* One accent hairline in the product's violet. The previous
@@ -346,6 +351,10 @@ export default function ProUpgradeModal({
         >
           <X className="h-4 w-4" />
         </button>
+
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:items-start">
+        {/* Left on desktop: the offer. */}
+        <div className="lg:border-r lg:border-white/[0.06] lg:h-full">
 
         {/* Header */}
         <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-4 sm:pb-6 relative z-10">
@@ -399,7 +408,7 @@ export default function ProUpgradeModal({
             items-center rather than items-start: with single-line labels the
             tick reads as centred on its text, and there is no longer a first
             line to align it to. */}
-        <div className="px-5 sm:px-7 py-3.5 sm:py-5 border-y border-white/[0.06] bg-white/[0.015] grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2 sm:gap-y-3">
+        <div className="px-5 sm:px-7 py-3.5 sm:py-5 border-y lg:border-b-0 border-white/[0.06] bg-white/[0.015] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-x-5 gap-y-2 sm:gap-y-3">
           {PRO_BENEFITS.map((benefit) => (
             <div key={benefit} className="flex items-center gap-2.5 text-[12.5px] text-slate-300">
               <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-500/15 border border-violet-500/25">
@@ -410,7 +419,10 @@ export default function ProUpgradeModal({
           ))}
         </div>
 
-        <div className="px-5 sm:px-7 py-4 sm:py-6 space-y-4 sm:space-y-5 relative z-10">
+        </div>{/* /left column */}
+
+        {/* Right on desktop: coupon, payment methods and the pay button. */}
+        <div className="px-5 sm:px-7 py-4 sm:py-6 lg:pt-7 space-y-4 sm:space-y-5 relative z-10">
           {statusMessage && (
             <div className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 border ${statusMessage.type === 'success'
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
@@ -610,6 +622,7 @@ export default function ProUpgradeModal({
             </div>
           )}
         </div>
+        </div>{/* /two-column grid */}
 
         {/* Footer */}
         <div className="px-6 py-3.5 bg-black/40 border-t border-white/[0.06] flex flex-col items-center justify-center text-center gap-1 text-[11.5px] text-slate-400">
