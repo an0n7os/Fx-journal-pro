@@ -1429,21 +1429,44 @@ export default function App() {
     const storedId = sessionStorage.getItem('auth_user_id') || user?.id || '';
     const storedEmail = sessionStorage.getItem('auth_email') || user?.email || '';
     console.log('[handleCreateAccount] auth check — id:', storedId, 'email:', storedEmail);
+    // Put the cursor in the field that is actually missing. The message named
+    // the field and nothing pointed at it, so on a form this long — and with
+    // the MT5 credentials already filled in — people re-read the part they had
+    // done rather than the empty box further up. The browser's own bubble was
+    // no better: `required` on these inputs was dead markup, since the modal
+    // has no <form> for it to validate, and when it did fire it said only
+    // "Please fill out this field."
+    const focusField = (id: string) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      setTimeout(() => el?.focus(), 150);
+    };
+
     if (!newAccName.trim() || !newAccBroker.trim()) {
-      showAlert('Please fill in Account Name and Broker Name.', { title: 'Required Fields', type: 'warning' });
+      const missingName = !newAccName.trim();
+      showAlert(
+        missingName
+          ? 'Give this account a name — anything you will recognise, like "Exness Live".'
+          : `Enter the ${newAccInstitutionType === 'Prop Firm' ? 'prop firm' : 'broker'} name.`,
+        { title: missingName ? 'Account Name is empty' : 'Broker Name is empty', type: 'warning' },
+      );
+      focusField(missingName ? 'mt5_account_name_field' : 'mt5_broker_field');
       return;
     }
     if (accountCreationMethod === 'mt5') {
       if (!newAccMt5Login.trim()) {
-        showAlert('Please enter your MT5 Login ID (account number).', { title: 'Required Field', type: 'warning' });
+        showAlert('Please enter your MT5 Login ID (account number).', { title: 'MT5 Login ID is empty', type: 'warning' });
+        focusField('mt5_account_num_field');
         return;
       }
       if (!newAccMt5Server.trim()) {
-        showAlert('Please enter your MT5 Server name.', { title: 'Required Field', type: 'warning' });
+        showAlert('Please enter your MT5 Server name.', { title: 'MT5 Server is empty', type: 'warning' });
+        focusField('mt5_server_field');
         return;
       }
       if (!newAccMt5InvestorPassword.trim()) {
-        showAlert('Please enter your MT5 Password (trading password or investor password).', { title: 'Required Field', type: 'warning' });
+        showAlert('Please enter your MT5 Password (trading password or investor password).', { title: 'Password is empty', type: 'warning' });
+        focusField('mt5_investor_key_nonpwd');
         return;
       }
     }
@@ -8915,7 +8938,7 @@ export default function App() {
                   <label className="text-xs font-semibold text-slate-700 block mb-1">Account Alias / Name</label>
                   <input
                     type="text"
-                    required
+                    id="mt5_account_name_field"
                     value={newAccName}
                     onChange={(e) => setNewAccName(e.target.value)}
                     placeholder="Primary Live Scalper"
@@ -9017,7 +9040,7 @@ export default function App() {
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Account Name</label>
                   <input
                     type="text"
-                    required
+                    id="mt5_account_name_field"
                     value={newAccName}
                     onChange={(e) => setNewAccName(e.target.value)}
                     placeholder="e.g. Primary Live Scalper"
@@ -9060,7 +9083,7 @@ export default function App() {
                     </label>
                     <input
                       type="text"
-                      required
+                      id="mt5_broker_field"
                       value={newAccBroker}
                       onChange={(e) => setNewAccBroker(e.target.value)}
                       placeholder={newAccInstitutionType === 'Prop Firm' ? 'e.g. FTMO, FundedNext, The5ers' : 'e.g. IC Markets, Exness'}
@@ -9071,7 +9094,7 @@ export default function App() {
                     <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">MT5 Server</label>
                     <input
                       type="text"
-                      required
+                      id="mt5_server_field"
                       value={newAccMt5Server}
                       onChange={(e) => setNewAccMt5Server(e.target.value)}
                       placeholder="e.g. ICMarketsSC-Live01"
@@ -9086,7 +9109,6 @@ export default function App() {
                     type="text"
                     name="mt5_account_num_field"
                     id="mt5_account_num_field"
-                    required
                     inputMode="numeric"
                     autoComplete="off"
                     autoCorrect="off"
@@ -9136,7 +9158,6 @@ export default function App() {
                       type="text"
                       name="mt5_investor_key_nonpwd"
                       id="mt5_investor_key_nonpwd"
-                      required
                       autoComplete="off"
                       autoCorrect="off"
                       spellCheck="false"

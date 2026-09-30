@@ -201,15 +201,33 @@ ok('and carries a last sync time', !!connected.json?.lastSyncTime, String(connec
 const again = await api('/api/mt5/vps/sync', { method: 'POST', cookie: trader.cookie, body: { accountId } });
 ok('a later sync can be queued', again.status === 200 && !again.json?.alreadyQueued, `status ${again.status}`);
 
-const claim2 = await worker('/api/mt5/worker/claim', { workerId: WORKER_ID });
-ok('the worker picks it up', claim2.json?.job?.accountId === accountId, String(claim2.json?.job?.accountId));
-ok('and is told to resume from the cursor', claim2.json?.sinceDeal === 500004, String(claim2.json?.sinceDeal));
+// The queue is shared, so a job left behind by another account — an earlier
+// run, or someone poking at the dev server — is handed over first. Claim until
+// this suite's own job comes up rather than dereferencing whatever arrived: a
+// stray job used to crash the run with "Cannot read properties of null", which
+// hides any real failure after it.
+let claim2 = null;
+for (let i = 0; i < 10; i++) {
+  const c = await worker('/api/mt5/worker/claim', { workerId: WORKER_ID });
+  if (!c.json?.job) break;
+  if (c.json.job.accountId === accountId) { claim2 = c; break; }
+  // Not ours. Hand it back so the queue is no worse than we found it.
+  await worker('/api/mt5/worker/complete', {
+    jobId: c.json.job.id, workerId: WORKER_ID, ok: false,
+    error: 'Released by the test suite — job belongs to another account',
+    errorCode: 'TEST_RELEASED',
+  });
+}
+ok('the worker picks it up', claim2?.json?.job?.accountId === accountId,
+  claim2 ? String(claim2.json.job.accountId) : 'no job for this account was offered');
+ok('and is told to resume from the cursor', claim2?.json?.sinceDeal === 500004,
+  String(claim2?.json?.sinceDeal));
 
 // ── a failed sync keeps what it already imported ──────────────────────────
-const failed = await worker('/api/mt5/worker/complete', {
+const failed = claim2 ? await worker('/api/mt5/worker/complete', {
   jobId: claim2.json.job.id, workerId: WORKER_ID, ok: false,
   error: 'MT5 login failed (-6): invalid account', errorCode: 'MT5_LOGIN_FAILED',
-});
+}) : { status: 0, json: null };
 ok('a failure is accepted', failed.status === 200, `status ${failed.status}`);
 
 const afterFailure = await api(`/api/mt5/${accountId}/status`, { cookie: trader.cookie });
