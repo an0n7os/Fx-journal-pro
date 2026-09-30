@@ -907,10 +907,14 @@ export default function App() {
     if (activeTab && DASHBOARD_TABS.includes(activeTab) && mappedCurrent !== activeTab) {
       navigate(`/${activeTab}`);
     }
-    // location.pathname is read here, so it belongs in the deps: without it the
-    // effect ran on a stale path and the shared-journal guard above could be
-    // skipped on the very render that lands on the link.
-  }, [user, activeTab, location.pathname]);
+    // Deliberately not keyed on location.pathname. This effect owns one
+    // direction — active tab to URL — and the effect above owns the other.
+    // Running it on every path change makes the two race whenever someone
+    // opens a tab URL directly: /admin arrives, the effect above has not yet
+    // moved activeTab off 'dashboard', and this one replaces the URL with
+    // /dashboard before it can. It still sees a current pathname, because the
+    // `user` transition on load is what runs it on a fresh page.
+  }, [user, activeTab]);
 
   // Synchronize document.title with activeTab when user is logged in
   useEffect(() => {
@@ -946,13 +950,21 @@ export default function App() {
   }, [user]);
 
   // First-time onboarding wizard: trigger if registration completed but onboarding not completed
+  //
+  // Mentor read-only mode swaps `user` for the trader being inspected, so
+  // without this guard an admin opening Analysis on anyone who never finished
+  // onboarding got that trader's wizard — as a full-screen early return, with
+  // no close button, because canDismiss reads the same unfinished flag. Both
+  // Skip and Continue then POST /api/auth/onboarding on the ADMIN's session,
+  // overwriting the admin's own experience, style and markets and marking
+  // their onboarding done. The trader's row was never touched.
   useEffect(() => {
-    if (!user || loading) return;
+    if (!user || loading || isMentorReadOnlyMode) return;
     const isCompleted = !!(user.onboardingCompleted || (user as any).onboarding_completed);
     if (!isCompleted) {
       setShowOnboardingWizard(true);
     }
-  }, [user, loading]);
+  }, [user, loading, isMentorReadOnlyMode]);
 
   // Pre-populate onboarding form states if user already has preferences
   useEffect(() => {
@@ -1366,7 +1378,13 @@ export default function App() {
   };
 
   const submitOnboarding = async () => {
-    console.log('submitOnboarding called', { obExperience, obStyle, obMarkets });
+    // This writes to whoever the session belongs to, which in mentor mode is
+    // the admin and not the trader on screen. Refuse rather than write the
+    // wrong profile if anything ever opens the wizard here again.
+    if (isMentorReadOnlyMode) {
+      setShowOnboardingWizard(false);
+      return;
+    }
     setActionLoading(true);
     try {
       console.log('Sending onboarding request...');
@@ -4168,8 +4186,10 @@ export default function App() {
   }
 
   // Onboarding Wizard (shown if new user has not completed onboarding, or if reopened)
+  // Never over a trader being inspected: `user` is them, not the admin whose
+  // session any answer would be saved against.
   const isUserOnboardingDone = !!(user?.onboardingCompleted || (user as any)?.onboarding_completed);
-  if (showOnboardingWizard) {
+  if (showOnboardingWizard && !isMentorReadOnlyMode) {
     return (
       <OnboardingWizardModal
         onboardingStep={onboardingStep}
@@ -10169,8 +10189,14 @@ export default function App() {
       />
 
       {/* Pro Upgrade Modal */}
+      {/* Never over an inspected trader. Their plan drives every paywall on
+          screen in mentor mode, so a free trader puts four "Upgrade to PRO"
+          buttons in front of the admin — and the checkout behind them runs on
+          the admin's session, charging the admin and granting the admin Pro
+          while the screen says the trader's name. Gated here rather than at
+          the sixteen call sites that open it. */}
       <ProUpgradeModal
-        isOpen={showProModal}
+        isOpen={showProModal && !isMentorReadOnlyMode}
         onClose={() => setShowProModal(false)}
         user={user}
         authFetch={authFetch}

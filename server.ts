@@ -268,6 +268,9 @@ function loadDatabaseFromFile() {
         mainMarkets: ['Forex', 'Gold'],
         onboardingCompleted: true,
         isPro: true,
+        // The local store has no column defaults, so a seeded row without this
+        // reads "Joined: N/A" in the user registry.
+        createdAt: new Date().toISOString(),
       },
     ] : [];
 
@@ -448,7 +451,8 @@ function createEmptyUserDb(userId?: string, email?: string, injectDummyUser = fa
       mainMarkets: ['Forex', 'Gold'],
       onboardingCompleted: isDev ? true : false,
       isPro: isDev ? true : false,
-      isEmailVerified: true
+      isEmailVerified: true,
+      createdAt: new Date().toISOString()
     });
   }
 
@@ -3185,6 +3189,11 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
       onboarding_completed: existingUserRow?.onboarding_completed || false,
       is_pro: existingUserRow?.is_pro || false,
       is_email_verified: false,
+      // Set here rather than left to the column default. Supabase fills it
+      // from DEFAULT NOW(), but the local store has no defaults, so every
+      // account registered against db.json read "Joined: N/A" in the registry
+      // and sorted as if it had no join date at all.
+      created_at: existingUserRow?.created_at || new Date().toISOString(),
       email_otp: otp,
       otp_expires_at: otpExpiresAt,
       otp_attempts: 0,
@@ -7672,6 +7681,29 @@ const localAllPayments = (): any[] => {
 };
 
 /**
+ * The same union for accounts and trades.
+ *
+ * The user registry already read users through localAllUsers, but counted a
+ * user's accounts and trades out of the file alone. In local mode a fresh
+ * signup's rows live only in userDatabases until something flushes them, so
+ * every row in the ACCOUNTS & TRADES column read 0 — for a user the mentor
+ * banner on the very next screen described as having one account and six
+ * trades.
+ */
+const localAllRows = (key: 'accounts' | 'trades'): any[] => {
+  const byId = new Map<string, any>();
+  try {
+    for (const r of loadDatabaseFromFile()?.[key] || []) if (r?.id) byId.set(r.id, r);
+  } catch { /* caches below are still worth reading */ }
+  for (const cached of userDatabases.values()) {
+    for (const r of cached?.[key] || []) if (r?.id && !byId.has(r.id)) byId.set(r.id, r);
+  }
+  return [...byId.values()];
+};
+const localAllAccounts = (): any[] => localAllRows('accounts');
+const localAllTrades = (): any[] => localAllRows('trades');
+
+/**
  * Referral earnings per referrer, from captured payments.
  *
  * Every screen that showed this used `referralCount * 300` — a flat ₹300 for
@@ -9663,10 +9695,14 @@ app.get('/api/admin/users', async (req, res) => {
   const everyone = localAllUsers();
   const visibleUsers = scope === null ? everyone : everyone.filter((u: any) => scope.includes(u.id));
   const earnedByReferrer = referralEarningsByReferrer(everyone, localAllPayments());
+  // Accounts and trades come from the same union as the users above, not from
+  // the file alone — see localAllRows.
+  const allAccounts = localAllAccounts();
+  const allTrades = localAllTrades();
   const usersWithStats = visibleUsers.map((u: any) => {
-    const uAccounts = (db.accounts || []).filter((acc: any) => acc.userId === u.id);
-    const accIds = uAccounts.map((a: any) => a.id);
-    const uTrades = (db.trades || []).filter((t: any) => accIds.includes(t.accountId) || t.userId === u.id);
+    const uAccounts = allAccounts.filter((acc: any) => acc.userId === u.id);
+    const accIds = new Set(uAccounts.map((a: any) => a.id));
+    const uTrades = allTrades.filter((t: any) => t.userId === u.id || (t.accountId && accIds.has(t.accountId)));
     const refCode = u.referralCode || ('FX-' + (u.id || '').replace(/\D/g, '').slice(-4).padStart(4, '8') || 'FX-100');
     const directReferrals = everyone.filter((other: any) =>
       other.referredBy && (other.referredBy === u.id || other.referredBy === refCode)
