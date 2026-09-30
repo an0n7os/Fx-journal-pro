@@ -1916,7 +1916,16 @@ export default function App() {
 
       setInspectedUser(targetU);
       setIsMentorReadOnlyMode(true);
-      setUser(targetU);
+      // Deliberately NOT setUser(targetU). Inspecting someone is reading their
+      // numbers, not becoming them: the session cookie stays the admin's, so
+      // swapping the identity only made every feature that keys off `user`
+      // aim at the wrong person while the writes still landed on the admin.
+      // It is what put the trader's onboarding wizard and the trader's
+      // paywalls in front of the admin, and what made the whole app look like
+      // it had signed in as them — avatar, account menu, Settings and all.
+      // The screens that matter here (analytics, journal, calendar, accounts)
+      // render from `accounts` and `trades`, which are swapped below; between
+      // them they read `user` exactly twice, both on the dashboard greeting.
       setAccounts(targetAccs);
       setTrades(targetTrades);
       setRiskSettings(targetRisk);
@@ -1938,7 +1947,9 @@ export default function App() {
 
   const handleExitMentorMode = () => {
     if (adminBackupData) {
-      setUser(adminBackupData.user);
+      // `user` was never swapped on the way in, so restoring it would be a
+      // no-op at best and would reinstate a stale copy at worst — the admin's
+      // own row may have been refreshed while the inspection was open.
       setAccounts(adminBackupData.accounts);
       setTrades(adminBackupData.trades);
       setRiskSettings(adminBackupData.riskSettings);
@@ -4252,6 +4263,22 @@ export default function App() {
     }
   ];
 
+  /**
+   * What an inspecting mentor may open.
+   *
+   * Mentor mode swaps in the trader's accounts and trades, so only the screens
+   * that render from those two show the trader at all. Everything else —
+   * Settings, Notebook, Tools, Heyza, FX News — is the admin's own account
+   * wearing an inspection banner, which is how an admin ends up editing their
+   * own preferences believing they are looking at a customer's.
+   */
+  const MENTOR_VISIBLE_TABS = ['dashboard', 'analytics', 'journal', 'calendar', 'accounts', 'chart'];
+  const visibleNavGroups = isMentorReadOnlyMode
+    ? NAV_GROUPS
+        .map((group) => ({ ...group, items: group.items.filter((i) => MENTOR_VISIBLE_TABS.includes(i.id)) }))
+        .filter((group) => group.items.length > 0)
+    : NAV_GROUPS;
+
   // Primary Platform Shell Layout
   return (
     <div className="min-h-screen md:h-screen md:overflow-hidden bg-[#FBFBFA]/40 font-sans antialiased text-slate-800 flex flex-col">
@@ -4478,7 +4505,7 @@ export default function App() {
                       sidebar, which is `hidden md:flex`. On a phone that left a
                       partner or an admin with no route to their own console at
                       all — the menu they can reach is this one. */}
-                  {(isPartner || isAdmin) && (
+                  {(isPartner || isAdmin) && !isMentorReadOnlyMode && (
                     <>
                       <div className="border-t border-slate-100 dark:border-white/[0.07] my-1.5" />
                       {isPartner && (
@@ -4490,7 +4517,7 @@ export default function App() {
                           <Users className="h-4 w-4" /> Partner Portal
                         </button>
                       )}
-                      {isAdmin && adminRole !== 'PARTNER' && (
+                      {isAdmin && adminRole !== 'PARTNER' && !isMentorReadOnlyMode && (
                         <button
                           role="menuitem"
                           onClick={() => { setActiveTab('admin'); setShowMobileNavProfile(false); }}
@@ -4554,7 +4581,11 @@ export default function App() {
             className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden dx-sidebar-scroll flex flex-col gap-0.5 w-full ${desktopSidebarOpen ? 'items-start px-3' : 'items-center'} pb-2`}
             aria-label="Main"
           >
-            {isPartner && (
+            {/* The admin's own consoles are hidden while inspecting: leaving
+                them reachable means clicking into the admin panel with the
+                trader's trades still loaded and the inspection banner still
+                up. "Return to Admin Console" is the way back. */}
+            {isPartner && !isMentorReadOnlyMode && (
               <button
                 onClick={() => { setActiveTab('partner'); }}
                 aria-current={activeTab === 'partner' ? 'page' : undefined}
@@ -4569,7 +4600,7 @@ export default function App() {
               </button>
             )}
 
-            {isAdmin && adminRole !== 'PARTNER' && (
+            {isAdmin && adminRole !== 'PARTNER' && !isMentorReadOnlyMode && (
               <button
                 onClick={() => { setActiveTab('admin'); }}
                 aria-current={activeTab === 'admin' ? 'page' : undefined}
@@ -4588,7 +4619,7 @@ export default function App() {
               </button>
             )}
 
-            {NAV_GROUPS.map((group) => (
+            {visibleNavGroups.map((group) => (
               <div key={group.label || 'primary'} className="w-full">
                 {/* Group labels only make sense when the labels are visible. */}
                 {group.label && desktopSidebarOpen && (
@@ -4745,7 +4776,12 @@ export default function App() {
               <div className="flex-1 min-w-0">
                 <div>
                   <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white font-display sm:truncate">
-                    {activeTab === 'dashboard' ? `Hello, ${user?.name || 'Trader'}` :
+                    {/* In mentor mode the numbers below belong to the trader
+                        being inspected, so the heading names them rather than
+                        greeting the admin over someone else's figures. */}
+                    {activeTab === 'dashboard' ? (isMentorReadOnlyMode
+                      ? `${inspectedUser?.name || 'Trader'} — overview`
+                      : `Hello, ${user?.name || 'Trader'}`) :
                       activeTab === 'journal' ? 'Trading Journal' :
                         activeTab === 'notebook' ? 'Notebook' :
                           activeTab === 'accounts' ? 'Portfolio Accounts' :
