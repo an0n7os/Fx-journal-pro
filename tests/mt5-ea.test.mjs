@@ -82,6 +82,13 @@ const created = await api('/api/accounts', {
 const accountId = created.json?.account?.id;
 ok('setup: an MT5 portfolio account exists', created.status === 200 && !!accountId, `status ${created.status}`);
 
+// A new account has no EA running yet. It used to be created as Connected,
+// which told the customer they were synced before the file was downloaded and
+// hid the setup UI that keys off the connected state.
+const fresh = await api(`/api/mt5/${accountId}/status`, { cookie: trader.cookie });
+ok('a new MT5 account is not yet connected', fresh.json?.eaStatus === 'Not Connected',
+  String(fresh.json?.eaStatus));
+
 // ── the EA file downloads with this account's token baked in ──────────────
 const dl = await fetch(BASE + `/api/mt5/ea/${accountId}/download`, {
   headers: { Cookie: trader.cookie },
@@ -193,6 +200,35 @@ const stranger = await signInOrRegister(BASE, `mt5_other_${stamp}@example.com`, 
 const steal = await api(`/api/mt5/ea/${accountId}/download`, { cookie: stranger.cookie });
 ok('another user cannot download this EA', steal.status === 403 || steal.status === 404,
   `status ${steal.status}`);
+
+// ── cloud sync refuses rather than parking at Validating ──────────────────
+// It answered 200 and left the account at "Validating" forever, while the UI
+// offered it as the easier of the two methods. Unless a deployment can really
+// run the worker, saying no is the only honest answer.
+const cloudEnabled = process.env.MT5_CLOUD_SYNC_ENABLED === 'true';
+const cloudConnect = await api('/api/mt5/cloud/connect', {
+  method: 'POST', cookie: trader.cookie,
+  body: { accountId, login: '5001234', server: 'MetaQuotes-Demo', investorPassword: 'probe-investor-pw' },
+});
+if (cloudEnabled) {
+  ok('cloud connect is accepted where the worker runs', cloudConnect.status === 200,
+    `status ${cloudConnect.status}`);
+} else {
+  ok('cloud connect is refused where no worker runs', cloudConnect.status === 503,
+    `status ${cloudConnect.status}`);
+  ok('the refusal names the reason', cloudConnect.json?.code === 'CLOUD_WORKER_UNAVAILABLE',
+    String(cloudConnect.json?.code));
+  ok('and points at the EA instead', /Expert Advisor/i.test(cloudConnect.json?.error || ''),
+    String(cloudConnect.json?.error));
+
+  const afterRefusal = await api(`/api/mt5/${accountId}/status`, { cookie: trader.cookie });
+  ok('the refused connect left the account on EA', afterRefusal.json?.syncMethod === 'EA',
+    String(afterRefusal.json?.syncMethod));
+  ok('and the EA connection still stands', afterRefusal.json?.eaStatus === 'Connected',
+    String(afterRefusal.json?.eaStatus));
+  ok('the UI is told cloud is unavailable', afterRefusal.json?.cloudSyncAvailable === false,
+    String(afterRefusal.json?.cloudSyncAvailable));
+}
 
 // ── report ────────────────────────────────────────────────────────────────
 console.log('');

@@ -1627,6 +1627,29 @@ async function cloudSyncLoopTick() {
   }
 }
 
+/**
+ * Whether cloud sync can actually run on this deployment.
+ *
+ * Three things have to be true, and on the current deployment none of the last
+ * two are:
+ *
+ *  - a broker worker credential (META_API_TOKEN),
+ *  - a process that lives long enough to hold the sync loop, which serverless
+ *    is not — startCloudWorker below returns early on Vercel and Netlify,
+ *  - the recurring loop actually being armed, which it is not:
+ *    cloudSyncLoopTick is written and never called.
+ *
+ * Until that is wired, POST /api/mt5/cloud/connect returned 200 and parked the
+ * account at "Validating" forever, while the UI offered it as the easier of
+ * the two methods — "No EA installation needed". A customer who picked it was
+ * simply stuck. Opt in explicitly when the worker is real; the EA path needs
+ * none of this and works on the current deployment today.
+ */
+const cloudSyncAvailable = (): boolean =>
+  process.env.MT5_CLOUD_SYNC_ENABLED === 'true'
+  && !IS_SERVERLESS
+  && !!process.env.META_API_TOKEN?.trim();
+
 function startCloudWorker() {
   // A background interval only survives on a long-running process. On Vercel or
   // Netlify every request is a fresh instance that is frozen as soon as it
@@ -4073,7 +4096,13 @@ app.post('/api/accounts', async (req, res) => {
     status: 'Active',
     isMt5Sync: !!isMt5Sync,
     eaToken: generateEaToken(),
-    eaStatus: isMt5Sync ? 'Connected' : 'Not Connected',
+    // A new MT5 account has no EA running yet — the file has not even been
+    // downloaded. Marking it Connected at creation told the customer they were
+    // synced before anything was installed, and hid the setup UI that would
+    // have got them there: the method cards and the "Waiting for MT5" banner
+    // both key off the connected state. The EA flips this itself on its first
+    // authenticate or validate.
+    eaStatus: 'Not Connected',
     ...(login ? { mt5Login: String(login).trim(), eaTerminalLogin: String(login).trim() } : {}),
     ...(server ? { mt5Server: String(server).trim(), eaTerminalServer: String(server).trim() } : {}),
     ...(enc ? {
@@ -5300,9 +5329,12 @@ app.get('/api/mt5/:accountId/status', async (req, res) => {
     ? db.mt5ConnectJobs.filter((j: any) => j.accountId === account.id).slice(-5)
     : [];
 
-  // Reconcile accounts stuck in Validating from a cloud connect that has no
-  // broker worker configured (e.g. META_API_TOKEN missing).
-  const workerConfigured = !!process.env.META_API_TOKEN?.trim();
+  // Reconcile accounts stuck in Validating from a cloud connect on a
+  // deployment that cannot run the sync worker. The token alone was not enough
+  // to tell: it is set here while the worker never starts, so an account
+  // connected before this check sat at "Validating" and looked like it was
+  // about to come up.
+  const workerConfigured = cloudSyncAvailable();
   const cloudStuckValidating = account.syncMethod === 'CLOUD'
     && account.connectionStatus === 'Validating'
     && !workerConfigured;
@@ -5328,6 +5360,10 @@ app.get('/api/mt5/:accountId/status', async (req, res) => {
     workerConfigured,
     // The UI offers cloud as the easier of the two methods, so it has to know
     // whether this deployment can honour that before showing the form.
+    // Two different methods, two different answers. cloudSyncAvailable is the
+    // old MetaApi path, which is off; vpsSyncAvailable is our own terminal
+    // pool. The UI gates each on its own flag rather than one shared "cloud".
+    cloudSyncAvailable: workerConfigured,
     vpsSyncAvailable: vpsSyncAvailable(),
     queueDepth: queueDepth(db),
     connectJobs,
@@ -5367,12 +5403,11 @@ app.post('/api/mt5/cloud/connect', async (req, res) => {
   if (!account) return res.status(404).json({ error: 'Account not found' });
   if (account.userId !== currentUser.id) return res.status(403).json({ error: 'Access denied' });
 
-  // A cloud connect needs a broker worker (MetaApi token or VPS worker) to
-  // actually reach MT5. Without one, fail fast instead of leaving the account
-  // stuck in Validating.
-  if (!process.env.META_API_TOKEN?.trim()) {
+  // A cloud connect needs a worker that can actually reach MT5 and keep
+  // syncing. Fail fast instead of leaving the account stuck in Validating.
+  if (!cloudSyncAvailable()) {
     return res.status(503).json({
-      error: 'The cloud sync worker is not configured on this deployment yet (META_API_TOKEN is missing). Use the EA method, which needs no extra setup.',
+      error: 'Cloud sync is not available on this deployment. Use the Expert Advisor method — it needs no extra setup and syncs your full history.',
       code: 'CLOUD_WORKER_UNAVAILABLE'
     });
   }
@@ -5439,6 +5474,13 @@ app.post('/api/mt5/cloud/sync', async (req, res) => {
   const account = db.accounts.find((a: any) => a.id === body.accountId);
   if (!account) return res.status(404).json({ error: 'Account not found' });
   if (account.userId !== currentUser.id) return res.status(403).json({ error: 'Access denied' });
+
+  if (!cloudSyncAvailable()) {
+    return res.status(503).json({
+      error: 'Cloud sync is not available on this deployment. Use the Expert Advisor method instead.',
+      code: 'CLOUD_WORKER_UNAVAILABLE'
+    });
+  }
 
   if (account.syncMethod !== 'CLOUD') {
     return res.status(400).json({ error: 'Account is not configured for cloud sync' });

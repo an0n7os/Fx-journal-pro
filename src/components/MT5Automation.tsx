@@ -117,6 +117,8 @@ interface MT5Status {
   syncMethod: string;
   cloudConnected: boolean;
   workerConfigured?: boolean;
+  /** True only where this deployment can actually run the cloud sync worker. */
+  cloudSyncAvailable?: boolean;
   connectJobs: MT5ConnectJob[];
   lastSyncTime: string | null;
   lastHeartbeatAt: string | null;
@@ -234,13 +236,18 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const [showPasswordTip, setShowPasswordTip] = useState(false);
   const [activeTab, setActiveTab] = useState<'ea' | 'investor'>('ea');
 
+  // The server decides: it knows whether a worker can run here at all.
+  // Defaults to false so a status that has not arrived yet never advertises a
+  // method that may not work.
+  const cloudAvailable = status?.cloudSyncAvailable === true;
+
   useEffect(() => {
-    if (status?.syncMethod === 'CLOUD') {
+    if (status?.syncMethod === 'CLOUD' && cloudAvailable) {
       setActiveTab('investor');
-    } else if (status?.syncMethod === 'EA') {
+    } else if (status?.syncMethod === 'EA' || !cloudAvailable) {
       setActiveTab('ea');
     }
-  }, [status?.syncMethod]);
+  }, [status?.syncMethod, cloudAvailable]);
 
   const host = typeof window !== 'undefined' ? window.location.host : 'www.fxjournalpro.com';
   const apiUrl = `${window.location.protocol}//${host}/api/mt5`;
@@ -679,23 +686,39 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
             Choose Your MT5 Connection Method
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
-            {/* Card 1: Investor Password */}
+            {/* Card 1: Investor Password.
+                Only offered where the deployment can actually run the cloud
+                worker. It used to sit here as the easier-looking of the two —
+                "No EA installation needed" — and connecting left the account
+                at "Validating" forever, because nothing was going to pick the
+                job up. Offering it at all is a promise; make it only when it
+                can be kept. */}
             <div
-              onClick={() => setActiveTab('investor')}
-              className={`cursor-pointer rounded-2xl border p-5 flex items-center gap-4 transition-all duration-200 ${
-                activeTab === 'investor'
-                  ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/30 dark:bg-indigo-950/20 ring-2 ring-indigo-600/20'
-                  : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/50'
+              onClick={() => { if (cloudAvailable) setActiveTab('investor'); }}
+              aria-disabled={!cloudAvailable}
+              title={cloudAvailable ? undefined : 'Cloud sync is not available on this deployment — use the MT5 EA'}
+              className={`rounded-2xl border p-5 flex items-center gap-4 transition-all duration-200 ${
+                !cloudAvailable
+                  ? 'cursor-not-allowed opacity-50 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50'
+                  : activeTab === 'investor'
+                    ? 'cursor-pointer border-indigo-600 dark:border-indigo-500 bg-indigo-50/30 dark:bg-indigo-950/20 ring-2 ring-indigo-600/20'
+                    : 'cursor-pointer border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/50'
               }`}
             >
               <div className="h-10 w-10 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
                 <Eye className="h-5 w-5" />
               </div>
-              <div className="flex items-center gap-1.5">
-                <h4 className="dx-section-title">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h4 className="dx-section-title truncate">
                   Trading Password
                 </h4>
-                <Crown className="h-3.5 w-3.5 text-amber-500 fill-amber-500/10 shrink-0" />
+                {cloudAvailable
+                  ? <Crown className="h-3.5 w-3.5 text-amber-500 fill-amber-500/10 shrink-0" />
+                  : (
+                    <span className="font-bold text-[9px] text-slate-500 dark:text-slate-400 bg-slate-500/10 px-1.5 py-0.5 rounded border border-slate-500/10 shrink-0">
+                      UNAVAILABLE
+                    </span>
+                  )}
               </div>
             </div>
 

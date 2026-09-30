@@ -52,6 +52,7 @@ const PartnerPortal = React.lazy(() => import('./components/PartnerPortal'));
 const TradingTools = React.lazy(() => import('./components/TradingTools'));
 const AchievementsTab = React.lazy(() => import('./components/AchievementsTab'));
 const NotebookTab = React.lazy(() => import('./components/NotebookTab'));
+const MT5Automation = React.lazy(() => import('./components/MT5Automation'));
 
 
 /**
@@ -5928,6 +5929,23 @@ export default function App() {
                   <Plus className="h-5 w-5" />
                   Connect New Portfolio Account
                 </button>
+
+                {/* MT5 sync for the selected account.
+                    MT5Automation carries the whole setup surface — the EA
+                    download, the WebRequest host to allow, the install steps
+                    and the live connection status — and nothing imported it,
+                    so none of it was reachable. The endpoints behind it worked
+                    the entire time; a customer simply had no way to get their
+                    EA file. Shown only for accounts that are on MT5 sync. */}
+                {activeAccount?.isMt5Sync && (
+                  <React.Suspense fallback={<TabLoading />}>
+                    <MT5Automation
+                      account={activeAccount}
+                      authFetch={authFetch}
+                      onRefresh={fetchAccountData}
+                    />
+                  </React.Suspense>
+                )}
 
               </div>
             )}
