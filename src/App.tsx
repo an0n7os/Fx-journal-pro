@@ -6404,16 +6404,23 @@ export default function App() {
                   </div>
                 </section>
 
-                {/* Summary Session & Summary Pairs Section — Pro only */}
+                {/* Summary Session & Summary Pairs Section — Pro only.
+                    This is the ONE paywall card on Analytics. The sections
+                    below stay blurred so a free user can see there is more
+                    here, but they do not each repeat a lock and a price: four
+                    identical "Upgrade to PRO — ₹499/mo" cards down one page
+                    reads as a wall, not an offer. */}
                 <div className="relative">
                   {!isProActive && (
                     <div className="absolute inset-0 z-20 backdrop-blur-xs bg-slate-900/60 dark:bg-slate-950/70 rounded-2xl flex flex-col items-center justify-center p-6 text-center border border-white/10">
                       <div className="p-3.5 rounded-full bg-violet-600/30 border border-violet-500/40 text-violet-300 mb-3 shadow-xl">
                         <Lock className="h-6 w-6" />
                       </div>
-                      <h4 className="text-lg font-bold text-white mb-1.5">Session & Pair Analytics</h4>
+                      <h4 className="text-lg font-bold text-white mb-1.5">Advanced Analytics</h4>
                       <p className="text-xs text-slate-300 max-w-md mb-4 leading-relaxed">
-                        Upgrade to <strong>FX Journal Pro</strong> to unlock comprehensive session breakdowns (London, NY, Asia) and traded currency pair metrics.
+                        Session breakdowns, pair metrics, win and loss streaks, your equity and
+                        drawdown curve and day-of-week edge — everything below unlocks with{' '}
+                        <strong>FX Journal Pro</strong>.
                       </p>
                       <button
                         onClick={() => setShowProModal(true)}
@@ -6670,26 +6677,9 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Win & Loss Performance Section — Pro only */}
+                {/* Win & Loss Performance Section — Pro only.
+                    Blurred, but no second lock card: the one above covers it. */}
                 <div className="relative">
-                  {!isProActive && (
-                    <div className="absolute inset-0 z-20 backdrop-blur-xs bg-slate-900/60 dark:bg-slate-950/70 rounded-2xl flex flex-col items-center justify-center p-6 text-center border border-white/10">
-                      <div className="p-3.5 rounded-full bg-violet-600/30 border border-violet-500/40 text-violet-300 mb-3 shadow-xl">
-                        <Lock className="h-6 w-6" />
-                      </div>
-                      <h4 className="text-lg font-bold text-white mb-1.5">Win & Loss Performance</h4>
-                      <p className="text-xs text-slate-300 max-w-md mb-4 leading-relaxed">
-                        Upgrade to <strong>FX Journal Pro</strong> to unlock advanced winning and losing streak analytics, cumulative curves, and volume breakdowns.
-                      </p>
-                      <button
-                        onClick={() => setShowProModal(true)}
-                        className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg transition flex items-center gap-2"
-                      >
-                        <Sparkles className="h-3.5 w-3.5" /> Upgrade to PRO — ₹499/mo
-                      </button>
-                    </div>
-                  )}
-
                   <div className={!isProActive ? 'filter blur-[3px] opacity-60 pointer-events-none select-none' : ''}>
                 <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Win Performance Card */}
@@ -6991,14 +6981,8 @@ export default function App() {
                         </p>
                       </div>
                     </div>
-                    {!isProActive && (
-                      <button
-                        onClick={() => setShowProModal(true)}
-                        className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-md transition shrink-0"
-                      >
-                        <Lock className="h-3.5 w-3.5" /> Unlock Pro Analytics Suite
-                      </button>
-                    )}
+                    {/* No second call to action here — the one card at the top
+                        of the gated run already offers this. */}
                   </div>
 
                   {/* Pro Stat Cards Grid */}
@@ -7033,26 +7017,8 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* 2 Pro Charts with Pro Lock Gate for Free Users */}
+                  {/* 2 Pro Charts — blurred, no third lock card. */}
                   <div className="relative">
-                    {!isProActive && (
-                      <div className="absolute inset-0 z-20 backdrop-blur-xs bg-slate-900/60 dark:bg-slate-950/70 rounded-2xl flex flex-col items-center justify-center p-6 text-center border border-white/10">
-                        <div className="p-3.5 rounded-full bg-violet-600/30 border border-violet-500/40 text-violet-300 mb-3 shadow-xl">
-                          <Lock className="h-6 w-6" />
-                        </div>
-                        <h4 className="text-lg font-bold text-white mb-1.5">Pro Analytics Suite</h4>
-                        <p className="text-xs text-slate-300 max-w-md mb-4 leading-relaxed">
-                          Upgrade to <strong>FX Journal Pro</strong> to unlock your real-time <strong>Equity & Underwater Drawdown Curve</strong>, <strong>Day-of-Week Win Rate Edge</strong>, and statistical trade expectancy.
-                        </p>
-                        <button
-                          onClick={() => setShowProModal(true)}
-                          className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg transition flex items-center gap-2"
-                        >
-                          <Sparkles className="h-3.5 w-3.5" /> Upgrade to PRO — ₹499/mo
-                        </button>
-                      </div>
-                    )}
-
                     <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6 ${!isProActive ? 'filter blur-[3px] opacity-60 pointer-events-none' : ''}`}>
                       {/* Pro Chart 1: Equity & Drawdown Underwater Curve */}
                       <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-6 shadow-xs">
