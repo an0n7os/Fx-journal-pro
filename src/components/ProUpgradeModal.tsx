@@ -408,7 +408,10 @@ export default function ProUpgradeModal({
             items-center rather than items-start: with single-line labels the
             tick reads as centred on its text, and there is no longer a first
             line to align it to. */}
-        <div className="px-5 sm:px-7 py-3.5 sm:py-5 border-y lg:border-b-0 border-white/[0.06] bg-white/[0.015] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-x-5 gap-y-2 sm:gap-y-3">
+        {/* Two across on desktop as well: eight benefits stacked in one column
+            ran the left side far past the pay button and left the right half
+            half empty. */}
+        <div className="px-5 sm:px-7 py-3.5 sm:py-5 border-y lg:border-b-0 border-white/[0.06] bg-white/[0.015] grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2 sm:gap-y-3">
           {PRO_BENEFITS.map((benefit) => (
             <div key={benefit} className="flex items-center gap-2.5 text-[12.5px] text-slate-300">
               <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-500/15 border border-violet-500/25">
@@ -421,8 +424,11 @@ export default function ProUpgradeModal({
 
         </div>{/* /left column */}
 
-        {/* Right on desktop: coupon, payment methods and the pay button. */}
-        <div className="px-5 sm:px-7 py-4 sm:py-6 lg:pt-7 space-y-4 sm:space-y-5 relative z-10">
+        {/* Right on desktop: coupon, payment methods and the pay button.
+            lg:pt-14 clears the close button, which sits at the modal's
+            top-right and therefore lands on top of this column's first card
+            once the layout is two columns. */}
+        <div className="px-5 sm:px-7 py-4 sm:py-6 lg:pt-14 space-y-4 sm:space-y-5 relative z-10">
           {statusMessage && (
             <div className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 border ${statusMessage.type === 'success'
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
@@ -502,7 +508,9 @@ export default function ProUpgradeModal({
                           setCouponInput(e.target.value.toUpperCase());
                           setCouponError(null);
                         }}
-                        placeholder="Enter mentor coupon code (e.g. VIP60)"
+                        // Short enough to survive the narrower desktop column:
+                        // the long version was clipped mid-word at "(E.G. V".
+                        placeholder="Enter code — e.g. VIP60"
                         className="flex-1 bg-slate-950/80 border border-slate-700/80 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 uppercase tracking-wide"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -533,11 +541,14 @@ export default function ProUpgradeModal({
               {/* Payment methods as chips */}
               <div className="rounded-xl border border-white/[0.06] px-4 py-3.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Pay with</p>
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {/* A fixed three-across grid rather than wrapping chips: six
+                    of them wrapped to five and a lonely "NetBanking", which
+                    reads as a stray rather than a row. */}
+                <div className="mt-2.5 grid grid-cols-3 gap-1.5">
                   {PAY_METHODS.map((m) => (
                     <span
                       key={m}
-                      className="rounded-md bg-white/[0.04] border border-white/[0.07] px-2 py-1 text-[11px] font-semibold text-slate-300"
+                      className="rounded-md bg-white/[0.04] border border-white/[0.07] px-2 py-1 text-center text-[11px] font-semibold text-slate-300"
                     >
                       {m}
                     </span>
