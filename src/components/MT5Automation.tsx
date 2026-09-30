@@ -1031,7 +1031,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                 onChange={(e) => setCloudPassword(e.target.value)}
                 required
                 autoComplete="off"
-                placeholder="••••••••"
+                placeholder="Enter your investor password"
                 className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-xs px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500/40"
               />
             </div>

@@ -2500,7 +2500,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               </div>
               <div className="relative">
                 <input id="login-password" type={showPassword ? "text" : "password"} required value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-11'} placeholder="••••••••••••" />
+                  onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-11'} placeholder="Enter your password" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}

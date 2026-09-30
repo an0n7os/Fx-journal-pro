@@ -7625,7 +7625,7 @@ export default function App() {
                                   <input
                                     type="password"
                                     required
-                                    placeholder="••••••••"
+                                    placeholder="Enter password"
                                     value={settingsCurrPassword}
                                     onChange={(e) => setSettingsCurrPassword(e.target.value)}
                                     className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full font-mono"
@@ -7637,7 +7637,7 @@ export default function App() {
                                   <input
                                     type="password"
                                     required
-                                    placeholder="••••••••"
+                                    placeholder="Enter password"
                                     value={settingsNewPassword}
                                     onChange={(e) => setSettingsNewPassword(e.target.value)}
                                     className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full font-mono"
@@ -7649,7 +7649,7 @@ export default function App() {
                                   <input
                                     type="password"
                                     required
-                                    placeholder="••••••••"
+                                    placeholder="Enter password"
                                     value={settingsConfirmPassword}
                                     onChange={(e) => setSettingsConfirmPassword(e.target.value)}
                                     className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full font-mono"
@@ -9125,6 +9125,12 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* The placeholder used to be "••••••••" on a field masked
+                      with WebkitTextSecurity, so an EMPTY field looked exactly
+                      like a filled one — same dots, same width. People clicked
+                      Connect believing they had typed a password and got
+                      "Please fill out this field." with no idea which field
+                      was empty. Words, so empty reads as empty. */}
                   <div className="relative">
                     <input
                       type="text"
@@ -9137,8 +9143,8 @@ export default function App() {
                       style={{ WebkitTextSecurity: showInvestorPassword ? 'none' : 'disc' } as any}
                       value={newAccMt5InvestorPassword}
                       onChange={(e) => setNewAccMt5InvestorPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 pr-10 w-full focus:ring-violet-500 focus:border-violet-500 font-mono tracking-wider"
+                      placeholder="Enter your MT5 password"
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 pr-10 w-full focus:ring-violet-500 focus:border-violet-500 font-mono tracking-wider placeholder:font-sans placeholder:tracking-normal"
                     />
                     <button
                       type="button"
