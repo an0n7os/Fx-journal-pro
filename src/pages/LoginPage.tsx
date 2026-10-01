@@ -1611,7 +1611,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               {/*
                 "/month ... Cancel anytime" described a subscription that does
                 not exist. Checkout calls /api/payments/order — a one-time
-                Razorpay order that grants exactly 30 days — and never
+                Cashfree order that grants exactly 30 days — and never
                 /api/payments/subscribe, so there is nothing recurring and
                 nothing to cancel. A customer reading "cancel anytime" would
                 expect auto-renewal and a cancel button; access simply lapses
@@ -1870,7 +1870,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-slate-400">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
-                    <span className="text-[11px] font-medium text-slate-300">Razorpay Verified Merchant</span>
+                    <span className="text-[11px] font-medium text-slate-300">Secured by Cashfree</span>
                   </div>
                   <span className="text-[10px] text-slate-500 font-mono">Encrypted Dispatch</span>
                 </div>
@@ -2047,8 +2047,8 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 <Globe className="h-4 w-4 text-sky-400" />
               </div>
               <div>
-                <p className="text-xs font-bold text-white leading-tight">Razorpay Protected</p>
-                <p className="text-[11px] text-slate-400">Verified Subscriptions</p>
+                <p className="text-xs font-bold text-white leading-tight">Cashfree Protected</p>
+                <p className="text-[11px] text-slate-400">Verified Payment Gateway</p>
               </div>
             </div>
           </div>
@@ -2135,7 +2135,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 ))}
                 <li>
                   <span className="text-[11px] font-mono text-slate-400 block pt-1">
-                    Razorpay Official Merchant Partner
+                    Payments secured by Cashfree
                   </span>
                 </li>
               </ul>

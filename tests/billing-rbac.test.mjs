@@ -27,10 +27,6 @@ async function signIn(email) {
 const userCookie = await signIn(`rbac_${Date.now()}@example.com`);
 ok('setup: signed in', !!userCookie);
 
-// Whether Razorpay keys AND a plan id are present decides what `subscribe`
-// should answer below.
-const config0 = (await api('/api/payments/config')).json;
-
 // --- a plain user is not an admin ----------------------------------------
 const check = await api('/api/admin/check', { cookie: userCookie });
 ok('plain user: isAdmin false', check.json?.isAdmin === false, `role ${check.json?.role}`);
@@ -63,33 +59,36 @@ ok('anonymous: audit log refused', anonAudit.status === 403 || anonAudit.status 
   `status ${anonAudit.status}`);
 
 // --- webhook signature ----------------------------------------------------
+// Cashfree signs `timestamp + rawBody` with the merchant secret, base64. An
+// event this account never issued must not be able to buy Pro for anyone.
 const fakeEvent = JSON.stringify({
-  event: 'subscription.charged',
-  payload: { subscription: { entity: { id: 'sub_fake', current_end: Math.floor(Date.now() / 1000) + 2592000 } } },
+  type: 'PAYMENT_SUCCESS_WEBHOOK',
+  data: {
+    order: { order_id: 'fxj_fake', order_amount: 499, order_tags: { user_id: 'nobody', period_days: '30' } },
+    payment: { cf_payment_id: 'cfpay_fake', payment_status: 'SUCCESS', payment_amount: 499 },
+  },
 });
+const fakeTs = String(Date.now());
 
 const noSig = await api('/api/payments/webhook', { method: 'POST', rawBody: fakeEvent });
 ok('webhook: unsigned rejected', noSig.status !== 200, `status ${noSig.status}`);
 
 const badSig = await api('/api/payments/webhook', {
   method: 'POST', rawBody: fakeEvent,
-  headers: { 'x-razorpay-signature': crypto.createHmac('sha256', 'wrong-secret').update(fakeEvent).digest('hex') },
+  headers: {
+    'x-webhook-timestamp': fakeTs,
+    'x-webhook-signature': crypto.createHmac('sha256', 'wrong-secret').update(`${fakeTs}${fakeEvent}`).digest('base64'),
+  },
 });
 ok('webhook: wrongly-signed rejected', badSig.status !== 200, `status ${badSig.status}`);
 
-// --- paid routes fail closed when unconfigured ---------------------------
-// Two valid outcomes, and the point is the same either way: starting checkout
-// must never be what grants Pro. Unconfigured it refuses; configured it hands
-// back a Razorpay subscription id and waits for the webhook.
+// --- paid routes fail closed ---------------------------------------------
+// Pro is sold as a 30-day order, so there is no recurring plan to start. The
+// route says so instead of pretending, and either way it never grants Pro.
 const subscribe = await api('/api/payments/subscribe', { method: 'POST', cookie: userCookie });
-if (config0?.configured) {
-  ok('subscribe: returns a real subscription id', subscribe.status === 200 && !!subscribe.json?.subscriptionId,
-    `status ${subscribe.status} id ${subscribe.json?.subscriptionId}`);
-  ok('subscribe: does not report the user as Pro', subscribe.json?.isPro !== true);
-} else {
-  ok('subscribe: fails closed without keys', subscribe.status === 503,
-    `status ${subscribe.status} — must never grant Pro when billing is unconfigured`);
-}
+ok('subscribe: reports that recurring billing is off', subscribe.status === 503,
+  `status ${subscribe.status} — must never grant Pro`);
+ok('subscribe: does not report the user as Pro', subscribe.json?.isPro !== true);
 
 const verifyEmpty = await api('/api/payments/verify', { method: 'POST', cookie: userCookie, body: {} });
 ok('verify: empty body never grants Pro', verifyEmpty.status !== 200, `status ${verifyEmpty.status}`);
@@ -106,7 +105,7 @@ const testTier = await api('/api/payments/toggle-test-tier', {
 });
 ok('toggle-test-tier: unavailable', testTier.status !== 200, `status ${testTier.status}`);
 
-// The self-serve "type a UTR" upgrade is gone entirely: Razorpay handles UPI,
+// The self-serve "type a UTR" upgrade is gone entirely: Cashfree handles UPI,
 // and offline payments are activated by an admin from Billing & Payments.
 const manual = await api('/api/payments/submit-manual', {
   method: 'POST', cookie: userCookie, body: { utr: '999988887777' },

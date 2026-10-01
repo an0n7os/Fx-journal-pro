@@ -96,7 +96,7 @@ ok('no refused call moved the balance', afterRejects.json?.earnings?.totalEarned
 
 // ── a credit lands, and lands once ────────────────────────────────────────
 const credit = await api(`/api/admin/partners/${partner.user.id}/adjustment`, {
-  method: 'POST', cookie: admin.cookie, body: { amount: 2500, reason: 'Referral settled by UPI outside Razorpay' },
+  method: 'POST', cookie: admin.cookie, body: { amount: 2500, reason: 'Referral settled by UPI outside the gateway' },
 });
 ok('admin credits the partner', credit.status === 200, `status ${credit.status}`);
 ok('the response carries the new total', credit.json?.adjustmentTotal === 2500, String(credit.json?.adjustmentTotal));
@@ -108,7 +108,7 @@ ok('and in the balance they can withdraw', afterCredit.json?.earnings?.available
   String(afterCredit.json?.earnings?.availableBalance));
 ok('the adjustment total is reported separately', afterCredit.json?.earnings?.adjustmentTotal === 2500,
   String(afterCredit.json?.earnings?.adjustmentTotal));
-ok('the reason travels with it', afterCredit.json?.adjustments?.[0]?.reason?.includes('outside Razorpay'),
+ok('the reason travels with it', afterCredit.json?.adjustments?.[0]?.reason?.includes('outside the gateway'),
   afterCredit.json?.adjustments?.[0]?.reason);
 ok('and who applied it', afterCredit.json?.adjustments?.[0]?.createdByEmail === adminEmail,
   String(afterCredit.json?.adjustments?.[0]?.createdByEmail));

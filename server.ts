@@ -579,6 +579,24 @@ function generateEaToken(): string {
   return `ea_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/**
+ * The origin this request arrived on, as the browser sees it.
+ *
+ * Used for the URLs handed to a payment provider, which the customer's browser
+ * has to be able to reach: a localhost value on a deployed box, or a
+ * production value on a dev box, both break checkout. Derived from the request
+ * rather than configured, so dev, Netlify previews and production each get
+ * their own without an env var per environment. PUBLIC_SITE_URL overrides it
+ * for the cases with no request to read (background jobs).
+ */
+function publicOrigin(req: any): string {
+  const configured = process.env.PUBLIC_SITE_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, '');
+  const proto = (req?.headers?.['x-forwarded-proto']?.toString().split(',')[0] || req?.protocol || 'https').trim();
+  const host = (req?.headers?.['x-forwarded-host']?.toString().split(',')[0] || req?.get?.('host') || 'www.fxjournalpro.com').trim();
+  return `${proto}://${host}`;
+}
+
 // Derive the public base URL for the EA (works behind the Vercel proxy too)
 function apiBaseUrl(req: any): string {
   const proto = (req.headers['x-forwarded-proto']?.toString().split(',')[0] || req.protocol || 'https').trim();
@@ -6412,17 +6430,22 @@ app.get('/api/announcements', async (req, res) => {
 });
 
 // ==========================================
-// BILLING — RAZORPAY SUBSCRIPTIONS
+// BILLING — CASHFREE PAYMENT GATEWAY
 //
-// The previous implementation created a ONE-TIME order while the pricing page
-// advertised monthly billing: a customer paid once and kept Pro forever.
+// Pro is sold as a 30-day pass: one Cashfree order, one payment, 30 days of
+// access added to whatever is left of the current period. There is no mandate
+// and no auto-renewal, so lapsing is the default and nothing has to be
+// cancelled at the provider.
 //
-// Two rules here matter more than the rest:
+// Three rules here matter more than the rest:
 //   1. The WEBHOOK is the source of truth, not the browser callback. A client
-//      can close the tab, lose connection, or replay a stale response; the
-//      webhook is signed by Razorpay and arrives regardless.
-//   2. Pro access is derived from `pro_until`, not a boolean. A boolean with
-//      no expiry cannot represent a cancelled or lapsed subscription.
+//      can close the tab or lose connection; the webhook is signed by Cashfree
+//      and arrives regardless.
+//   2. Nothing the browser sends is evidence of payment. /verify takes an
+//      order id and asks Cashfree whether it was paid — Cashfree's checkout
+//      hands the browser no signature, and inventing one would be theatre.
+//   3. Pro access is derived from `pro_until`, not a boolean. A boolean with
+//      no expiry cannot represent a lapsed plan.
 // ==========================================
 
 const PRO_PLAN_AMOUNT_PAISE = 49900; // ₹499/month
@@ -6441,36 +6464,111 @@ const PARTNER_PLATFORM_FLOOR_INR = 199;
 /**
  * Whether the shortcuts that hand out Pro without a real payment may run.
  *
- * These exist so the upgrade flow can be exercised before Razorpay keys are
+ * These exist so the upgrade flow can be exercised before Cashfree keys are
  * issued, but each of them is a one-POST "make me Pro" button for any logged-in
  * account, so they are off unless explicitly switched on, and can never be on
  * in production.
  */
 const allowTestBilling = () =>
   IS_DEV && process.env.ALLOW_TEST_BILLING === 'true';
-const RAZORPAY_API = 'https://api.razorpay.com/v1';
 
-const razorpayAuth = () => {
-  const keyId = process.env.RAZORPAY_KEY_ID?.trim();
-  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
-  if (!keyId || !keySecret) return null;
-  return { keyId, keySecret, header: 'Basic ' + Buffer.from(`${keyId}:${keySecret}`).toString('base64') };
+/**
+ * Which Cashfree environment the keys belong to.
+ *
+ * Cashfree issues a separate App ID / Secret pair per environment and the two
+ * are not interchangeable, so the base URL is derived from the same setting
+ * rather than configured twice. Anything other than an explicit "production"
+ * is treated as sandbox: a typo must not send a live charge.
+ */
+const cashfreeMode = (): 'sandbox' | 'production' =>
+  process.env.CASHFREE_ENV?.trim().toLowerCase() === 'production' ? 'production' : 'sandbox';
+
+const CASHFREE_BASE = {
+  sandbox: 'https://sandbox.cashfree.com/pg',
+  production: 'https://api.cashfree.com/pg',
+} as const;
+
+/**
+ * Cashfree pins behaviour to a dated API version sent on every request. It is
+ * an env var so the account can be moved to a newer one without a deploy, but
+ * the field names this file reads are the ones documented for this default.
+ */
+const CASHFREE_API_VERSION = process.env.CASHFREE_API_VERSION?.trim() || '2026-01-01';
+
+/**
+ * Cashfree requires customer_phone on every order and this product never asks
+ * for one. A single well-known placeholder keeps checkout working; a real
+ * number can be supplied later without touching this code.
+ */
+const CASHFREE_FALLBACK_PHONE = (process.env.CASHFREE_FALLBACK_PHONE?.trim() || '9999999999')
+  .replace(/\D/g, '')
+  .slice(-10);
+
+const cashfreeAuth = () => {
+  const appId = process.env.CASHFREE_APP_ID?.trim();
+  const secretKey = process.env.CASHFREE_SECRET_KEY?.trim();
+  if (!appId || !secretKey) return null;
+  const mode = cashfreeMode();
+  return { appId, secretKey, mode, baseUrl: CASHFREE_BASE[mode] };
 };
 
-const razorpayFetch = async (path: string, init: any = {}) => {
-  const auth = razorpayAuth();
-  if (!auth) throw new Error('RAZORPAY_NOT_CONFIGURED');
-  const res = await fetch(RAZORPAY_API + path, {
+/**
+ * The secret the webhook signature is checked against.
+ *
+ * Cashfree signs webhooks with the same secret key as the API, so that is the
+ * default; CASHFREE_WEBHOOK_SECRET exists only for an account where the two
+ * have been separated.
+ */
+const cashfreeWebhookSecret = () =>
+  process.env.CASHFREE_WEBHOOK_SECRET?.trim() || process.env.CASHFREE_SECRET_KEY?.trim() || '';
+
+const cashfreeFetch = async (path: string, init: any = {}) => {
+  const auth = cashfreeAuth();
+  if (!auth) throw new Error('CASHFREE_NOT_CONFIGURED');
+  const res = await fetch(auth.baseUrl + path, {
     ...init,
-    headers: { 'Content-Type': 'application/json', Authorization: auth.header, ...(init.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-version': CASHFREE_API_VERSION,
+      'x-client-id': auth.appId,
+      'x-client-secret': auth.secretKey,
+      ...(init.headers || {}),
+    },
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    console.error(`[razorpay] ${path} failed:`, body);
-    throw new Error(body?.error?.description || 'Razorpay request failed');
+    console.error(`[cashfree] ${path} failed (${res.status}):`, body);
+    throw new Error(body?.message || body?.error_description || 'Cashfree request failed');
   }
   return body;
 };
+
+/**
+ * Cashfree accepts order ids of 3–45 characters from [A-Za-z0-9_-], and the id
+ * is how /verify and the webhook find the order again, so it is generated here
+ * rather than left to Cashfree.
+ */
+const newCashfreeOrderId = (userId: string) =>
+  `fxj_${userId.replace(/[^A-Za-z0-9]/g, '').slice(0, 12)}_${Date.now().toString(36)}_${crypto
+    .randomBytes(3)
+    .toString('hex')}`.slice(0, 45);
+
+/**
+ * order_tags is the only thing that travels with a Cashfree order and comes
+ * back on both the order lookup and the webhook, so it carries everything the
+ * grant needs. Values must be strings.
+ */
+type CashfreeOrderTags = {
+  user_id?: string;
+  plan?: string;
+  period_days?: string;
+  coupon_code?: string;
+  partner_id?: string;
+  offer_price?: string;
+  mentor_commission?: string;
+};
+
+const readOrderTags = (raw: any): CashfreeOrderTags => (raw && typeof raw === 'object' ? raw : {});
 
 /** Grants or revokes Pro by writing an expiry, and mirrors it to the fast flag. */
 /**
@@ -6498,12 +6596,12 @@ const readProUntil = async (userId: string): Promise<number | null> => {
 /**
  * Claims a provider payment id, so one payment can be credited exactly once.
  *
- * /api/payments/verify checked the HMAC and then extended Pro by 30 days from
- * the current expiry. The signature is valid for as long as the order exists,
- * and nothing recorded that this payment had already been credited — so
- * replaying one successful verify call granted another 30 days each time. Pay
- * ₹499 once, resend the same request twenty-four times, hold Pro for two
- * years. The payments upsert deduped the row but ran after the grant.
+ * An earlier /api/payments/verify checked a signature and then extended Pro by
+ * 30 days from the current expiry, with nothing recording that the payment had
+ * already been credited — so replaying one successful confirmation granted
+ * another 30 days each time. Pay ₹499 once, resend the same request
+ * twenty-four times, hold Pro for two years. The payments upsert deduped the
+ * row but ran after the grant.
  *
  * The insert is the claim, not a check-then-act: payments.provider_payment_id
  * is UNIQUE, so two concurrent replays cannot both succeed. A duplicate-key
@@ -6526,7 +6624,7 @@ const claimPayment = async (opts: {
     const { error } = await supabase.from('payments').insert({
       id: `pay_${crypto.randomUUID()}`,
       user_id: userId,
-      provider: 'razorpay',
+      provider: 'cashfree',
       provider_payment_id: providerPaymentId,
       amount: amountRupees,
       currency: 'INR',
@@ -6559,7 +6657,7 @@ const claimPayment = async (opts: {
       id: `pay_${crypto.randomUUID()}`,
       userId,
       userEmail: userEmail || null,
-      provider: 'razorpay',
+      provider: 'cashfree',
       providerPaymentId,
       amount: amountRupees,
       currency: 'INR',
@@ -6615,15 +6713,19 @@ const applyProState = async (userId: string, proUntil: Date | null) => {
 };
 
 app.get('/api/payments/config', (req, res) => {
-  const auth = razorpayAuth();
+  const auth = cashfreeAuth();
   const configured = !!auth;
   res.json({
     configured,
+    provider: 'cashfree',
+    // Which Cashfree environment the browser SDK must be initialised with.
+    // Cashfree({ mode }) has to match the keys the session id was minted with
+    // or the checkout refuses to open.
+    mode: auth?.mode || 'sandbox',
     // Only true on a dev box with ALLOW_TEST_BILLING=true. The client uses it
     // to decide whether to show the test-tier switch at all.
     testBilling: allowTestBilling(),
     sandboxMode: !configured && allowTestBilling(),
-    keyId: auth?.keyId || 'rzp_test_sandbox_mode',
     amount: PRO_PLAN_AMOUNT_PAISE,
     amountRupees: 499,
     currency: 'INR',
@@ -6631,7 +6733,7 @@ app.get('/api/payments/config', (req, res) => {
   });
 });
 
-/** Creates a Razorpay Order for one-time Pro payment (30 days access). */
+/** Creates a Cashfree Order for one-time Pro payment (30 days access). */
 app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res) => {
   const currentUser = (req as any).currentUser;
   if (!currentUser) return res.status(401).json({ error: 'Not authenticated' });
@@ -6652,10 +6754,10 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
 
   const mentorCommission = partner ? Math.max(0, appliedOfferPrice - PARTNER_PLATFORM_FLOOR_INR) : 0;
 
-  const auth = razorpayAuth();
+  const auth = cashfreeAuth();
   if (!auth) {
     if (!allowTestBilling()) {
-      console.error('[payments/order] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set.');
+      console.error('[payments/order] CASHFREE_APP_ID / CASHFREE_SECRET_KEY are not set.');
       return res.status(503).json({
         error: 'Payments are not configured yet. Please try again shortly.',
       });
@@ -6663,8 +6765,10 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
     // Sandbox fallback only with ALLOW_TEST_BILLING=true
     return res.json({
       sandboxMode: true,
-      keyId: 'rzp_test_sandbox',
+      provider: 'cashfree',
+      mode: 'sandbox',
       orderId: `order_test_${currentUser.id.slice(-6)}_${crypto.randomUUID()}`,
+      paymentSessionId: null,
       amount: orderAmountPaise,
       amountRupees: appliedOfferPrice,
       originalPrice: 499,
@@ -6672,119 +6776,94 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
       discountApplied: !!partner && appliedOfferPrice < 499,
       couponCode: partner?.code || null,
       currency: 'INR',
-      message: partner ? `Mentor offer applied: ₹${appliedOfferPrice} (Regular ₹499)` : 'Razorpay running in test/sandbox mode.',
+      message: partner ? `Mentor offer applied: ₹${appliedOfferPrice} (Regular ₹499)` : 'Cashfree running in test/sandbox mode.',
     });
   }
 
   try {
-    const order = await razorpayFetch('/orders', {
+    const origin = publicOrigin(req);
+    const orderId = newCashfreeOrderId(currentUser.id);
+    const tags: CashfreeOrderTags = {
+      user_id: currentUser.id,
+      plan: 'pro',
+      period_days: '30',
+      coupon_code: partner?.code || '',
+      partner_id: partner?.userId || '',
+      offer_price: String(appliedOfferPrice),
+      mentor_commission: String(mentorCommission),
+    };
+
+    // Cashfree takes the amount in rupees, not paise — passing 49900 here
+    // would charge ₹49,900.
+    const order = await cashfreeFetch('/orders', {
       method: 'POST',
       body: JSON.stringify({
-        amount: orderAmountPaise,
-        currency: 'INR',
-        receipt: `rcpt_${currentUser.id.slice(0, 8)}_${Date.now().toString(36)}`,
-        notes: {
-          userId: currentUser.id,
-          email: currentUser.email || '',
-          plan: 'pro',
-          periodDays: '30',
-          couponCode: partner?.code || '',
-          partnerId: partner?.userId || '',
-          offerPrice: String(appliedOfferPrice),
-          mentorCommission: String(mentorCommission),
+        order_id: orderId,
+        order_amount: orderAmountPaise / 100,
+        order_currency: 'INR',
+        customer_details: {
+          // 3–50 chars, so the raw uuid is stripped of its dashes.
+          customer_id: `u_${currentUser.id.replace(/[^A-Za-z0-9]/g, '')}`.slice(0, 50),
+          customer_email: currentUser.email || undefined,
+          customer_name: currentUser.name || undefined,
+          customer_phone: CASHFREE_FALLBACK_PHONE,
         },
+        order_meta: {
+          // Where the customer lands if Cashfree has to leave the modal (UPI
+          // apps, bank pages). The query placeholder is filled in by Cashfree.
+          return_url: `${origin}/?cf_order_id={order_id}`,
+          notify_url: `${origin}/api/payments/webhook`,
+        },
+        order_note: 'FX Journal Pro — 30 days',
+        order_tags: tags,
       }),
     });
 
+    if (!order?.payment_session_id) {
+      console.error('[payments/order] Cashfree returned no payment_session_id:', order);
+      return res.status(502).json({ error: 'Could not initiate the payment. Please try again.' });
+    }
+
     res.json({
-      orderId: order.id,
-      amount: order.amount,
+      provider: 'cashfree',
+      mode: auth.mode,
+      orderId: order.order_id || orderId,
+      paymentSessionId: order.payment_session_id,
+      amount: orderAmountPaise,
       amountRupees: appliedOfferPrice,
       originalPrice: 499,
       mentorCommission,
       discountApplied: !!partner && appliedOfferPrice < 499,
       couponCode: partner?.code || null,
-      currency: order.currency,
-      keyId: auth.keyId,
+      currency: order.order_currency || 'INR',
     });
   } catch (err: any) {
     console.error('[payments/order]', err?.message || err);
-    res.status(502).json({ error: 'Could not initiate Razorpay order. Please try again.' });
+    res.status(502).json({ error: 'Could not initiate the payment. Please try again.' });
   }
 });
 
-/** Starts a monthly subscription and hands the id to Razorpay Checkout. */
+/**
+ * Recurring billing, which this product does not have.
+ *
+ * Checkout has always created a one-time order for 30 days of Pro — the
+ * Razorpay Subscriptions path this route used to drive was never reachable
+ * from the UI, and Cashfree's recurring product (Subscriptions) is a separate
+ * API with its own onboarding. Rather than leave a route that looks like it
+ * starts a subscription and does not, it says so.
+ *
+ * Existing subscription rows are still read by /api/payments/subscription and
+ * honoured by the webhook, so nobody who was on the old path loses access.
+ */
 app.post('/api/payments/subscribe', async (req, res) => {
   const currentUser = (req as any).currentUser;
   if (!currentUser) return res.status(401).json({ error: 'Not authenticated' });
 
-  const planId = process.env.RAZORPAY_PLAN_ID?.trim();
-  const auth = razorpayAuth();
-  if (!auth || !planId) {
-    if (!allowTestBilling()) {
-      // The customer sees the same sentence either way; the log says which of
-      // the two it was, because "not configured" covered both a missing key
-      // pair and a missing plan id and they need different fixes.
-      console.error(auth
-        ? '[payments/subscribe] RAZORPAY_PLAN_ID is not set — run `npm run razorpay:check`.'
-        : '[payments/subscribe] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set.');
-      return res.status(503).json({
-        error: 'Payments are not configured yet. Please try again shortly.',
-      });
-    }
-    // Sandbox only, and only with ALLOW_TEST_BILLING=true.
-    return res.json({
-      sandboxMode: true,
-      keyId: 'rzp_test_sandbox',
-      subscriptionId: `sub_test_${currentUser.id.slice(-6)}_${Date.now()}`,
-      message: 'Razorpay running in test/sandbox mode.',
-    });
-  }
-
-  try {
-    // Reuse an in-flight subscription instead of creating a duplicate when
-    // someone clicks upgrade twice.
-    if (useSupabase) {
-      const { data: existing } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .in('status', ['created', 'authenticated', 'active', 'pending'])
-        .maybeSingle();
-      if (existing?.provider_subscription_id && existing.status !== 'active') {
-        return res.json({ subscriptionId: existing.provider_subscription_id, keyId: auth.keyId, reused: true });
-      }
-      if (existing?.status === 'active') {
-        return res.status(409).json({ error: 'You already have an active Pro subscription.' });
-      }
-    }
-
-    const subscription = await razorpayFetch('/subscriptions', {
-      method: 'POST',
-      body: JSON.stringify({
-        plan_id: planId,
-        customer_notify: 1,
-        total_count: 120, // ten years of monthly cycles; cancellation ends it
-        notes: { userId: currentUser.id, email: currentUser.email },
-      }),
-    });
-
-    if (useSupabase) {
-      await supabase.from('subscriptions').insert({
-        id: `sub_${crypto.randomUUID()}`,
-        user_id: currentUser.id,
-        provider: 'razorpay',
-        provider_subscription_id: subscription.id,
-        plan: 'pro',
-        status: subscription.status || 'created',
-      });
-    }
-
-    res.json({ subscriptionId: subscription.id, keyId: auth.keyId });
-  } catch (err: any) {
-    console.error('[payments/subscribe]', err?.message || err);
-    res.status(502).json({ error: 'Could not start the subscription. Please try again.' });
-  }
+  console.warn('[payments/subscribe] called, but Pro is sold as a 30-day order — use /api/payments/order.');
+  return res.status(503).json({
+    error: 'Monthly auto-billing is not available yet. Pro is sold as a 30-day pass.',
+    code: 'SUBSCRIPTIONS_NOT_ENABLED',
+  });
 });
 
 /** Test Mode Toggle: Quickly switch between Pro and Free during evaluation */
@@ -6817,28 +6896,97 @@ app.post('/api/payments/toggle-test-tier', async (req, res) => {
 });
 
 /**
- * Razorpay webhook. Verified against req.rawBody — the exact bytes Razorpay
- * sent — because the signature is computed over those bytes, and re-serialising
- * the parsed JSON would change them.
+ * Extends Pro for one captured payment, exactly once.
+ *
+ * Both the webhook and /api/payments/verify can see the same successful
+ * payment — whichever arrives first grants it — so the claim on the provider
+ * payment id lives here rather than in either caller. A payment that has
+ * already been credited returns `false` and nothing is extended, which is what
+ * stops one ₹499 charge being replayed into years of Pro.
+ */
+const grantProForPayment = async (opts: {
+  userId: string;
+  cfPaymentId: string;
+  amountRupees: number;
+  userEmail?: string;
+  periodDays?: number;
+}): Promise<{ granted: boolean; proUntil: Date | null }> => {
+  const { userId, cfPaymentId, amountRupees, userEmail, periodDays = 30 } = opts;
+
+  const claimed = await claimPayment({
+    providerPaymentId: cfPaymentId,
+    userId,
+    userEmail,
+    amountRupees,
+  });
+  if (!claimed) return { granted: false, proUntil: null };
+
+  // Topping up a plan that is still running adds to the existing expiry; one
+  // that has lapsed starts from now.
+  const existingUntil = await readProUntil(userId);
+  const base = existingUntil && existingUntil > Date.now() ? existingUntil : Date.now();
+  const proUntil = new Date(base + periodDays * 86400000);
+  await applyProState(userId, proUntil);
+  return { granted: true, proUntil };
+};
+
+/**
+ * Asks Cashfree whether an order was actually paid.
+ *
+ * This is the whole verification. Razorpay handed the browser a signature that
+ * the server checked offline; Cashfree's browser callback carries no proof at
+ * all, so the only trustworthy answer comes from Cashfree's own API. That is
+ * also stricter: a customer cannot replay, forge or alter anything here,
+ * because nothing they send is treated as evidence beyond the order id — and
+ * the order id is checked to belong to them before anything is granted.
+ */
+const fetchCashfreeOrderPayment = async (orderId: string) => {
+  const order = await cashfreeFetch(`/orders/${encodeURIComponent(orderId)}`);
+  const payments = await cashfreeFetch(`/orders/${encodeURIComponent(orderId)}/payments`);
+  const list: any[] = Array.isArray(payments) ? payments : [];
+  const paid = list.find((p) => String(p?.payment_status).toUpperCase() === 'SUCCESS') || null;
+  return { order, paid };
+};
+
+/**
+ * Cashfree webhook.
+ *
+ * Verified against req.rawBody — the exact bytes Cashfree sent — because the
+ * signature is computed over those bytes, and re-serialising the parsed JSON
+ * would change them. Cashfree signs `timestamp + rawBody` with the merchant
+ * secret and sends the result base64-encoded, so both the header timestamp and
+ * the raw body are required to reproduce it.
+ *
+ * The webhook is the source of truth, not the browser: it arrives whether or
+ * not the customer's tab survives checkout. Without it, a customer whose phone
+ * loses signal on the UPI screen is charged and left on Free.
  */
 app.post('/api/payments/webhook', async (req: any, res) => {
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
+  const secret = cashfreeWebhookSecret();
   if (!secret) {
-    console.error('[webhook] RAZORPAY_WEBHOOK_SECRET is not set — rejecting.');
+    console.error('[webhook] CASHFREE_SECRET_KEY / CASHFREE_WEBHOOK_SECRET is not set — rejecting.');
     return res.status(503).end();
   }
 
   // The global express.json() middleware already consumed the stream, but its
   // verify hook stashed the exact bytes on req.rawBody. Re-serialising the
   // parsed object would reorder keys and the signature would never match.
-  const signature = req.headers['x-razorpay-signature'];
+  const signature = req.headers['x-webhook-signature'];
+  const timestamp = req.headers['x-webhook-timestamp'];
   const raw: string = typeof req.rawBody === 'string' ? req.rawBody : '';
   if (!raw) {
     console.error('[webhook] raw body unavailable — cannot verify signature.');
     return res.status(400).end();
   }
-  const expected = crypto.createHmac('sha256', secret).update(raw, 'utf8').digest('hex');
-  if (!signature || !safeTokenEqual(expected, String(signature))) {
+  if (!signature || !timestamp) {
+    console.warn('[webhook] missing x-webhook-signature or x-webhook-timestamp — ignoring.');
+    return res.status(400).end();
+  }
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(`${timestamp}${raw}`, 'utf8')
+    .digest('base64');
+  if (!safeTokenEqual(expected, String(signature))) {
     console.warn('[webhook] signature mismatch — ignoring.');
     return res.status(400).end();
   }
@@ -6850,158 +6998,77 @@ app.post('/api/payments/webhook', async (req: any, res) => {
     return res.status(400).end();
   }
 
-  // Acknowledge fast. Razorpay retries on non-2xx, and a slow handler causes
+  // Acknowledge fast. Cashfree retries on non-2xx, and a slow handler causes
   // duplicate deliveries.
   res.status(200).json({ received: true });
 
   try {
-    const type = event.event as string;
-    const sub = event.payload?.subscription?.entity;
-    const payment = event.payload?.payment?.entity;
-    const providerSubId = sub?.id || payment?.subscription_id;
-
-    // ── One-time order payments ──────────────────────────────────────────
-    //
-    // Checkout in this product creates an order, not a subscription, so a
-    // successful payment arrives here as payment.captured with no
-    // subscription_id — and the guard below used to return immediately on
-    // that, which meant the webhook did nothing for the only kind of payment
-    // the app actually takes.
-    //
-    // The happy path does not need this: the browser posts to
-    // /api/payments/verify and Pro is granted from the HMAC. This covers the
-    // case where the money is taken and the browser never comes back — the
-    // tab is closed on the Razorpay screen, the phone loses signal, the app
-    // is killed. Without it that customer is charged and left on Free, with
-    // nothing to recover it but a support ticket.
-    if (!providerSubId) {
-      if (type !== 'payment.captured' && type !== 'order.paid') return;
-      const payUserId = payment?.notes?.userId || event.payload?.order?.entity?.notes?.userId;
-      const payId = payment?.id;
-      if (!payUserId || !payId) {
-        console.warn('[webhook] one-time payment with no userId in notes:', payId);
-        return;
-      }
-
-      // /verify records the same provider_payment_id, so if the browser got
-      // back first this is a duplicate and must not extend Pro a second time.
-      if (useSupabase) {
-        const { data: seen } = await supabase
-          .from('payments').select('id').eq('provider_payment_id', payId).maybeSingle();
-        if (seen) {
-          console.log('[webhook] payment already recorded, skipping:', payId);
-          return;
-        }
-      } else {
-        const local = loadDatabaseFromFile();
-        if ((local.payments || []).some((x: any) => x.providerPaymentId === payId)) {
-          console.log('[webhook] payment already recorded, skipping:', payId);
-          return;
-        }
-      }
-
-      const existingUntil = await readProUntil(payUserId);
-      const base = existingUntil && existingUntil > Date.now() ? existingUntil : Date.now();
-      const until = new Date(base + 30 * 86400000);
-      await applyProState(payUserId, until);
-
-      if (useSupabase) {
-        await supabase.from('payments').upsert({
-          id: `pay_${crypto.randomUUID()}`,
-          user_id: payUserId,
-          provider: 'razorpay',
-          provider_payment_id: payId,
-          amount: (payment.amount || PRO_PLAN_AMOUNT_PAISE) / 100,
-          currency: payment.currency || 'INR',
-          plan: 'pro',
-          status: payment.status || 'captured',
-          paid_at: new Date().toISOString(),
-        }, { onConflict: 'provider_payment_id' });
-      }
-      console.log(`[webhook] ${type} — Pro until ${until.toISOString()} for ${payUserId} (order path)`);
+    const type = String(event?.type || '');
+    if (type !== 'PAYMENT_SUCCESS_WEBHOOK') {
+      // Failed and dropped payments change nothing: the customer stays on the
+      // plan they already had, and the log is enough to explain a support
+      // question later.
+      if (type) console.log(`[webhook] ${type} — no change`);
       return;
     }
 
-    if (!useSupabase) return;
+    const order = event?.data?.order || {};
+    const payment = event?.data?.payment || {};
+    const tags = readOrderTags(order.order_tags);
+    const userId = tags.user_id;
+    const cfPaymentId = payment.cf_payment_id ? String(payment.cf_payment_id) : '';
 
-    const { data: row } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('provider_subscription_id', providerSubId)
-      .maybeSingle();
-    if (!row) {
-      console.warn('[webhook] no local subscription for', providerSubId);
+    if (!userId || !cfPaymentId) {
+      console.warn('[webhook] success event without user_id tag or cf_payment_id:', order.order_id);
+      return;
+    }
+    if (String(payment.payment_status).toUpperCase() !== 'SUCCESS') {
+      console.warn('[webhook] PAYMENT_SUCCESS_WEBHOOK whose payment is not SUCCESS:', payment.payment_status);
       return;
     }
 
-    const periodEnd = sub?.current_end ? new Date(sub.current_end * 1000) : null;
+    const amountRupees = Number(payment.payment_amount) || Number(order.order_amount) || PRO_PLAN_AMOUNT_PAISE / 100;
+    const periodDays = Number(tags.period_days) || 30;
 
-    switch (type) {
-      case 'subscription.activated':
-      case 'subscription.charged': {
-        // Razorpay sends current_end in seconds; fall back to +1 month so a
-        // paid customer is never left without access because a field moved.
-        const until = periodEnd || new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
-        await supabase.from('subscriptions').update({
-          status: 'active',
-          current_period_end: until.toISOString(),
-          updated_at: new Date().toISOString(),
-        }).eq('id', row.id);
-        await applyProState(row.user_id, until);
+    const { granted, proUntil } = await grantProForPayment({
+      userId,
+      cfPaymentId,
+      amountRupees,
+      userEmail: event?.data?.customer_details?.customer_email,
+      periodDays,
+    });
 
-        if (payment?.id) {
-          // Keyed on the provider payment id, so a retried webhook cannot
-          // record the same charge twice.
-          await supabase.from('payments').upsert({
-            id: `pay_${crypto.randomUUID()}`,
-            user_id: row.user_id,
-            subscription_id: row.id,
-            provider: 'razorpay',
-            provider_payment_id: payment.id,
-            amount: (payment.amount || PRO_PLAN_AMOUNT_PAISE) / 100,
-            currency: payment.currency || 'INR',
-            plan: 'pro',
-            status: payment.status || 'captured',
-            paid_at: new Date().toISOString(),
-          }, { onConflict: 'provider_payment_id' });
-        }
-        console.log(`[webhook] ${type} — Pro until ${until.toISOString()} for ${row.user_id}`);
-        break;
-      }
+    if (!granted) {
+      console.log('[webhook] payment already credited, skipping:', cfPaymentId);
+      return;
+    }
+    console.log(`[webhook] ${type} — Pro until ${proUntil?.toISOString()} for ${userId}`);
 
-      case 'subscription.cancelled':
-      case 'subscription.completed':
-      case 'subscription.expired': {
-        await supabase.from('subscriptions').update({
-          status: type.split('.')[1],
-          updated_at: new Date().toISOString(),
-        }).eq('id', row.id);
-        // Access runs to the end of the period already paid for.
-        const until = row.current_period_end ? new Date(row.current_period_end) : null;
-        await applyProState(row.user_id, until);
-        break;
-      }
-
-      case 'subscription.halted':
-      case 'subscription.pending': {
-        // Payment is failing. Keep access until the paid period ends; Razorpay
-        // retries, and cutting a customer off mid-cycle is wrong.
-        await supabase.from('subscriptions').update({
-          status: type.split('.')[1],
-          updated_at: new Date().toISOString(),
-        }).eq('id', row.id);
-        break;
-      }
-
-      default:
-        break;
+    // Keep any legacy subscription row in step, so the billing panel of a
+    // customer who came through the old Razorpay subscription path does not
+    // contradict their new expiry.
+    if (useSupabase && proUntil) {
+      await supabase.from('subscriptions').update({
+        status: 'active',
+        current_period_end: proUntil.toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('user_id', userId).in('status', ['created', 'authenticated', 'active', 'pending', 'halted']);
     }
   } catch (err: any) {
     console.error('[webhook] handler error:', err?.message || err);
   }
 });
 
-/** Called by the browser after checkout closes — a hint, never the authority. */
+/**
+ * Called by the browser after checkout closes.
+ *
+ * The browser sends only the order id. Nothing it says is treated as evidence:
+ * the order is looked up at Cashfree, must belong to the signed-in user, and
+ * must carry a payment Cashfree itself reports as SUCCESS. This exists so a
+ * customer who completes payment does not have to wait for the webhook to see
+ * Pro unlock — the webhook remains the authority, and whichever of the two
+ * arrives first is the one that credits the payment.
+ */
 app.post('/api/payments/verify', async (req, res) => {
   const currentUser = (req as any).currentUser;
   if (!currentUser) return res.status(401).json({ error: 'Not authenticated' });
@@ -7027,98 +7094,52 @@ app.post('/api/payments/verify', async (req, res) => {
     });
   }
 
-  const {
-    razorpay_order_id,
-    razorpay_subscription_id,
-    razorpay_payment_id,
-    razorpay_signature,
-  } = req.body || {};
+  const orderId = String(req.body?.orderId || req.body?.order_id || '').trim();
+  if (!cashfreeAuth()) return res.status(503).json({ error: 'Payments are not configured yet.' });
+  if (!orderId) return res.status(400).json({ error: 'Incomplete payment confirmation.' });
 
-  const auth = razorpayAuth();
-  if (!auth) return res.status(503).json({ error: 'Payments are not configured yet.' });
-  if (!razorpay_payment_id || !razorpay_signature || (!razorpay_order_id && !razorpay_subscription_id)) {
-    return res.status(400).json({ error: 'Incomplete payment confirmation.' });
+  let order: any;
+  let paid: any;
+  try {
+    ({ order, paid } = await fetchCashfreeOrderPayment(orderId));
+  } catch (err: any) {
+    console.error('[payments/verify] Cashfree lookup failed:', err?.message || err);
+    return res.status(502).json({ error: 'Could not confirm the payment yet. It will be applied automatically.' });
   }
 
-  // 1. One-Time Order Verification (razorpay_order_id | razorpay_payment_id)
-  if (razorpay_order_id) {
-    const expected = crypto
-      .createHmac('sha256', auth.keySecret)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      .digest('hex');
-
-    if (!safeTokenEqual(expected, String(razorpay_signature))) {
-      console.warn(`[payments/verify] order signature mismatch for user ${currentUser.id}`);
-      return res.status(400).json({ error: 'Payment verification failed.' });
-    }
-
-    // Claim the payment BEFORE granting anything: a valid signature stays
-    // valid, so without this the same confirmation could be replayed for
-    // another 30 days each time.
-    const claimed = await claimPayment({
-      providerPaymentId: String(razorpay_payment_id),
-      userId: currentUser.id,
-      userEmail: currentUser.email,
-      amountRupees: PRO_PLAN_AMOUNT_PAISE / 100,
-    });
-    if (!claimed) {
-      return res.json({
-        success: true,
-        active: !!currentUser.isPro,
-        proUntil: currentUser.proUntil || null,
-        alreadyApplied: true,
-        message: 'This payment was already applied to your account.',
-      });
-    }
-
-    // Pro is granted for 30 days. If currently active, extend from existing expiry date.
-    const currentProUntil = currentUser.proUntil ? new Date(currentUser.proUntil).getTime() : 0;
-    const baseTime = currentProUntil > Date.now() ? currentProUntil : Date.now();
-    const proUntil = new Date(baseTime + 30 * 86400000);
-
-    await applyProState(currentUser.id, proUntil);
-
-    // The payment row was written by claimPayment; only the cached user needs
-    // updating here. Pushing it again produced a duplicate line in the
-    // customer's payment history on every replay.
-    const db = (req as any).userDb;
-    if (db && Array.isArray(db.users)) {
-      const u = db.users.find((x: any) => x.id === currentUser.id);
-      if (u) {
-        u.isPro = true;
-        u.proUntil = proUntil.toISOString();
-        await saveDatabase(db);
-      }
-    }
-
-    return res.json({
-      success: true,
-      active: true,
-      proUntil: proUntil.toISOString(),
-      message: 'Payment verified successfully! Welcome to Pro (30 days access).',
-    });
-  }
-
-  // 2. Subscription Verification (razorpay_payment_id | razorpay_subscription_id)
-  const expected = crypto
-    .createHmac('sha256', auth.keySecret)
-    .update(`${razorpay_payment_id}|${razorpay_subscription_id}`)
-    .digest('hex');
-
-  if (!safeTokenEqual(expected, String(razorpay_signature))) {
-    console.warn(`[payments/verify] signature mismatch for user ${currentUser.id}`);
+  // An order id belonging to somebody else must never credit this account.
+  // The tag is written by /api/payments/order and cannot be set by the client.
+  const tags = readOrderTags(order?.order_tags);
+  if (tags.user_id !== currentUser.id) {
+    console.warn(`[payments/verify] order ${orderId} does not belong to user ${currentUser.id}`);
     return res.status(400).json({ error: 'Payment verification failed.' });
   }
 
-  // Same replay guard as the one-time branch: claim the payment id first, and
-  // grant nothing if it has already been credited.
-  const subClaimed = await claimPayment({
-    providerPaymentId: String(razorpay_payment_id),
+  if (!paid) {
+    // Not an error: the customer may have closed the modal, or the bank may
+    // still be settling an UPI collect request. The webhook will pick it up.
+    return res.status(202).json({
+      success: false,
+      active: !!currentUser.isPro,
+      pending: true,
+      orderStatus: order?.order_status || 'ACTIVE',
+      message: 'Payment not completed yet. If you have paid, Pro unlocks within a minute.',
+    });
+  }
+
+  const amountRupees = Number(paid.payment_amount) || Number(order?.order_amount) || PRO_PLAN_AMOUNT_PAISE / 100;
+  const periodDays = Number(tags.period_days) || 30;
+
+  const { granted, proUntil } = await grantProForPayment({
     userId: currentUser.id,
+    cfPaymentId: String(paid.cf_payment_id),
+    amountRupees,
     userEmail: currentUser.email,
-    amountRupees: PRO_PLAN_AMOUNT_PAISE / 100,
+    periodDays,
   });
-  if (!subClaimed) {
+
+  if (!granted) {
+    // The webhook, or an earlier call with the same order, already credited it.
     return res.json({
       success: true,
       active: !!currentUser.isPro,
@@ -7128,34 +7149,23 @@ app.post('/api/payments/verify', async (req, res) => {
     });
   }
 
-  // Immediate Pro activation upon verified signature
-  const proUntil = new Date(Date.now() + 31 * 86400000);
-  await applyProState(currentUser.id, proUntil);
-
-  let active = true;
-  if (useSupabase) {
-    await supabase.from('subscriptions').update({
-      status: 'active',
-      current_period_end: proUntil.toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq('provider_subscription_id', razorpay_subscription_id);
-  }
-
+  // The payment row was written by claimPayment; only the cached user needs
+  // updating here.
   const db = (req as any).userDb;
   if (db && Array.isArray(db.users)) {
     const u = db.users.find((x: any) => x.id === currentUser.id);
     if (u) {
       u.isPro = true;
-      u.proUntil = proUntil.toISOString();
+      u.proUntil = proUntil!.toISOString();
       await saveDatabase(db);
     }
   }
 
   res.json({
     success: true,
-    active,
-    proUntil: proUntil.toISOString(),
-    message: 'Payment received. Welcome to Pro!',
+    active: true,
+    proUntil: proUntil!.toISOString(),
+    message: `Payment verified successfully! Welcome to Pro (${periodDays} days access).`,
   });
 });
 
@@ -7175,13 +7185,14 @@ app.post('/api/payments/cancel', async (req, res) => {
   }
 
   try {
-    // cancel_at_cycle_end: the customer keeps what they paid for.
-    await razorpayFetch(`/subscriptions/${row.provider_subscription_id}/cancel`, {
-      method: 'POST',
-      body: JSON.stringify({ cancel_at_cycle_end: 1 }),
-    });
+    // There is nothing to cancel at the provider: Pro is a 30-day order, so
+    // not renewing IS the cancellation and no mandate exists to revoke. Rows
+    // reaching here are from the retired Razorpay subscription path, whose
+    // mandates were cancelled with that account. Marking the row keeps the
+    // billing panel truthful, and access runs to the end of the paid period.
     await supabase.from('subscriptions').update({
       cancel_at_period_end: true,
+      status: 'cancelled',
       updated_at: new Date().toISOString(),
     }).eq('id', row.id);
 
@@ -9454,7 +9465,7 @@ app.delete('/api/admin/users/:id/partner', async (req, res) => {
  * Referral income is derived, not stored: it is the sum of every captured
  * payment from a referred user, less PARTNER_PLATFORM_FLOOR_INR. So there is
  * no column to write when a partner is owed something the payment history
- * cannot show — a bonus, a correction, or a referral settled outside Razorpay.
+ * cannot show — a bonus, a correction, or a referral settled outside the gateway.
  * Without this the only way to move the number was to insert a customer row
  * and a captured payment row that never happened, which also inflates platform
  * revenue and is indistinguishable from a real sale afterwards.
@@ -9992,7 +10003,7 @@ app.post('/api/admin/payouts/:id/process', async (req, res) => {
 // ── Admin: credit or correct a partner's balance by hand ──────────────────
 // Referral income is derived from captured payments, so a partner owed
 // something the payment history cannot show — a bonus, a correction, a
-// referral settled outside Razorpay — had no way to be paid except by
+// referral settled outside the gateway — had no way to be paid except by
 // inventing a customer and a payment. This writes a signed, reasoned entry
 // instead, which the payout balance picks up and the audit log records.
 //

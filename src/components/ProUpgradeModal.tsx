@@ -63,6 +63,35 @@ const PRO_BENEFITS = [
 /** Shown as chips so the long list of methods stops crowding a table row. */
 const PAY_METHODS = ['UPI', 'GPay', 'PhonePe', 'Paytm', 'Cards', 'NetBanking'];
 
+const CASHFREE_SDK_URL = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+
+/**
+ * Makes sure the Cashfree checkout SDK is on the page.
+ *
+ * index.html loads it already, so this normally resolves immediately. It
+ * matters when that tag was blocked or is still in flight: without it the
+ * first click on Pay would fail on a browser that was merely slow, and the
+ * customer would be told the SDK is broken.
+ */
+const loadCashfreeSdk = (): Promise<boolean> =>
+  new Promise((resolve) => {
+    if (typeof (window as any).Cashfree === 'function') return resolve(true);
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${CASHFREE_SDK_URL}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true));
+      existing.addEventListener('error', () => resolve(false));
+      // In case it finished loading between the two checks above.
+      if (typeof (window as any).Cashfree === 'function') resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = CASHFREE_SDK_URL;
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+
 export default function ProUpgradeModal({
   isOpen,
   onClose,
@@ -73,19 +102,19 @@ export default function ProUpgradeModal({
   const [activeTab, setActiveTab] = useState<'gateway' | 'test'>('gateway');
   const [loading, setLoading] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [config, setConfig] = useState<{
     configured: boolean;
     testBilling: boolean;
     sandboxMode: boolean;
-    keyId: string;
+    mode: 'sandbox' | 'production';
     amountRupees: number;
     merchantName: string;
   }>({
     configured: false,
     testBilling: false,
     sandboxMode: false,
-    keyId: 'rzp_test_sandbox_mode',
+    mode: 'sandbox',
     amountRupees: 499,
     merchantName: 'FX Journal Pro'
   });
@@ -236,84 +265,55 @@ export default function ProUpgradeModal({
         }
       }
 
-      if (typeof (window as any).Razorpay === 'undefined') {
-        await new Promise<boolean>((resolve) => {
-          const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
-          if (existing) {
-            existing.addEventListener('load', () => resolve(true));
-            existing.addEventListener('error', () => resolve(false));
-            // In case it finished loading between checks
-            if ((window as any).Razorpay) return resolve(true);
-            return;
-          }
-          const script = document.createElement('script');
-          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-          script.async = true;
-          script.onload = () => resolve(true);
-          script.onerror = () => resolve(false);
-          document.body.appendChild(script);
-        });
+      if (!data.paymentSessionId) {
+        throw new Error('Payments are not configured yet. Please try again shortly.');
       }
 
-      if (typeof (window as any).Razorpay === 'undefined') {
-        throw new Error('Razorpay SDK failed to load. Please check your internet connection and try again.');
+      await loadCashfreeSdk();
+      const cashfreeFactory = (window as any).Cashfree;
+      if (typeof cashfreeFactory !== 'function') {
+        throw new Error('Payment SDK failed to load. Please check your internet connection and try again.');
       }
 
-      const rzp = new (window as any).Razorpay({
-        key: data.keyId,
-        amount: data.amount,
-        currency: data.currency || 'INR',
-        order_id: data.orderId,
-        name: 'FX Journal Pro',
-        description: appliedCoupon ? `Pro Access (30 Days) — ₹${appliedCoupon.offerPrice} (Mentor Offer Applied)` : `Pro Access (30 Days) — ₹${amountRupees}`,
-        theme: {
-          color: '#8b5cf6',
-          backdrop_color: '#07080c',
-        },
-        config: {
-          display: {
-            blocks: {
-              upi: {
-                name: 'Pay using UPI / QR',
-                instruments: [
-                  { method: 'upi' }
-                ]
-              }
-            },
-            sequence: ['block.upi', 'block.default'],
-            preferences: {
-              show_default_blocks: true
-            }
-          }
-        },
-        handler: async (response: any) => {
-          setLoading(true);
-          try {
-            const verify = await authFetch('/api/payments/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(response),
-            });
-            const result = await verify.json().catch(() => ({}));
-            if (verify.ok && result?.success) {
-              setStatusMessage({ type: 'success', text: result?.message || 'Payment confirmed! Welcome to Pro.' });
-              await onSuccess();
-              setTimeout(() => onClose(), 1500);
-            } else {
-              setStatusMessage({ type: 'error', text: result?.error || 'Payment verification failed.' });
-            }
-          } catch (err: any) {
-            setStatusMessage({ type: 'error', text: err?.message || 'Verification request failed.' });
-          } finally {
-            setLoading(false);
-          }
-        },
-        modal: {
-          backdropclose: true,
-          ondismiss: () => setLoading(false),
-        },
+      // The SDK mode has to match the environment the session id was minted
+      // with, or the checkout refuses to open.
+      const cashfree = cashfreeFactory({ mode: data.mode === 'production' ? 'production' : 'sandbox' });
+
+      const result = await cashfree.checkout({
+        paymentSessionId: data.paymentSessionId,
+        redirectTarget: '_modal',
       });
-      rzp.open();
+
+      // `error` is also how Cashfree reports the customer simply closing the
+      // modal, so it is not surfaced as a failure unless it carries a message.
+      if (result?.error && !result?.paymentDetails) {
+        setLoading(false);
+        if (result.error?.message) {
+          setStatusMessage({ type: 'error', text: result.error.message });
+        }
+        return;
+      }
+
+      // paymentDetails comes back whatever the outcome was, so the server is
+      // the one that decides whether money actually arrived.
+      setLoading(true);
+      const verify = await authFetch('/api/payments/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: data.orderId }),
+      });
+      const verified = await verify.json().catch(() => ({}));
+      if (verify.ok && verified?.success) {
+        setStatusMessage({ type: 'success', text: verified?.message || 'Payment confirmed! Welcome to Pro.' });
+        await onSuccess();
+        setTimeout(() => onClose(), 1500);
+      } else if (verified?.pending) {
+        // Paid-but-not-settled, or the modal was closed on the bank page. The
+        // webhook finishes the job, so this is not an error.
+        setStatusMessage({ type: 'info', text: verified.message || 'Payment is being confirmed. Pro unlocks shortly.' });
+      } else {
+        setStatusMessage({ type: 'error', text: verified?.error || 'Payment verification failed.' });
+      }
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err?.message || 'Error opening checkout.' });
     } finally {
@@ -429,10 +429,16 @@ export default function ProUpgradeModal({
           {statusMessage && (
             <div className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 border ${statusMessage.type === 'success'
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                : statusMessage.type === 'info'
+                  ? 'bg-sky-500/10 border-sky-500/30 text-sky-200'
+                  : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
               }`}>
               {statusMessage.type === 'success' ? (
                 <CheckCircle2 className="h-4 w-4 shrink-0 mt-px text-emerald-400" />
+              ) : statusMessage.type === 'info' ? (
+                // A payment still settling is not a failure, and a red cross on
+                // it reads as "your money is gone".
+                <Loader2 className="h-4 w-4 shrink-0 mt-px text-sky-400 animate-spin" />
               ) : (
                 <AlertCircle className="h-4 w-4 shrink-0 mt-px text-rose-400" />
               )}
@@ -446,7 +452,7 @@ export default function ProUpgradeModal({
           {DEV_BYPASS && config.testBilling && (
             <div className="flex rounded-xl bg-white/[0.03] p-1 border border-white/[0.06]">
               {([
-                { id: 'gateway', label: 'Pay with Razorpay', icon: CreditCard },
+                { id: 'gateway', label: 'Pay with Cashfree', icon: CreditCard },
                 { id: 'test', label: 'Test Mode', icon: Zap },
               ] as const).map((t) => (
                 <button
@@ -636,7 +642,7 @@ export default function ProUpgradeModal({
         <div className="px-6 py-3.5 bg-black/40 border-t border-white/[0.06] flex flex-col items-center justify-center text-center gap-1 text-[11.5px] text-slate-400">
           <div className="flex items-center justify-center gap-1.5 text-slate-300">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-            <span>Payment handled by Razorpay — we never see your card</span>
+            <span>Payment handled by Cashfree — we never see your card</span>
           </div>
           <div className="text-slate-500 text-[11px]">
             7-day refund if Pro doesn't work as described

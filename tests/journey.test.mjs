@@ -146,14 +146,11 @@ ok('pricing is readable before paying', payConfig.status === 200 && payConfig.js
   `₹${payConfig.json?.amountRupees}`);
 ok('test billing is off', payConfig.json?.testBilling !== true);
 
+// Pro is a 30-day pass, not a subscription, so this route exists only to say
+// so. Either way it must never be what grants Pro.
 const subscribe = await api('/api/payments/subscribe', { method: 'POST', cookie });
-if (payConfig.json?.configured) {
-  ok('checkout starts a real subscription', subscribe.status === 200 && !!subscribe.json?.subscriptionId,
-    `id ${subscribe.json?.subscriptionId}`);
-} else {
-  ok('checkout reports honestly when Razorpay is unconfigured', subscribe.status === 503,
-    `status ${subscribe.status} — 200 here would mean a free upgrade`);
-}
+ok('checkout never upgrades anyone by itself', subscribe.status === 503,
+  `status ${subscribe.status} — 200 here would mean a free upgrade`);
 
 const stillFree = await api('/api/auth/me', { cookie });
 ok('customer is still on Free after all that', stillFree.json?.user?.isPro !== true);
