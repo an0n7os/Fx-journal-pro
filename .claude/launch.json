@@ -9,6 +9,13 @@
       "autoPort": true
     },
     {
+      "name": "journalpro-dev-localdb",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:localdb"],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
       "name": "journalpro-dev-testbilling",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:testbilling"],

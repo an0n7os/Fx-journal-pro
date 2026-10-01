@@ -1560,13 +1560,9 @@ html.dark .dark\:border-slate-700\/50 {
   border-color: var(--dash-hair) !important;
 }
 
-/* Header and sidebar shells */
-html.dark header.fixed,
-html.dark header.fixed.dark\:bg-slate-950\/90 {
-  background-color: rgba(7, 8, 12, .72) !important;
-  background-image: none !important;
-}
-
+/* Sidebar shell. The app bar is NOT here: it owns its surface in one place,
+   `.dx-appbar` further down, because three separate rules competing for it is
+   how it ended up transparent. */
 html.dark aside {
   background-color: rgba(9, 10, 15, .55) !important;
   background-image: none !important;
@@ -2198,12 +2194,47 @@ html.dark table tbody tr:hover {
   background-color: rgba(255, 255, 255, .022) !important;
 }
 
-/* ── Header and sidebar: the same black as the ground ───────
-   The reference has no visible chrome band; the nav floats on the
-   page rather than sitting on its own grey strip. */
-html.dark header.fixed {
-  background-color: rgba(4, 4, 10, .82) !important;
+/* ── The app bar ────────────────────────────────────────────
+   One rule, after the card rules, because it has to beat them.
+
+   The bar's Tailwind classes include `dark:bg-slate-950/90`, which the card
+   flattening block above also matches — so the bar inherited the card's
+   `backdrop-filter: none` and a 0.72 alpha. On a phone that meant every
+   scroll dragged card titles and ACTIVE badges straight across the logo and
+   the avatar. The blur has to survive, and the surface has to be opaque
+   enough that nothing reads through it even where the blur is unsupported.
+
+   .dx-appbar is matched on top of header.fixed so this beats both the card
+   rules and anything still targeting the bare element. */
+html.dark header.dx-appbar {
+  background-color: rgba(6, 7, 13, .94) !important;
+  background-image: none !important;
   border-bottom: 1px solid var(--dash-hair) !important;
+  backdrop-filter: blur(24px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+}
+
+/* Where the blur is unavailable — Firefox without the flag, reduced
+   transparency, older WebKit — a translucent bar is just a broken one, so it
+   goes fully opaque instead. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html.dark header.dx-appbar {
+    background-color: #06070d !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html.dark header.dx-appbar {
+    background-color: #06070d !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+html:not(.dark) header.dx-appbar {
+  background-color: rgba(251, 251, 250, .94) !important;
+  backdrop-filter: blur(24px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
 }
 
 html.dark aside {
@@ -2284,15 +2315,11 @@ html.dark .bg-white .text-slate-400:only-child {
    RESPONSIVE POLISH — phone and tablet
    ============================================================ */
 
-/* The header is translucent so the page shows motion behind it. At phone
-   widths the bar is short and the card text underneath stayed legible
-   through it, which read as two overlapping layers. More opacity, more
-   blur — the effect survives, the double-vision does not. */
+/* The app bar's surface lives with the rest of it, in `.dx-appbar` above.
+   A phone-width override used to sit here with the blur written WITHOUT
+   !important, so the card rules' `backdrop-filter: none !important` beat it
+   and the fix never took — which is how the bar stayed see-through. */
 @media (max-width: 767px) {
-  html.dark header.fixed {
-    background-color: rgba(4, 4, 10, .94) !important;
-    backdrop-filter: blur(24px) saturate(140%);
-  }
 
   /* Cards lose a little radius and padding so content is not squeezed into
      a narrow column between two thick rounded corners. */

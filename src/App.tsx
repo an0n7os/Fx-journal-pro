@@ -4307,7 +4307,17 @@ export default function App() {
   return (
     <div className="min-h-screen md:h-screen md:overflow-hidden bg-[#FBFBFA]/40 font-sans antialiased text-slate-800 flex flex-col">
       {/* Unified Top Header */}
-      <header className="fixed top-0 left-0 right-0 h-[60px] z-[50] bg-[#FBFBFA]/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/[0.06] px-4 flex items-center justify-between">
+      {/*
+        dx-appbar is a hook, not decoration.
+
+        The bar carried `dark:bg-slate-950/90`, which is also in the list of
+        card utilities index.css flattens — so the app bar was being handed the
+        card's `backdrop-filter: none` and a 0.72 alpha, and the page scrolled
+        visibly through it: card titles and badges crossed the logo and the
+        avatar on every scroll. A class the card rules do not match is what
+        lets the bar own its own surface.
+      */}
+      <header className="dx-appbar fixed top-0 left-0 right-0 h-[60px] z-[50] bg-[#FBFBFA]/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/[0.06] px-4 flex items-center justify-between">
         {/* Mobile Left: Greeting + Name | Desktop: Logo & Brand */}
         <div className="flex items-center gap-2.5">
           {/* One brand mark on every width. The phone header used to carry a
@@ -4998,7 +5008,13 @@ export default function App() {
                   <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                     <div className="lg:col-span-2">
                       {/* Equity Curve Area Chart - Widescreen Layout */}
-                      <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col h-72 sm:h-80">
+                      {/* An empty chart does not need a chart's height. At
+                          h-72 the first card a new trader sees was 288px of
+                          dark nothing — a third of the phone viewport — with
+                          one sentence floating in the middle of it. It keeps
+                          its full height the moment there is a curve to
+                          draw. */}
+                      <div className={`dx-panel p-4 sm:p-6 shadow-xs flex flex-col sm:h-80 ${totalTradesCount > 0 ? 'h-72' : 'h-52'}`}>
                         <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4 flex-shrink-0">
                           <div className="min-w-0">
                             <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate">Portfolio Growth Curve</h3>
@@ -5496,7 +5512,16 @@ export default function App() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    {/*
+                      Three buttons do not fit across 375px. They used to wrap
+                      their own labels instead — "Sync / Trades" and "Export /
+                      CSV" each broke onto two lines, which made the row 2.5
+                      buttons wide and ragged. They keep their labels on one
+                      line now and the row scrolls sideways when it has to,
+                      bleeding to the card edge so the cut-off button is
+                      visibly scrollable rather than looking clipped.
+                    */}
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:overflow-visible">
                       <button
                         onClick={() => {
                           if (!isProActive) {
@@ -5508,7 +5533,7 @@ export default function App() {
                             setShowShareModal(true);
                           }
                         }}
-                        className="border border-violet-300 dark:border-violet-700/60 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-violet-700 dark:text-violet-300 text-xs font-semibold rounded-lg px-3 py-2 transition flex items-center gap-1.5 bg-white dark:bg-[#0a0d14] shadow-xs"
+                        className="shrink-0 whitespace-nowrap border border-violet-300 dark:border-violet-700/60 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-violet-700 dark:text-violet-300 text-xs font-semibold rounded-lg px-3 py-2 transition flex items-center gap-1.5 bg-white dark:bg-[#0a0d14] shadow-xs"
                         title="Share verified journal link (Pro)"
                       >
                         <Share2 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
@@ -5519,14 +5544,14 @@ export default function App() {
                         onClick={refreshTrades}
                         disabled={tradesRefreshing}
                         title="Reload trades from Supabase"
-                        className="border border-violet-200 hover:bg-violet-50 text-violet-700 text-xs font-semibold rounded-lg px-3 py-2 transition flex items-center gap-1 bg-white disabled:opacity-50"
+                        className="shrink-0 whitespace-nowrap border border-violet-200 hover:bg-violet-50 text-violet-700 text-xs font-semibold rounded-lg px-3 py-2 transition flex items-center gap-1 bg-white disabled:opacity-50"
                       >
                         <RefreshCw className={`h-3.5 w-3.5 ${tradesRefreshing ? 'animate-spin' : ''}`} />
                         {tradesRefreshing ? 'Syncing...' : 'Sync Trades'}
                       </button>
                       <button
                         onClick={() => setShowExportModal(true)}
-                        className="border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg px-3 py-2 transition flex items-center gap-1 bg-white"
+                        className="shrink-0 whitespace-nowrap border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg px-3 py-2 transition flex items-center gap-1 bg-white"
                       >
                         <Download className="h-3.5 w-3.5" />
                         Export CSV
