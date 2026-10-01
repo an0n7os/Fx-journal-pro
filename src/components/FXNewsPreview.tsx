@@ -222,10 +222,10 @@ export default function FXNewsPreview() {
   }, [events, selectedCurrency]);
 
   return (
-    <div className="relative">
-      {/* Background violet/indigo glow exactly matching HeroPanel */}
+    <div className="relative overflow-hidden rounded-3xl">
+      {/* Background violet/indigo glow constrained to prevent horizontal bleed */}
       <div
-        className="absolute -inset-5 sm:-inset-8 rounded-[36px] bg-gradient-to-tr from-violet-600/25 via-indigo-500/10 to-transparent blur-3xl pointer-events-none"
+        className="absolute inset-0 rounded-3xl bg-gradient-to-tr from-violet-600/20 via-indigo-500/10 to-transparent blur-2xl pointer-events-none"
         aria-hidden="true"
       />
 
@@ -250,7 +250,7 @@ export default function FXNewsPreview() {
         </div>
 
         {/* Content Area */}
-        <div className="p-5 sm:p-6">
+        <div className="p-4 sm:p-6">
           {/* Header Row */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
             <div className="flex items-center gap-3 min-w-0">
@@ -271,11 +271,11 @@ export default function FXNewsPreview() {
             </div>
 
             {/* Pill view switcher matching .lp-navgroup */}
-            <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.04] border border-white/[0.08] self-start sm:self-auto">
+            <div className="grid grid-cols-2 sm:inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.04] border border-white/[0.08] w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setTab('news')}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${tab === 'news'
+                className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${tab === 'news'
                   ? 'bg-white/[0.12] text-white shadow-sm border border-white/[0.15]'
                   : 'text-slate-400 hover:text-white'
                   }`}
@@ -287,7 +287,7 @@ export default function FXNewsPreview() {
               <button
                 type="button"
                 onClick={() => setTab('calendar')}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${tab === 'calendar'
+                className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${tab === 'calendar'
                   ? 'bg-white/[0.12] text-white shadow-sm border border-white/[0.15]'
                   : 'text-slate-400 hover:text-white'
                   }`}

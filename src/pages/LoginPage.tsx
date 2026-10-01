@@ -973,15 +973,9 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
       {/* ── Navbar ── */}
       <header className="lp-nav fixed top-0 inset-x-0 z-50" data-scrolled={navScrolled}>
-        <div className="lp-navbar max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[68px] flex items-center justify-between gap-4">
-          {/*
-            min-w-0 rather than shrink-0: at 375px the three items in this row
-            added up to 411px, and because the page clips overflow-x the
-            hamburger sat past the right edge with no way to reach it. The
-            wordmark is the one item that can give way.
-          */}
-          <a href="/" onClick={(e) => handleNavClick(e, '/', 'top')} className="flex items-center gap-2.5 min-w-0 group">
-            <Logo size={28} />
+        <div className="lp-navbar max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[58px] sm:h-[68px] flex items-center justify-between gap-3 sm:gap-4">
+          <a href="/" onClick={(e) => handleNavClick(e, '/', 'top')} className="flex items-center gap-2 min-w-0 group py-1">
+            <Logo size={25} />
           </a>
           <nav className="lp-navgroup hidden lg:flex">
             {navLinks.map((l) => {
@@ -999,92 +993,112 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               );
             })}
           </nav>
-          <div className="flex items-center gap-2.5 shrink-0">
-            <button onClick={() => openAuthModal('login')} className="lp-btn-ghost hidden sm:inline-flex text-[13px] font-medium rounded-full px-4 py-2">Sign In</button>
-            <button onClick={() => openAuthModal('register')} className="lp-btn-primary text-xs sm:text-[13px] font-semibold rounded-full px-4 py-2 shrink-0">
+          <div className="flex items-center gap-1.5 xs:gap-2.5 shrink-0">
+            <button onClick={() => openAuthModal('login')} className="lp-btn-ghost hidden sm:inline-flex text-[13px] font-medium rounded-full px-4 py-2">
+              Sign In
+            </button>
+            <button
+              onClick={() => openAuthModal('register')}
+              className="lp-btn-primary text-xs sm:text-[13px] font-semibold rounded-full px-3.5 sm:px-4 py-2 shrink-0 active:scale-95 transition min-h-[38px] flex items-center justify-center"
+            >
               Get Started<span className="hidden sm:inline"> Free</span>
             </button>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Toggle navigation menu"
-              className="lg:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] transition"
+              className="lg:hidden min-h-[44px] min-w-[44px] p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/[0.08] active:scale-90 transition flex items-center justify-center"
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
         </div>
 
-        {/* Mobile menu dropdown */}
+        {/* Dedicated Mobile Menu Overlay */}
         {mobileMenuOpen && (
-          <div className="lg:hidden border-b border-white/[0.08] bg-[#0b0e14]/95 backdrop-blur-2xl px-4 py-4 space-y-1 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
-            {navLinks.map((l) => {
-              const isActive = isNavLinkActive(l.id, activeSection);
-              return (
-                <a
-                  key={l.path}
-                  href={l.path}
-                  onClick={(e) => handleNavClick(e, l.path, l.id)}
-                  className={`block px-4 py-2.5 rounded-xl text-sm font-medium transition ${isActive
-                    ? 'bg-violet-600/25 text-violet-200 font-semibold'
-                    : 'text-slate-300 hover:text-white hover:bg-white/[0.06]'
+          <div className="lg:hidden fixed inset-x-0 top-[58px] sm:top-[68px] bottom-0 z-50 bg-[#070913]/98 backdrop-blur-2xl px-5 py-6 flex flex-col justify-between overflow-y-auto animate-in fade-in slide-in-from-top-3 duration-200 border-b border-white/[0.08]">
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-mono uppercase tracking-wider text-slate-400 px-3 pb-2 font-bold">
+                Platform Navigation
+              </p>
+              {navLinks.map((l) => {
+                const isActive = isNavLinkActive(l.id, activeSection);
+                return (
+                  <a
+                    key={l.path}
+                    href={l.path}
+                    onClick={(e) => {
+                      setMobileMenuOpen(false);
+                      handleNavClick(e, l.path, l.id);
+                    }}
+                    className={`flex items-center justify-between px-4 py-3.5 rounded-2xl text-[15px] font-medium transition active:scale-[0.98] min-h-[48px] ${
+                      isActive
+                        ? 'bg-violet-600/20 text-violet-300 border border-violet-500/30 font-semibold'
+                        : 'text-slate-300 hover:text-white hover:bg-white/[0.06] border border-transparent'
                     }`}
-                >
-                  {l.label}
-                </a>
-              );
-            })}
-            <div className="pt-3 border-t border-white/[0.06] flex items-center gap-2">
+                  >
+                    <span>{l.label}</span>
+                    <ArrowRight className={`h-4 w-4 ${isActive ? 'text-violet-400' : 'text-slate-500'}`} />
+                  </a>
+                );
+              })}
+            </div>
+
+            <div className="pt-6 border-t border-white/[0.08] space-y-3 pb-safe">
               <button
-                onClick={() => { setMobileMenuOpen(false); openAuthModal('login'); }}
-                className="w-1/2 py-2.5 rounded-xl text-center text-sm font-medium text-slate-300 hover:text-white hover:bg-white/[0.06] transition"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  openAuthModal('register');
+                }}
+                className="lp-btn-primary w-full py-3.5 rounded-2xl text-center text-base font-semibold shadow-lg shadow-violet-600/25 min-h-[48px] flex items-center justify-center gap-2 active:scale-95 transition"
+              >
+                Get Started Free <ArrowUpRight className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  openAuthModal('login');
+                }}
+                className="w-full py-3.5 rounded-2xl text-center text-base font-semibold text-slate-200 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] min-h-[48px] active:scale-95 transition"
               >
                 Sign In
               </button>
-              <button
-                onClick={() => { setMobileMenuOpen(false); openAuthModal('register'); }}
-                className="lp-btn-primary w-1/2 py-2.5 rounded-xl text-center text-sm font-semibold"
-              >
-                Get Started
-              </button>
+              <div className="pt-2 flex items-center justify-center gap-3 text-xs text-slate-400">
+                <span>MT5 Automated Sync</span>
+                <span>•</span>
+                <span>Bank-Grade Encryption</span>
+              </div>
             </div>
           </div>
         )}
       </header>
 
       {/* ── Hero ── */}
-      <section id="top" className="relative pt-28 md:pt-32 pb-14 md:pb-20">
+      <section id="top" className="relative pt-20 sm:pt-28 md:pt-32 pb-10 sm:pb-14 md:pb-20 overflow-hidden">
         <div className="lp-grid" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-[1.02fr_0.98fr] gap-12 lg:gap-16 items-center">
+          <div className="grid lg:grid-cols-[1.02fr_0.98fr] gap-8 lg:gap-16 items-center">
             {/* Left: #1 Best Trading Journal */}
             <div className="animate-fade-up">
-              <div className="lp-pill mb-6">
+              <div className="lp-pill mb-5 sm:mb-6">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_2px_rgba(52,211,153,.55)]" />
                 <span className="lp-eyebrow">#1 Best Trading Journal</span>
               </div>
 
-              {/* "Know Your Trades" leads. The keyword phrase moves to the
-                sub-line: it appeared three times on this page and reads as
-                stuffing when it is also the headline.
-
-                h1, not h2: the whole marketing page had no h1 at all — 13 h2s
-                and 34 h3s under nothing — so neither search engines nor a
-                screen reader's heading list had a page title to anchor on. */}
-              <h1 className="font-display text-[38px] sm:text-[48px] xl:text-[60px] font-bold text-white leading-[1.02] tracking-[-0.035em] text-balance">
+              <h1 className="font-display text-[30px] xs:text-[36px] sm:text-[48px] xl:text-[60px] font-bold text-white leading-[1.08] tracking-[-0.03em] text-balance">
                 Know Your
                 <span className="block bg-gradient-to-r from-violet-300 via-violet-400 to-indigo-300 bg-clip-text text-transparent">Trades.</span>
               </h1>
 
-              <p className="mt-5 font-display text-lg sm:text-xl font-semibold text-slate-200 tracking-[-0.01em]">
+              <p className="mt-4 sm:mt-5 font-display text-base sm:text-xl font-semibold text-slate-200 tracking-[-0.01em]">
                 The trading journal for forex &amp; prop firm traders.
               </p>
 
-              <p className="mt-6 text-base sm:text-[17px] text-slate-400 leading-relaxed max-w-xl">
+              <p className="mt-4 sm:mt-6 text-sm sm:text-[17px] text-slate-400 leading-relaxed max-w-xl">
                 The fastest way to journal, analyze, and improve your trading. Auto-sync MetaTrader 5 trades, get AI mentor insights, and track every metric that matters.
               </p>
 
-              <div className="mt-7 grid sm:grid-cols-2 gap-x-6 gap-y-3">
+              <div className="mt-6 sm:mt-7 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 sm:gap-y-3">
                 {heroPoints.map((p) => (
                   <div key={p} className="flex items-center gap-2.5">
                     <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
@@ -1093,12 +1107,18 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 ))}
               </div>
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-9">
-                <button onClick={() => openAuthModal('register')} className="lp-btn-primary group inline-flex items-center justify-center gap-2 font-semibold rounded-full px-7 py-3.5 text-sm">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-8 sm:mt-9">
+                <button
+                  onClick={() => openAuthModal('register')}
+                  className="lp-btn-primary group inline-flex items-center justify-center gap-2 font-semibold rounded-2xl sm:rounded-full px-7 py-3.5 text-base sm:text-sm min-h-[48px] active:scale-[0.98] transition"
+                >
                   Get Started Free
                   <ArrowUpRight className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </button>
-                <button onClick={() => openAuthModal('login')} className="lp-btn-ghost inline-flex items-center justify-center gap-2 font-semibold rounded-full px-7 py-3.5 text-sm">
+                <button
+                  onClick={() => openAuthModal('login')}
+                  className="lp-btn-ghost inline-flex items-center justify-center gap-2 font-semibold rounded-2xl sm:rounded-full px-7 py-3.5 text-base sm:text-sm min-h-[48px] active:scale-[0.98] transition"
+                >
                   Sign In
                 </button>
               </div>
@@ -2560,16 +2580,18 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
         )}
       </AuthModal>
       {/* Floating WhatsApp Quick Connect Button */}
-      <a
-        href="https://wa.me/918136802573?text=Hi%20FX%20Journal%20Pro%2C%20I%20have%20an%20inquiry"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="Chat on WhatsApp"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-full bg-[#25D366] hover:bg-[#20ba5a] text-white font-semibold text-xs shadow-[0_4px_22px_rgba(37,211,102,0.45)] hover:shadow-[0_6px_30px_rgba(37,211,102,0.65)] hover:scale-105 active:scale-95 transition-all duration-200 group border border-white/20"
-      >
-        <WhatsAppIcon className="h-5 w-5 shrink-0 fill-current" />
-        <span className="hidden sm:inline font-bold tracking-wide">Chat on WhatsApp</span>
-      </a>
+      {!isAuthModalOpen && (
+        <a
+          href="https://wa.me/918136802573?text=Hi%20FX%20Journal%20Pro%2C%20I%20have%20an%20inquiry"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Chat on WhatsApp"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+16px)] right-4 sm:right-6 sm:bottom-6 z-40 flex items-center justify-center gap-2.5 p-3 sm:px-4 sm:py-3 rounded-full bg-[#25D366] hover:bg-[#20ba5a] text-white font-semibold text-xs shadow-[0_4px_22px_rgba(37,211,102,0.45)] hover:shadow-[0_6px_30px_rgba(37,211,102,0.65)] hover:scale-105 active:scale-95 transition-all duration-200 group border border-white/20"
+        >
+          <WhatsAppIcon className="h-5 w-5 shrink-0 fill-current" />
+          <span className="hidden sm:inline font-bold tracking-wide">Chat on WhatsApp</span>
+        </a>
+      )}
     </div>
   );
 }
@@ -2596,7 +2618,7 @@ function AuthModal({ isOpen, onClose, children }: { isOpen: boolean; onClose: ()
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4 sm:p-6"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center overflow-y-auto p-0 sm:p-6"
       onMouseDown={(e) => {
         mouseDownTargetRef.current = e.target;
         mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
@@ -2612,37 +2634,33 @@ function AuthModal({ isOpen, onClose, children }: { isOpen: boolean; onClose: ()
         }
       }}
       onMouseUp={() => {
-        // Retain drag status through the immediate click event
         setTimeout(() => {
           mouseDownPosRef.current = null;
           isDraggingRef.current = false;
         }, 100);
       }}
       onClick={(e) => {
-        // If a drag movement occurred anywhere, ignore the click
         if (isDraggingRef.current) return;
         if (mouseDownPosRef.current) {
           const dist = Math.hypot(e.clientX - mouseDownPosRef.current.x, e.clientY - mouseDownPosRef.current.y);
           if (dist > 4) return;
         }
-
-        // Only close on stationary click directly on the backdrop container
         if (e.target === e.currentTarget && mouseDownTargetRef.current === e.currentTarget) {
           onClose();
         }
       }}
     >
       <div className="cyber-matrix-backdrop fixed inset-0 backdrop-blur-md pointer-events-none" aria-hidden="true"></div>
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-[440px] my-auto animate-fade-up z-10" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-[440px] mt-auto sm:my-auto animate-fade-up z-10" onClick={(e) => e.stopPropagation()}>
         <div className="cyber-card-glow-wrap">
-          <div className="cyber-card-surface p-6 sm:p-8">
+          <div className="cyber-card-surface rounded-t-[28px] sm:rounded-2xl p-5 xs:p-6 sm:p-8 pb-safe">
             <button
               type="button"
               onClick={onClose}
               aria-label="Close dialog"
-              className="absolute right-5 top-5 z-20 text-slate-400 hover:text-white h-8 w-8 rounded-full bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center cursor-pointer"
+              className="absolute right-4 top-4 sm:right-5 sm:top-5 z-20 text-slate-400 hover:text-white h-10 w-10 rounded-full bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center cursor-pointer active:scale-90"
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5" />
             </button>
             {children}
           </div>
@@ -2827,10 +2845,10 @@ function HeroPanel() {
   ];
 
   return (
-    <div className="relative">
-      <div className="absolute -inset-5 sm:-inset-8 rounded-[36px] bg-gradient-to-tr from-violet-600/25 via-indigo-500/10 to-transparent blur-3xl pointer-events-none" aria-hidden="true" />
+    <div className="relative overflow-hidden rounded-[24px]">
+      <div className="absolute inset-0 rounded-[24px] bg-gradient-to-tr from-violet-600/20 via-indigo-500/10 to-transparent blur-2xl pointer-events-none" aria-hidden="true" />
 
-      <div className="lp-card relative p-5 sm:p-6">
+      <div className="lp-card relative p-4 sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <span className="lp-chip h-9 w-9 shrink-0">
@@ -2847,10 +2865,10 @@ function HeroPanel() {
           </span>
         </div>
 
-        <div className="mt-6 flex items-end justify-between gap-4">
+        <div className="mt-5 sm:mt-6 flex items-end justify-between gap-3 sm:gap-4">
           <div className="min-w-0">
             <p className="lp-eyebrow">Net Profit &middot; This quarter</p>
-            <p className="lp-num font-display text-[34px] sm:text-[40px] font-bold text-white leading-none tracking-[-0.02em] mt-2">
+            <p className="lp-num font-display text-[30px] xs:text-[34px] sm:text-[40px] font-bold text-white leading-none tracking-[-0.02em] mt-2">
               +${Math.round(netProfit).toLocaleString('en-US')}
             </p>
           </div>
@@ -2860,18 +2878,18 @@ function HeroPanel() {
           </span>
         </div>
 
-        <EquityCurve className="w-full h-24 sm:h-28 mt-5" />
+        <EquityCurve className="w-full h-24 sm:h-28 mt-4 sm:mt-5" />
 
-        <div className="mt-5 grid grid-cols-3 gap-2.5">
+        <div className="mt-4 sm:mt-5 grid grid-cols-3 gap-1.5 xs:gap-2 sm:gap-2.5">
           {metrics.map((m) => (
-            <div key={m.label} className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-              <p className="lp-num font-display text-lg font-bold text-white leading-none">{m.value}</p>
-              <p className="lp-eyebrow mt-1.5 truncate">{m.label}</p>
+            <div key={m.label} className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-2 sm:px-3 sm:py-2.5 text-center sm:text-left">
+              <p className="lp-num font-display text-base sm:text-lg font-bold text-white leading-none">{m.value}</p>
+              <p className="text-[10px] sm:text-xs text-slate-400 mt-1 font-mono uppercase tracking-wider">{m.label}</p>
             </div>
           ))}
         </div>
 
-        <p className="lp-eyebrow mt-5 pt-4 border-t border-white/[0.07]">Sample portfolio &middot; your own figures after MT5 sync</p>
+        <p className="lp-eyebrow mt-4 sm:mt-5 pt-3.5 sm:pt-4 border-t border-white/[0.07]">Sample portfolio &middot; your own figures after MT5 sync</p>
       </div>
     </div>
   );

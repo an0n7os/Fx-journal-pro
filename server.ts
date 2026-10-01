@@ -4105,21 +4105,37 @@ app.post('/api/accounts', async (req, res) => {
     eaStatus: 'Not Connected',
     ...(login ? { mt5Login: String(login).trim(), eaTerminalLogin: String(login).trim() } : {}),
     ...(server ? { mt5Server: String(server).trim(), eaTerminalServer: String(server).trim() } : {}),
-    ...(enc ? {
+    // Storing a password is not a connection. This said Connected the moment
+    // the form was submitted, on the dead MetaApi method, and queued nothing —
+    // so the customer saw "Connected" against an empty journal forever and had
+    // no way to tell that nothing was ever going to arrive. An account with
+    // credentials goes on the VPS queue where one can run; otherwise it waits
+    // for its EA, and says so.
+    ...(enc && vpsSyncAvailable() ? {
       investorPasswordEnc: enc.enc,
       passwordEncNonce: '',
       passwordKmsKeyId: enc.keyId,
-      syncMethod: 'CLOUD',
-      connectionStatus: 'Connected'
+      syncMethod: 'VPS',
+      connectionStatus: 'Queued'
+    } : enc ? {
+      investorPasswordEnc: enc.enc,
+      passwordEncNonce: '',
+      passwordKmsKeyId: enc.keyId,
+      syncMethod: 'EA',
+      connectionStatus: 'Not Connected'
     } : {
-      ...(isMt5Sync && login && server ? {
-        syncMethod: 'CLOUD',
-        connectionStatus: 'Connected'
-      } : {})
+      ...(isMt5Sync ? { syncMethod: 'EA', connectionStatus: 'Not Connected' } : {})
     })
   };
 
   db.accounts.push(newAcc);
+
+  // Queue the first sync, the way /api/mt5/vps/connect does. Without this the
+  // credentials sat encrypted and no worker was ever told to use them.
+  if (enc && vpsSyncAvailable()) {
+    enqueueConnectJob(db, newAcc, 'SYNC_NOW');
+    logEaEvent(db, newAcc, 'VPS_CONNECT_REQUESTED', 'info', 'Queued for a VPS terminal on account creation');
+  }
 
   // Create default risk settings
   const riskBase = startBal || 10000;

@@ -322,23 +322,20 @@ export default function ProUpgradeModal({
   };
 
   return (
-    // z-[70] because the mobile bottom nav is z-[60] and was floating over
-    // the pay button.
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-[#07080c]/85 backdrop-blur-md animate-fade-in overflow-y-auto"
+      className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#07080c]/85 backdrop-blur-md animate-fade-in overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pro-upgrade-title"
     >
       <div
-        // One narrow column on every width left a desktop reader scrolling a
-        // tall modal with empty space either side, and pushed the pay button
-        // below the fold. From lg it widens and splits: what you get on the
-        // left, what you do about it on the right, both in view at once.
-        // Below lg it is unchanged — same order, same single column.
-        className="relative w-full max-w-lg lg:max-w-4xl bg-[#0b0d13] border border-white/[0.07] rounded-2xl shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)] overflow-hidden my-6 text-slate-200"
+        className="relative w-full max-w-lg lg:max-w-4xl bg-[#0b0d13] border-t sm:border border-white/[0.08] rounded-t-[28px] sm:rounded-2xl shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)] max-h-[92vh] sm:max-h-none overflow-y-auto my-0 sm:my-6 pb-safe text-slate-200 animate-in slide-in-from-bottom sm:slide-in-from-none sm:zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Mobile sheet drag handle */}
+        <div className="sm:hidden flex justify-center pt-2.5 pb-0.5">
+          <span className="h-1 w-9 rounded-full bg-white/20" aria-hidden="true" />
+        </div>
         {/* One accent hairline in the product's violet. The previous
             violet/fuchsia/indigo bar was the only rainbow in the app. */}
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-violet-500/70 to-transparent" />
@@ -347,7 +344,7 @@ export default function ProUpgradeModal({
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 z-20 p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition"
+          className="absolute right-4 top-4 z-20 p-2 rounded-xl text-slate-400 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] active:scale-95 transition"
         >
           <X className="h-4 w-4" />
         </button>

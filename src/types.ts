@@ -43,7 +43,14 @@ export interface TradingAccount {
   eaTerminalServer?: string;
   mt5Login?: string;
   mt5Server?: string;
-  syncMethod?: 'EA' | 'CLOUD';
+  /**
+   * How this account's trades arrive.
+   *
+   * EA   — the Expert Advisor running in the customer's own terminal.
+   * VPS  — a terminal in our own pool, driven by a worker.
+   * CLOUD — the old MetaApi path, kept so existing rows still read, off.
+   */
+  syncMethod?: 'EA' | 'VPS' | 'CLOUD';
   connectionStatus?: string;
 }
 

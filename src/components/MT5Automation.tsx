@@ -119,6 +119,9 @@ interface MT5Status {
   workerConfigured?: boolean;
   /** True only where this deployment can actually run the cloud sync worker. */
   cloudSyncAvailable?: boolean;
+  /** True only where the self-hosted VPS worker pool is configured. */
+  vpsSyncAvailable?: boolean;
+  queueDepth?: number;
   connectJobs: MT5ConnectJob[];
   lastSyncTime: string | null;
   lastHeartbeatAt: string | null;
@@ -141,6 +144,7 @@ type Phase =
   | 'Collecting'
   | 'EA Ready'
   | 'Validating'
+  | 'Queued'
   | 'Connected'
   | 'Syncing'
   | 'Synced'
@@ -231,23 +235,33 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const [cloudPassword, setCloudPassword] = useState('');
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState('');
+  // VPS sync state
+  const [vpsLogin, setVpsLogin] = useState('');
+  const [vpsServer, setVpsServer] = useState('');
+  const [vpsPassword, setVpsPassword] = useState('');
+  const [vpsBusy, setVpsBusy] = useState(false);
+  const [vpsError, setVpsError] = useState('');
+  const [vpsSyncing, setVpsSyncing] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showPasswordTip, setShowPasswordTip] = useState(false);
-  const [activeTab, setActiveTab] = useState<'ea' | 'investor'>('ea');
+  const [activeTab, setActiveTab] = useState<'ea' | 'investor' | 'vps'>('ea');
 
   // The server decides: it knows whether a worker can run here at all.
   // Defaults to false so a status that has not arrived yet never advertises a
   // method that may not work.
   const cloudAvailable = status?.cloudSyncAvailable === true;
+  const vpsAvailable = status?.vpsSyncAvailable === true;
 
   useEffect(() => {
-    if (status?.syncMethod === 'CLOUD' && cloudAvailable) {
+    if (status?.syncMethod === 'VPS' && status.cloudConnected) {
+      setActiveTab('vps');
+    } else if (status?.syncMethod === 'CLOUD' && cloudAvailable) {
       setActiveTab('investor');
-    } else if (status?.syncMethod === 'EA' || !cloudAvailable) {
+    } else if (status?.syncMethod === 'EA' || (!cloudAvailable && !vpsAvailable)) {
       setActiveTab('ea');
     }
-  }, [status?.syncMethod, cloudAvailable]);
+  }, [status?.syncMethod, status?.cloudConnected, cloudAvailable, vpsAvailable]);
 
   const host = typeof window !== 'undefined' ? window.location.host : 'www.fxjournalpro.com';
   const apiUrl = `${window.location.protocol}//${host}/api/mt5`;
@@ -457,8 +471,104 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
     }
   }
 
+  // ── VPS sync handlers ──────────────────────────────────────────────────
+
+  async function handleVpsConnect() {
+    if (!account) return;
+    setVpsBusy(true);
+    setVpsError('');
+    try {
+      const res = await authFetch('/api/mt5/vps/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: account.id,
+          login: vpsLogin.trim(),
+          server: vpsServer.trim(),
+          investorPassword: vpsPassword
+        })
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setVpsError(d.error || 'VPS connect failed. Please try again.');
+        return;
+      }
+      setVpsPassword('');
+      setVpsLogin('');
+      setVpsServer('');
+      await pollStatus();
+      onRefresh();
+    } catch (e) {
+      setVpsError('VPS connect failed. Please try again.');
+    } finally {
+      setVpsBusy(false);
+    }
+  }
+
+  async function handleVpsSync() {
+    if (!account) return;
+    setVpsSyncing(true);
+    setVpsError('');
+    try {
+      const res = await authFetch('/api/mt5/vps/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: account.id })
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setVpsError(d.error || 'Sync request failed. Please try again.');
+        return;
+      }
+      if (d.alreadyQueued) {
+        setVpsError('');
+      }
+      await pollStatus();
+      onRefresh();
+    } catch (e) {
+      setVpsError('Sync request failed. Please try again.');
+    } finally {
+      setVpsSyncing(false);
+    }
+  }
+
+  async function handleVpsDisconnect() {
+    if (!account) return;
+    setVpsBusy(true);
+    setVpsError('');
+    try {
+      const res = await authFetch(`/api/mt5/${account.id}/disconnect`, {
+        method: 'POST',
+        body: JSON.stringify({})
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setVpsError(d.error || 'Disconnect failed. Please try again.');
+        return;
+      }
+      setShowDisconnectConfirm(false);
+      setStatus(null);
+      onRefresh();
+    } catch (e) {
+      setVpsError('Disconnect failed. Please try again.');
+    } finally {
+      setVpsBusy(false);
+    }
+  }
+
   function derivePhase(): Phase {
     if (downloading || copying || resetting) return 'Collecting';
+    // VPS method
+    if (status?.syncMethod === 'VPS' && status.cloudConnected) {
+      if (status.eaStatus === 'Connected' || status.status === 'Connected') return 'Synced';
+      if (status.status === 'Queued') return 'Queued';
+      if (status.status === 'Disconnected') return 'Disconnected';
+      if (status.status === 'Error') return 'Error';
+      const pendingVps = (status.connectJobs || []).some((j) => j.status === 'PENDING' || j.status === 'RUNNING');
+      if (pendingVps) return 'Queued';
+      return 'Validating';
+    }
+    // Cloud (MetaApi) method
     if (status?.syncMethod === 'CLOUD' && status.cloudConnected) {
       if (status.status === 'Connected') return 'Synced';
       if (status.status === 'Disconnected') return 'Disconnected';
@@ -506,23 +616,25 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
       ? XCircle
       : phase === 'Disconnected'
         ? WifiOff
-        : phase === 'Validating'
+        : phase === 'Validating' || phase === 'Queued'
           ? Loader2
           : Terminal;
   const PhaseIcon = phaseIcon;
 
   const phaseLabel =
-    phase === 'Synced' ? 'Connected' : phase === 'Syncing' ? 'Syncing' : phase;
+    phase === 'Synced' ? 'Connected' : phase === 'Syncing' ? 'Syncing' : phase === 'Queued' ? 'In Queue' : phase;
   const phaseColor =
     phase === 'Synced'
       ? 'text-emerald-600 dark:text-emerald-400'
       : phase === 'Syncing'
         ? 'text-amber-600 dark:text-amber-400'
-        : phase === 'Error'
-          ? 'text-rose-600 dark:text-rose-400'
-          : phase === 'Disconnected'
-            ? 'text-slate-500 dark:text-slate-400'
-            : 'text-indigo-600 dark:text-indigo-400';
+        : phase === 'Queued'
+          ? 'text-indigo-600 dark:text-indigo-400'
+          : phase === 'Error'
+            ? 'text-rose-600 dark:text-rose-400'
+            : phase === 'Disconnected'
+              ? 'text-slate-500 dark:text-slate-400'
+              : 'text-indigo-600 dark:text-indigo-400';
 
   const latestError = (status?.lastErrors || []).filter((e) => !e.resolvedAt)[0];
   const latestCloudJob = (status?.connectJobs || []).filter((j) => j.action === 'CONNECT').slice(-1)[0];
@@ -586,6 +698,15 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
       </div>
 
       {/* Connection state banner */}
+      {phase === 'Queued' && status?.syncMethod === 'VPS' && (
+        <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-xl px-4 py-3">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          <div className="flex-1">
+            Your sync is queued — our VPS worker will connect to MT5, fetch your trades, and update the journal automatically.
+            {status.queueDepth && status.queueDepth > 1 ? ` (${status.queueDepth} jobs ahead)` : ''} This page refreshes automatically.
+          </div>
+        </div>
+      )}
       {phase === 'Validating' && status?.syncMethod === 'CLOUD' && status.cloudConnected && (
         <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-xl px-4 py-3">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
@@ -597,7 +718,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
           )}
         </div>
       )}
-      {phase === 'Validating' && !(status?.syncMethod === 'CLOUD' && status.cloudConnected) && (
+      {phase === 'Validating' && !(status?.syncMethod === 'CLOUD' && status.cloudConnected) && status?.syncMethod !== 'VPS' && (
         <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-xl px-4 py-3">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
           <div>
@@ -685,21 +806,41 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
           <h3 className="dx-section-title text-center">
             Choose Your MT5 Connection Method
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
-            {/* Card 1: Investor Password.
-                Only offered where the deployment can actually run the cloud
-                worker. It used to sit here as the easier-looking of the two —
-                "No EA installation needed" — and connecting left the account
-                at "Validating" forever, because nothing was going to pick the
-                job up. Offering it at all is a promise; make it only when it
-                can be kept. */}
+          <div className={`grid grid-cols-1 gap-4 max-w-3xl mx-auto ${vpsAvailable || cloudAvailable ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+
+            {/* Card 1: VPS Sync (our self-hosted method) — shown first when available */}
+            {vpsAvailable && (
+              <div
+                onClick={() => setActiveTab('vps')}
+                className={`cursor-pointer rounded-2xl border p-5 flex items-center gap-4 transition-all duration-200 ${
+                  activeTab === 'vps'
+                    ? 'border-emerald-600 dark:border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/20 ring-2 ring-emerald-600/20'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/50'
+                }`}
+              >
+                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0">
+                  <RefreshCw className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="dx-section-title flex items-center gap-1.5 flex-wrap">
+                    Auto Sync
+                    <span className="font-bold text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/10">
+                      RECOMMENDED
+                    </span>
+                  </h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">VPS worker syncs your trades</p>
+                </div>
+              </div>
+            )}
+
+            {/* Card 2: Investor Password (cloud/MetaApi) */}
             <div
               onClick={() => { if (cloudAvailable) setActiveTab('investor'); }}
               aria-disabled={!cloudAvailable}
-              title={cloudAvailable ? undefined : 'Cloud sync is not available on this deployment — use the MT5 EA'}
+              title={cloudAvailable ? undefined : 'Cloud sync is not available on this deployment — use the MT5 EA or Auto Sync'}
               className={`rounded-2xl border p-5 flex items-center gap-4 transition-all duration-200 ${
                 !cloudAvailable
-                  ? 'cursor-not-allowed opacity-50 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50'
+                  ? 'cursor-not-allowed opacity-40 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50'
                   : activeTab === 'investor'
                     ? 'cursor-pointer border-indigo-600 dark:border-indigo-500 bg-indigo-50/30 dark:bg-indigo-950/20 ring-2 ring-indigo-600/20'
                     : 'cursor-pointer border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/50'
@@ -710,19 +851,17 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
               </div>
               <div className="flex items-center gap-1.5 min-w-0">
                 <h4 className="dx-section-title truncate">
-                  Trading Password
+                  Cloud Password
                 </h4>
-                {cloudAvailable
-                  ? <Crown className="h-3.5 w-3.5 text-amber-500 fill-amber-500/10 shrink-0" />
-                  : (
-                    <span className="font-bold text-[9px] text-slate-500 dark:text-slate-400 bg-slate-500/10 px-1.5 py-0.5 rounded border border-slate-500/10 shrink-0">
-                      UNAVAILABLE
-                    </span>
-                  )}
+                {!cloudAvailable && (
+                  <span className="font-bold text-[9px] text-slate-500 dark:text-slate-400 bg-slate-500/10 px-1.5 py-0.5 rounded border border-slate-500/10 shrink-0">
+                    UNAVAILABLE
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Card 2: MT5 EA */}
+            {/* Card 3: MT5 EA */}
             <div
               onClick={() => setActiveTab('ea')}
               className={`cursor-pointer rounded-2xl border p-5 flex items-center gap-4 transition-all duration-200 ${
@@ -895,6 +1034,237 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
         </>
       )}
 
+      {/* ── VPS Auto Sync Tab ──────────────────────────────────────────── */}
+      {activeTab === 'vps' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-emerald-500" />
+              <h3 className="dx-section-title">Auto Sync via VPS Worker</h3>
+            </div>
+            {status?.syncMethod === 'VPS' && status.cloudConnected && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-1">
+                <Wifi className="h-3 w-3" /> VPS Connected
+              </span>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            Enter your MT5 login and <strong>Investor (read-only) password</strong>. Our VPS worker will connect to your
+            account, fetch your complete trade history, and sync it to your journal. The connection is only held open
+            during the sync — it disconnects immediately after. Your password is <strong>encrypted before storage</strong>
+            and never shown again.
+          </p>
+
+          {vpsError && (
+            <div className="flex items-center gap-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded-xl px-4 py-3">
+              <AlertTriangle className="h-4 w-4 shrink-0" /> {vpsError}
+            </div>
+          )}
+
+          {status?.syncMethod === 'VPS' && status.cloudConnected ? (
+            /* ── Already connected: show status + Sync Now + Disconnect ── */
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Sync Method</div>
+                  <div className="text-sm font-black text-slate-800 dark:text-white">VPS Auto</div>
+                </div>
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">MT5 Login</div>
+                  <div className="text-sm font-black text-slate-800 dark:text-white truncate">{status.terminalLogin || '—'}</div>
+                </div>
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Server</div>
+                  <div className="text-sm font-black text-slate-800 dark:text-white truncate">{status.terminalServer || '—'}</div>
+                </div>
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Last Sync</div>
+                  <div className="text-sm font-black text-slate-800 dark:text-white">{timeAgo(status.lastSyncTime)}</div>
+                </div>
+              </div>
+
+              {/* Queue / job status */}
+              {status.connectJobs && status.connectJobs.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {status.connectJobs.slice(-3).map((j) => (
+                    <div key={j.id} className="inline-flex items-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 px-3 py-1.5 text-xs">
+                      <span className="font-black text-slate-700 dark:text-slate-200">{j.action}</span>
+                      <span className={`font-bold ${
+                        j.status === 'FAILED' ? 'text-rose-500'
+                        : j.status === 'DONE' ? 'text-emerald-600'
+                        : j.status === 'RUNNING' ? 'text-amber-500'
+                        : 'text-indigo-500'
+                      }`}>{j.status}</span>
+                      {j.errorCode && <span className="text-rose-500 font-bold text-[10px]">{j.errorCode}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  onClick={handleVpsSync}
+                  disabled={vpsSyncing || phase === 'Queued'}
+                  id="vps-sync-now-btn"
+                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition disabled:opacity-50"
+                >
+                  {vpsSyncing || phase === 'Queued'
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <RefreshCw className="h-4 w-4" />}
+                  {vpsSyncing ? 'Queuing…' : phase === 'Queued' ? 'Sync Queued…' : 'Sync Now'}
+                </button>
+                <button
+                  onClick={() => setShowDisconnectConfirm(true)}
+                  disabled={vpsBusy}
+                  className="inline-flex items-center gap-1.5 border border-rose-200 dark:border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-rose-600 dark:text-rose-300 text-xs font-bold px-4 py-2.5 rounded-xl transition disabled:opacity-50"
+                >
+                  {vpsBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
+                  Disconnect VPS Sync
+                </button>
+              </div>
+
+              {/* VPS disconnect confirmation */}
+              {showDisconnectConfirm && (
+                <div className="rounded-2xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 p-5">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-rose-500" />
+                    <div className="flex-1">
+                      <h4 className="text-sm font-bold text-rose-700 dark:text-rose-300">Disconnect VPS sync?</h4>
+                      <p className="text-xs text-rose-600/80 dark:text-rose-300/80 mt-1 leading-relaxed">
+                        The stored encrypted credentials will be removed. No trading data is deleted.
+                        You can reconnect at any time by entering your details again.
+                      </p>
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          onClick={handleVpsDisconnect}
+                          disabled={vpsBusy}
+                          className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50"
+                        >
+                          {vpsBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
+                          {vpsBusy ? 'Disconnecting…' : 'Yes, Disconnect'}
+                        </button>
+                        <button
+                          onClick={() => setShowDisconnectConfirm(false)}
+                          className="border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs font-bold px-4 py-2 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 text-[11px] text-emerald-700 dark:text-emerald-300 flex items-start gap-2">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+                <span>
+                  <strong>Investor password only.</strong> Our VPS worker uses read-only Investor password access — it cannot
+                  place, modify, or close trades. The MT5 session is opened only for the sync duration, then closed immediately.
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* ── Not yet connected: show the connect form ── */
+            <form
+              onSubmit={(e) => { e.preventDefault(); handleVpsConnect(); }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5" htmlFor="vpsLogin">MT5 Login Number</label>
+                  <input
+                    id="vpsLogin"
+                    type="text"
+                    value={vpsLogin}
+                    onChange={(e) => setVpsLogin(e.target.value)}
+                    required
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="e.g. 51012345"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-xs px-3 py-2.5 outline-none focus:ring-2 focus:ring-emerald-500/40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5" htmlFor="vpsServer">Broker Server</label>
+                  <input
+                    id="vpsServer"
+                    type="text"
+                    value={vpsServer}
+                    onChange={(e) => setVpsServer(e.target.value)}
+                    required
+                    autoComplete="off"
+                    placeholder="e.g. Exness-MT5Trial15"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-xs px-3 py-2.5 outline-none focus:ring-2 focus:ring-emerald-500/40"
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400" htmlFor="vpsPassword">Investor (Read-Only) Password</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowInfoModal(true)}
+                    className="text-slate-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition shrink-0 cursor-pointer"
+                    title="How to find your Investor password"
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <input
+                  id="vpsPassword"
+                  type="password"
+                  value={vpsPassword}
+                  onChange={(e) => setVpsPassword(e.target.value)}
+                  required
+                  autoComplete="off"
+                  placeholder="Enter your MT5 investor password"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-xs px-3 py-2.5 outline-none focus:ring-2 focus:ring-emerald-500/40"
+                />
+              </div>
+
+              {/* How it works */}
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 p-4 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">How It Works</div>
+                <div className="space-y-2">
+                  {[
+                    { n: '1', t: 'You click Connect → your credentials are encrypted and stored securely.' },
+                    { n: '2', t: 'Our VPS worker picks up the job, logs into MT5 with your Investor password (read-only).' },
+                    { n: '3', t: 'It fetches your full trade history and sends it to your journal.' },
+                    { n: '4', t: 'The MT5 session is closed immediately after sync completes.' },
+                    { n: '5', t: 'Click "Sync Now" any time to refresh with new trades.' },
+                  ].map((s) => (
+                    <div key={s.n} className="flex items-start gap-2.5">
+                      <span className="h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">{s.n}</span>
+                      <span className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">{s.t}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={vpsBusy}
+                id="vps-connect-btn"
+                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition disabled:opacity-50"
+              >
+                {vpsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                {vpsBusy ? 'Connecting…' : 'Connect & Start Sync'}
+              </button>
+
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-2">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+                <span>
+                  <strong className="text-slate-700 dark:text-slate-200">Investor password only — read-only.</strong> Use your
+                  MT5 Investor password, not your main trading password. Our VPS cannot place or modify any trades.
+                  Your password is AES-256-GCM encrypted before it is stored.
+                </span>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
       {activeTab === 'investor' && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
         <div className="flex items-center justify-between gap-3">
@@ -1060,13 +1430,23 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="dx-section-title">Live Sync Status</h3>
             <div className="flex items-center gap-3">
+              {status?.syncMethod === 'VPS' && status.cloudConnected && (
+                <button
+                  onClick={handleVpsSync}
+                  disabled={vpsSyncing || phase === 'Queued'}
+                  className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${vpsSyncing || phase === 'Queued' ? 'animate-spin' : ''}`} />
+                  {vpsSyncing ? 'Queuing…' : phase === 'Queued' ? 'In Queue…' : 'Sync Now'}
+                </button>
+              )}
               {status?.syncMethod === 'CLOUD' && (
-                <button 
-                  onClick={handleCloudSync} 
-                  disabled={phase === 'Syncing' || phase === 'Validating'} 
+                <button
+                  onClick={handleCloudSync}
+                  disabled={phase === 'Syncing' || phase === 'Validating'}
                   className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 ${phase === 'Syncing' || phase === 'Validating' ? 'animate-spin' : ''}`} /> 
+                  <RefreshCw className={`h-3.5 w-3.5 ${phase === 'Syncing' || phase === 'Validating' ? 'animate-spin' : ''}`} />
                   {phase === 'Syncing' || phase === 'Validating' ? 'Syncing...' : 'Sync Now'}
                 </button>
               )}

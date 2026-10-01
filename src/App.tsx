@@ -8759,7 +8759,7 @@ export default function App() {
                   handleOpenTradeModal();
                 }}
                 disabled={isMentorReadOnlyMode}
-                className="md:hidden fixed right-4 bottom-[100px] z-[59] h-14 w-14 rounded-full bg-gradient-to-br from-violet-500 to-violet-700 text-white shadow-[0_8px_28px_rgba(109,40,217,0.55)] flex items-center justify-center transition-all duration-200 active:scale-90 hover:brightness-110 disabled:opacity-50 border border-violet-400/40"
+                className="md:hidden fixed right-4 bottom-[calc(62px+env(safe-area-inset-bottom,0px)+16px)] z-[59] h-14 w-14 rounded-full bg-gradient-to-br from-violet-500 to-violet-700 text-white shadow-[0_8px_28px_rgba(109,40,217,0.55)] flex items-center justify-center transition-all duration-200 active:scale-90 hover:brightness-110 disabled:opacity-50 border border-violet-400/40"
                 aria-label="Add new trade"
               >
                 <Plus className="h-7 w-7" strokeWidth={2.5} />
@@ -8775,16 +8775,20 @@ export default function App() {
 
       {/* Edit Account Modal */}
       {showEditAccountModal && editingAccount && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-fade-in">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-100 max-w-md w-full p-6 relative">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-[70] animate-fade-in">
+          <div className="bg-white dark:bg-[#0c0d16] rounded-t-[28px] sm:rounded-2xl shadow-2xl border-t sm:border border-slate-100 dark:border-white/10 max-w-md w-full p-5 sm:p-6 pb-safe relative">
+            <div className="sm:hidden flex justify-center pt-1 pb-3">
+              <span className="h-1 w-9 rounded-full bg-slate-300 dark:bg-white/20" aria-hidden="true" />
+            </div>
             <button
               onClick={() => {
                 setShowEditAccountModal(false);
                 setEditingAccount(null);
               }}
-              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 transition"
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 dark:bg-white/[0.06] active:scale-95 transition"
+              aria-label="Close"
             >
-              ✖
+              <X className="h-4 w-4" />
             </button>
             <form onSubmit={handleEditAccount} className="space-y-4">
               <div>
@@ -8871,8 +8875,11 @@ export default function App() {
 
       {/* A. Account Creation Modal */}
       {showAccountModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-100 max-w-md w-full p-6 relative max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ zIndex: 9999 }}>
+          <div className="bg-white dark:bg-[#0c0d16] rounded-t-[28px] sm:rounded-2xl shadow-2xl border-t sm:border border-slate-100 dark:border-white/10 max-w-md w-full p-5 sm:p-6 relative max-h-[92vh] overflow-y-auto pb-safe">
+            <div className="sm:hidden flex justify-center pt-1 pb-3">
+              <span className="h-1 w-9 rounded-full bg-slate-300 dark:bg-white/20" aria-hidden="true" />
+            </div>
             <button
               onClick={() => {
                 setShowAccountModal(false);
@@ -8882,9 +8889,10 @@ export default function App() {
                 setShowInvestorPassword(false);
                 setShowMt5PasswordInfo(false);
               }}
-              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 z-10"
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 z-10 w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 dark:bg-white/[0.06] active:scale-95 transition"
+              aria-label="Close"
             >
-              ✖
+              <X className="h-4 w-4" />
             </button>
 
             {accountCreationMethod === 'select' && (
@@ -9309,18 +9317,21 @@ export default function App() {
       {/* B. Add / Edit Trade Modal */}
       {showTradeModal && (
         <div
-          className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-[70] overflow-y-auto"
+          className="fixed inset-0 bg-slate-900/70 dark:bg-slate-950/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-[70] overflow-y-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowTradeModal(false);
           }}
         >
           <div
-            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 max-w-md w-full relative flex flex-col my-auto max-h-[min(92vh,780px)] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            className="bg-white dark:bg-[#0c0d16] rounded-t-[28px] sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200/80 dark:border-white/10 max-w-md w-full relative flex flex-col max-h-[92vh] sm:max-h-[min(92vh,780px)] overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-none sm:zoom-in-95 duration-300"
             onClick={(e) => e.stopPropagation()}
           >
 
             {/* Modal Header - Sticky at top so Close button is always visible */}
-            <div className="shrink-0 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 p-4 sm:p-5 pr-14 sticky top-0 z-20">
+            <div className="shrink-0 bg-slate-50/95 dark:bg-[#0c0d16]/95 backdrop-blur-md border-b border-slate-100 dark:border-white/[0.08] p-4 sm:p-5 pr-14 sticky top-0 z-20">
+              <div className="sm:hidden flex justify-center pb-2">
+                <span className="h-1 w-9 rounded-full bg-slate-300 dark:bg-white/20" aria-hidden="true" />
+              </div>
               <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base sm:text-lg">
                 {isMentorReadOnlyMode ? 'Inspect Trade Execution (Read-Only)' : editingTradeId ? 'Modify Trade Record' : 'Record Executed Trade'}
               </h3>
@@ -9786,7 +9797,7 @@ export default function App() {
               </div>
 
               {/* Action Button */}
-              <div className="pt-2">
+              <div className="pt-2 pb-safe">
                 {isMentorReadOnlyMode ? (
                   <div className="p-3.5 bg-violet-500/10 border border-violet-500/30 rounded-xl text-center text-xs font-bold text-violet-600 dark:text-violet-300 flex items-center justify-center gap-2">
                     <Shield className="h-4 w-4 text-violet-500" />

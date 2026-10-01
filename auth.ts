@@ -312,6 +312,7 @@ export const auth = betterAuth({
     'https://fx-journal-pro-pi.vercel.app',
     'https://fxjournalp.netlify.app',
     'https://fxjournalpro.com',
+    'https://www.fxjournalpro.com',
     ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL.trim()] : []),
     ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL.trim()}`] : []),
     ...(process.env.VERCEL_PROJECT_PRODUCTION_URL ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`] : []),

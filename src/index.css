@@ -9,12 +9,45 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
 html,
 body {
   background-color: #060913;
   color: #f8fafc;
   scroll-behavior: smooth;
   overscroll-behavior-x: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  max-width: 100vw;
+}
+
+/* Safe area padding utilities */
+.pt-safe { padding-top: var(--sat); }
+.pb-safe { padding-bottom: var(--sab); }
+.pl-safe { padding-left: var(--sal); }
+.pr-safe { padding-right: var(--sar); }
+.top-safe { top: var(--sat); }
+.bottom-safe { bottom: var(--sab); }
+
+/* Touch friendliness */
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* Mobile swipeable lists without jarring scrollbars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Ensure browser autofill stays seamlessly dark on dark inputs */

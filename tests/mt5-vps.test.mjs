@@ -78,6 +78,41 @@ const created = await api('/api/accounts', {
 const accountId = created.json?.account?.id;
 ok('setup: an MT5 account exists', created.status === 200 && !!accountId, `status ${created.status}`);
 
+// ── creating one WITH credentials queues its first sync ───────────────────
+// The Connect MT5 form posts here, not to /vps/connect. It used to store the
+// password, mark the account Connected on the dead MetaApi method and queue
+// nothing — so the customer watched an empty journal under a green label with
+// nothing on its way, forever.
+const withCreds = await api('/api/accounts', {
+  method: 'POST', cookie: trader.cookie,
+  body: {
+    name: 'Form Connect', broker: 'Exness', platform: 'MT5', accountType: 'Demo',
+    currency: 'USD', startingBalance: '10000', isMt5Sync: true,
+    login: '5009999', server: 'Exness-MT5Trial15', investorPassword: 'form-flow-secret',
+  },
+});
+const formAccountId = withCreds.json?.account?.id;
+ok('the connect form creates the account', withCreds.status === 200 && !!formAccountId,
+  `status ${withCreds.status}`);
+
+const formStatus = await api(`/api/mt5/${formAccountId}/status`, { cookie: trader.cookie });
+ok('it does not claim to be connected yet', formStatus.json?.status !== 'Connected',
+  String(formStatus.json?.status));
+ok('it is on the VPS method, not the dead cloud one', formStatus.json?.syncMethod === 'VPS',
+  String(formStatus.json?.syncMethod));
+ok('and its first sync is queued', (formStatus.json?.connectJobs || []).some((j) => j.status === 'PENDING'),
+  JSON.stringify((formStatus.json?.connectJobs || []).map((j) => `${j.status}:${j.action}`)));
+
+// Leave the queue as we found it so the checks below get their own job.
+for (let i = 0; i < 5; i++) {
+  const c = await worker('/api/mt5/worker/claim', { workerId: `${WORKER_ID}-drain` });
+  if (!c.json?.job) break;
+  await worker('/api/mt5/worker/complete', {
+    jobId: c.json.job.id, workerId: `${WORKER_ID}-drain`, ok: true, tradesImported: 0,
+  });
+  if (c.json.job.accountId === formAccountId) break;
+}
+
 // ── the worker API is not reachable without the worker token ──────────────
 const noToken = await worker('/api/mt5/worker/claim', { workerId: WORKER_ID }, '');
 ok('a worker without a token is refused', noToken.status === 401, `status ${noToken.status}`);
