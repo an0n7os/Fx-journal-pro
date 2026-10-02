@@ -2260,13 +2260,13 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
       <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal}>
         {/* Glowing Brand Icon Badge */}
-        <div className="mb-5 flex items-center">
-          <div className="h-12 w-12 rounded-2xl flex items-center justify-center bg-slate-900/90 border border-violet-500/35 shadow-[0_0_25px_rgba(125,51,255,0.45)]">
-            <Logo iconOnly size={26} />
+        <div className="mb-5 flex items-center justify-center">
+          <div className="h-14 w-14 rounded-2xl flex items-center justify-center bg-slate-900/90 border border-violet-500/35 shadow-[0_0_30px_rgba(125,51,255,0.5)]">
+            <Logo iconOnly size={28} />
           </div>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-6 text-center">
           <h3 className="text-2xl font-bold text-white tracking-tight">
             {isRegistering ? 'Activate your account' : isForgotPassword ? 'Reset password' : 'Sign in to your account'}
           </h3>
@@ -2618,7 +2618,7 @@ function AuthModal({ isOpen, onClose, children }: { isOpen: boolean; onClose: ()
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center overflow-y-auto p-0 sm:p-6"
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4 sm:p-6"
       onMouseDown={(e) => {
         mouseDownTargetRef.current = e.target;
         mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
@@ -2651,9 +2651,9 @@ function AuthModal({ isOpen, onClose, children }: { isOpen: boolean; onClose: ()
       }}
     >
       <div className="cyber-matrix-backdrop fixed inset-0 backdrop-blur-md pointer-events-none" aria-hidden="true"></div>
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-[440px] mt-auto sm:my-auto animate-fade-up z-10" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-[420px] my-auto animate-fade-up z-10" onClick={(e) => e.stopPropagation()}>
         <div className="cyber-card-glow-wrap">
-          <div className="cyber-card-surface rounded-t-[28px] sm:rounded-2xl p-5 xs:p-6 sm:p-8 pb-safe">
+          <div className="cyber-card-surface !rounded-[28px] p-6 sm:p-8 pb-8">
             <button
               type="button"
               onClick={onClose}
