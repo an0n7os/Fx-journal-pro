@@ -22,5 +22,16 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    // The integration kit ships its own copy of the MT5 panel. It is not the
+    // one the app renders — src/components/MT5Automation.tsx is — and it polls
+    // /api/mt5/connections and /api/mt5/status, which exist neither in this
+    // server nor in the kit's own router, so it cannot run as written. Only
+    // the kit's backend/ is wired up, and that stays type-checked; this keeps
+    // a reference copy in the tree without failing `npm run lint`.
+    "src/mt5-integration-kit/frontend"
+  ]
 }

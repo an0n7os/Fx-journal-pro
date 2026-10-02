@@ -17,6 +17,7 @@ import {
   PaymentHistory
 } from './src/types.js';
 import { EA_TEMPLATE } from './src/eaTemplate.js';
+import { createMt5Router } from './src/mt5-integration-kit/backend/mt5Router.js';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 // metaapi.cloud-sdk's "exports.import" points at a browser build (esm-web) that
@@ -5966,6 +5967,281 @@ app.post('/api/mt5/vps/sync', async (req, res) => {
 function queueDepth(db: any): number {
   return (db.mt5ConnectJobs || []).filter((j: any) => j.status === 'PENDING').length;
 }
+
+// ==========================================
+// MT5 INTEGRATION KIT — DESKTOP BRIDGE ENDPOINTS
+//
+// MOUNT ORDER IS THE WHOLE DESIGN HERE. Express matches routes in the order
+// they are registered, so this router is mounted AFTER every /api/mt5/* route
+// above. Mounted before them it would shadow the EA and VPS endpoints that
+// customers are using today.
+//
+// What that leaves the kit handling is exactly the three paths this server
+// does not define:
+//
+//   GET  /api/mt5/worker/jobs
+//   POST /api/mt5/worker/job/:id/status
+//   POST /api/mt5/worker/job/:id/trades
+//
+// which is the protocol the kit's python_worker/worker.py speaks. Everything
+// else in the kit's router — /ea/validate, /ea/account, /ea/positions,
+// /ea/orders, /ea/heartbeat, /ea/sync, /ea/:accountId/download — is already
+// answered above, with HMAC verification on every route rather than only on
+// the handshake, zod-validated bodies, and rate limiting. Those handlers never
+// run, and that is deliberate.
+//
+// The two bridges share one queue (db.mt5ConnectJobs) and one secret, so a
+// job can be served by whichever worker is running and there is no second
+// token to rotate.
+// ==========================================
+
+/**
+ * The kit calls this the bridge token. It is the same secret as the VPS
+ * worker's, because both pull the same jobs and both receive a decrypted
+ * investor password — two names for one level of access would only mean one
+ * of them gets forgotten at rotation time.
+ *
+ * No literal fallback: the kit's own README suggests
+ * `process.env.BRIDGE_AUTH_TOKEN || 'dev-bridge-secret-token'`, and this
+ * repository is public, so an unset variable would publish the token.
+ */
+const bridgeAuthToken = (): string =>
+  process.env.BRIDGE_AUTH_TOKEN?.trim() || process.env.MT5_WORKER_TOKEN?.trim() || '';
+
+/** Finds a queued job and its account across every loaded database. */
+function findBridgeJob(jobId: string): { db: any; job: any; account: any } | null {
+  for (const db of allJobDbs()) {
+    const job = (db.mt5ConnectJobs || []).find((j: any) => j.id === jobId);
+    if (!job) continue;
+    const account = (db.accounts || []).find((a: any) => a.id === job.accountId) || null;
+    return { db, job, account };
+  }
+  return null;
+}
+
+app.use('/api/mt5', createMt5Router({
+  getAccount: async (id: string) => {
+    for (const db of allJobDbs()) {
+      const account = (db.accounts || []).find((a: any) => a.id === id);
+      if (account) return account;
+    }
+    return null;
+  },
+
+  saveAccount: async (account: any) => {
+    for (const db of allJobDbs()) {
+      if ((db.accounts || []).some((a: any) => a.id === account.id)) {
+        await saveDatabase(db, db.users?.[0]?.email);
+        return;
+      }
+    }
+  },
+
+  // The EA routes that would use these are all answered above, so these exist
+  // to satisfy the kit's interface rather than to be called. They write to the
+  // same collections the live handlers use, so if the kit's router ever does
+  // become reachable the data lands in one place rather than two.
+  saveSnapshots: async (snapshots: any[]) => {
+    for (const snap of snapshots) {
+      for (const db of allJobDbs()) {
+        if (!(db.accounts || []).some((a: any) => a.id === snap.accountId)) continue;
+        if (!Array.isArray(db.mt5AccountSnapshots)) db.mt5AccountSnapshots = [];
+        db.mt5AccountSnapshots.push({ ...snap, userId: db.users?.[0]?.id });
+        await saveDatabase(db, db.users?.[0]?.email);
+        break;
+      }
+    }
+  },
+
+  saveOpenPositions: async (accountId: string, positions: any[]) => {
+    for (const db of allJobDbs()) {
+      if (!(db.accounts || []).some((a: any) => a.id === accountId)) continue;
+      if (!Array.isArray(db.mt5OpenPositions)) db.mt5OpenPositions = [];
+      db.mt5OpenPositions = db.mt5OpenPositions.filter((p: any) => p.accountId !== accountId);
+      db.mt5OpenPositions.push(...positions.map((p: any) => ({ ...p, accountId, userId: db.users?.[0]?.id })));
+      await saveDatabase(db, db.users?.[0]?.email);
+      return;
+    }
+  },
+
+  savePendingOrders: async (accountId: string, orders: any[]) => {
+    for (const db of allJobDbs()) {
+      if (!(db.accounts || []).some((a: any) => a.id === accountId)) continue;
+      if (!Array.isArray(db.mt5PendingOrders)) db.mt5PendingOrders = [];
+      db.mt5PendingOrders = db.mt5PendingOrders.filter((o: any) => o.accountId !== accountId);
+      db.mt5PendingOrders.push(...orders.map((o: any) => ({ ...o, accountId, userId: db.users?.[0]?.id })));
+      await saveDatabase(db, db.users?.[0]?.email);
+      return;
+    }
+  },
+
+  saveTrades: async (trades: any[]) => {
+    if (!trades.length) return;
+    const accountId = trades[0].accountId;
+    for (const db of allJobDbs()) {
+      if (!(db.accounts || []).some((a: any) => a.id === accountId)) continue;
+      if (!Array.isArray(db.trades)) db.trades = [];
+      const existing = new Set(db.trades.map((t: any) => t.id));
+      for (const t of trades) {
+        if (!existing.has(t.id)) db.trades.push({ ...t, userId: db.users?.[0]?.id });
+      }
+      await saveDatabase(db, db.users?.[0]?.email);
+      return;
+    }
+  },
+
+  /**
+   * Hands the desktop worker its next job, with the credentials for it.
+   *
+   * The kit's own version returned `jobs.slice(0, 1)` from a plain queue and
+   * marked nothing, so two workers polling five seconds apart both received
+   * the same job and imported it twice. Claiming it under the same lease the
+   * VPS workers use means a second worker gets nothing instead of a duplicate,
+   * and a worker that dies mid-job has its lease reaped and the job retried.
+   */
+  getQueuedJobs: async () => {
+    for (const db of allJobDbs()) {
+      reapExpiredJobs(db);
+      const job = (db.mt5ConnectJobs || [])
+        .filter((j: any) => j.status === 'PENDING' && (j.action === 'SYNC_NOW' || j.action === 'CONNECT'))
+        .sort((a: any, b: any) => String(a.createdAt).localeCompare(String(b.createdAt)))[0];
+      if (!job) continue;
+
+      const account = (db.accounts || []).find((a: any) => a.id === job.accountId);
+      if (!account) {
+        job.status = 'FAILED';
+        job.error = 'Account no longer exists';
+        job.updatedAt = new Date().toISOString();
+        await saveDatabase(db, db.users?.[0]?.email);
+        continue;
+      }
+
+      const password = decryptInvestorPassword(account);
+      if (!password) {
+        job.status = 'FAILED';
+        job.error = 'Stored investor password could not be decrypted. Ask the customer to reconnect.';
+        job.updatedAt = new Date().toISOString();
+        account.connectionStatus = 'Error';
+        logEaEvent(db, account, 'VPS_CREDENTIAL_UNREADABLE', 'error', job.error);
+        await saveDatabase(db, db.users?.[0]?.email);
+        continue;
+      }
+
+      job.status = 'RUNNING';
+      job.attempts = (job.attempts || 0) + 1;
+      job.workerId = 'desktop-bridge';
+      job.leaseUntil = new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString();
+      job.startedAt = new Date().toISOString();
+      job.updatedAt = job.startedAt;
+      account.connectionStatus = 'Validating';
+      logEaEvent(db, account, 'BRIDGE_JOB_CLAIMED', 'info', `Desktop bridge claimed ${job.action}`);
+      await saveDatabase(db, db.users?.[0]?.email);
+
+      // Shaped the way worker.py reads it: job['id'] and job['connection'].
+      return [{
+        id: job.id,
+        connection: {
+          mt5AccountNumber: String(account.mt5Login || ''),
+          mt5Server: String(account.mt5Server || ''),
+          investorPassword: password,
+        },
+      }];
+    }
+    return [];
+  },
+
+  updateJobStatus: async (jobId: string, status: string, error?: string) => {
+    const found = findBridgeJob(jobId);
+    if (!found) return;
+    const { db, job, account } = found;
+
+    // The kit reports progress (CONNECTING, FETCHING_HISTORY, IMPORTING) as
+    // well as outcomes. Only the outcomes end the job; the rest extend the
+    // lease, so a long history pull is not reaped out from under the worker.
+    if (status === 'COMPLETED' || status === 'FAILED') {
+      job.status = status === 'COMPLETED' ? 'DONE' : 'FAILED';
+      job.leaseUntil = null;
+      job.completedAt = new Date().toISOString();
+      if (error) job.error = error;
+      if (account) {
+        account.connectionStatus = status === 'COMPLETED' ? 'Connected' : 'Error';
+        if (status === 'COMPLETED') account.lastSyncTime = new Date().toISOString();
+        logEaEvent(db, account, `BRIDGE_${status}`, status === 'COMPLETED' ? 'info' : 'error',
+          error || `Desktop bridge reported ${status}`);
+      }
+    } else {
+      job.leaseUntil = new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString();
+      job.statusMessage = status;
+      if (account) account.connectionStatus = 'Syncing';
+    }
+    job.updatedAt = new Date().toISOString();
+    await saveDatabase(db, db.users?.[0]?.email);
+  },
+
+  /**
+   * Stores the trades the desktop worker reconstructed.
+   *
+   * worker.py sends finished trades rather than raw deals, so this cannot go
+   * through applyEaSyncPayload — that one takes deals. Rows are keyed on the
+   * broker's position id, which is what makes a re-run idempotent: the worker
+   * pulls the full history from 2000 every time it runs, so without the key
+   * every sync would duplicate the entire journal.
+   */
+  saveImportedTrades: async (jobId: string, payload: any) => {
+    const found = findBridgeJob(jobId);
+    if (!found || !found.account) return { imported: 0, skipped: 0 };
+    const { db, account } = found;
+
+    if (!Array.isArray(db.trades)) db.trades = [];
+    const existing = new Set(db.trades.map((t: any) => String(t.id)));
+    const userId = db.users?.[0]?.id;
+
+    let imported = 0;
+    let skipped = 0;
+    for (const t of Array.isArray(payload?.trades) ? payload.trades : []) {
+      const id = `mt5bridge_${account.id}_${t.externalTradeId}`;
+      if (existing.has(id)) { skipped++; continue; }
+      db.trades.push({
+        id,
+        accountId: account.id,
+        userId,
+        date: t.entryTime || t.exitTime || new Date().toISOString(),
+        exitTime: t.exitTime || null,
+        symbol: String(t.symbol || 'UNKNOWN').toUpperCase(),
+        type: String(t.type).toUpperCase() === 'SELL' ? 'Sell' : 'Buy',
+        lotSize: Number(t.lotSize) || 0,
+        entryPrice: Number(t.entryPrice) || 0,
+        exitPrice: Number(t.exitPrice) || 0,
+        // worker.py has already folded commission and swap into netProfit, so
+        // adding them again here would double-count every cost.
+        profit: Number(t.netProfit) || 0,
+        commission: Number(t.commission) || 0,
+        swap: Number(t.swap) || 0,
+        riskPercentage: 1.0,
+        strategy: 'MT5 Bridge Sync',
+        emotion: 'Calm',
+        notes: '',
+        screenshot: '',
+        tags: ['MT5 Sync'],
+        isMt5Sync: true,
+        ticket: String(t.externalTradeId),
+      });
+      existing.add(id);
+      imported++;
+    }
+
+    if (payload?.balance !== undefined) account.currentBalance = Number(payload.balance);
+    if (payload?.equity !== undefined) account.equity = Number(payload.equity);
+    account.eaSyncTradeCount = db.trades.filter((t: any) => t.accountId === account.id && t.isMt5Sync).length;
+    account.syncMethod = 'VPS';
+
+    logEaEvent(db, account, 'BRIDGE_IMPORT', 'info', `Imported ${imported} trades, ${skipped} already present`);
+    await saveDatabase(db, db.users?.[0]?.email);
+    return { imported, skipped };
+  },
+
+  bridgeAuthToken: bridgeAuthToken(),
+}));
 
 // ==========================================
 // REAL-TIME AI TRADING INSIGHTS ROUTE (GEMINI)
