@@ -173,14 +173,22 @@ def complete(job: Job, ok: bool, error: str = "", code: str = "", imported: int 
 
 def terminal_login(job: Job) -> None:
     """Start this worker's terminal and log it into the customer's account."""
-    kwargs: dict[str, Any] = {"login": job.login, "password": job.password, "server": job.server}
+    init_kwargs: dict[str, Any] = {}
     if TERMINAL_PATH:
-        kwargs["path"] = TERMINAL_PATH
+        init_kwargs["path"] = TERMINAL_PATH
 
-    if not mt5.initialize(**kwargs):
+    # Initialize terminal IPC first
+    if not mt5.initialize(**init_kwargs):
         code, message = mt5.last_error()
-        # The password is in kwargs; never log kwargs.
-        raise SyncFailed(f"MT5 login failed ({code}): {message}", "MT5_LOGIN_FAILED")
+        raise SyncFailed(f"MT5 terminal IPC init failed ({code}): {message}", "MT5_INIT_FAILED")
+
+    # Authorize account with broker
+    if not mt5.login(job.login, password=job.password, server=job.server):
+        code, message = mt5.last_error()
+        raise SyncFailed(
+            f"MT5 login failed ({code}): {message}. Verify server '{job.server}' is scanned in MT5.",
+            "MT5_LOGIN_FAILED",
+        )
 
     info = mt5.account_info()
     if info is None:
