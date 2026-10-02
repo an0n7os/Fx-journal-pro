@@ -6603,26 +6603,9 @@ app.post('/api/ai/mentor', async (req, res) => {
       `What's on your mind today?`;
   };
 
-  if (!geminiKey || geminiKey === "MY_GEMINI_API_KEY") {
-    // No model configured. The fallback is a scripted reply built from the
-    // user's own numbers — useful, but it is not the AI mentor Pro is sold
-    // on, and returning it unmarked reads as a real answer. The flag lets the
-    // chat say so, the same way FX News labels its sample headlines.
-    const fallbackReply = generateSmartMentorFallback(userMessage, accountTrades, accountName);
-    return res.json({ reply: fallbackReply, fallback: true });
-  }
+  const openRouterKey = process.env.OPENROUTER_API_KEY || '';
 
-  try {
-    const ai = new GoogleGenAI({
-      apiKey: geminiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
-        }
-      }
-    });
-
-    const systemInstruction = `You are ${traderName}'s personal trading mentor, coach, and companion on FX Journal Pro. Your name is "AI Mentor".
+  const systemInstruction = `You are ${traderName}'s personal trading mentor, coach, and companion on FX Journal Pro. Your name is "AI Mentor".
 
 Personality & Vibe:
 - Extremely warm, friendly, encouraging, and approachable — like a trusted mentor, brother, and trading companion who truly wants to see ${traderName} succeed!
@@ -6648,31 +6631,91 @@ RESTRICTIONS:
 - NEVER promise profits or guarantee outcomes.
 - NEVER be dismissive or harsh. Always be encouraging and constructive.`;
 
-    const firstUserIdx = messages.findIndex((m: any) => m.role === 'user');
-    const validMessages = firstUserIdx !== -1 ? messages.slice(firstUserIdx) : messages;
+  const firstUserIdx = messages.findIndex((m: any) => m.role === 'user');
+  const validMessages = firstUserIdx !== -1 ? messages.slice(firstUserIdx) : messages;
 
-    const conversation = validMessages.map((msg: any) => ({
-      role: msg.role === 'mentor' ? 'model' : 'user',
-      parts: [{ text: msg.content }]
-    }));
+  // 1. Try OpenRouter (Gemma free / GPT-4o)
+  if (openRouterKey && !openRouterKey.includes('MY_KEY')) {
+    try {
+      const preferredModel = process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
+      const candidateModels = [...new Set([preferredModel, 'google/gemma-4-26b-a4b-it:free', 'openai/gpt-4o-mini', 'openai/gpt-4o'])];
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: conversation,
-      config: {
-        systemInstruction
+      const promptMessages = [
+        { role: 'system', content: systemInstruction },
+        ...validMessages.map((m: any) => ({
+          role: m.role === 'mentor' ? 'assistant' : 'user',
+          content: m.content
+        }))
+      ];
+
+      for (const model of candidateModels) {
+        try {
+          const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${openRouterKey.trim()}`,
+              'HTTP-Referer': 'https://www.fxjournalpro.com',
+              'X-Title': 'FX Journal Pro',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model,
+              max_tokens: 1200,
+              messages: promptMessages,
+            })
+          });
+
+          const orData: any = await orRes.json();
+          if (orData?.choices?.[0]?.message?.content) {
+            return res.json({ reply: orData.choices[0].message.content });
+          }
+          console.warn(`[OpenRouter] Model ${model} unavailable:`, orData?.error?.message || orData);
+        } catch (mErr: any) {
+          console.warn(`[OpenRouter] Model ${model} fetch failed:`, mErr?.message || mErr);
+        }
       }
-    });
-
-    const replyText = response.text || generateSmartMentorFallback(userMessage, accountTrades, accountName);
-
-    res.json({ reply: replyText });
-
-  } catch (err: any) {
-    console.error('Gemini API Error, using smart mentor fallback:', err);
-    const fallbackReply = generateSmartMentorFallback(userMessage, accountTrades, accountName);
-    res.json({ reply: fallbackReply });
+    } catch (e: any) {
+      console.error('[OpenRouter] Request error:', e?.message || e);
+    }
   }
+
+  // 2. Try Google Gemini if configured
+  if (geminiKey && geminiKey !== "MY_GEMINI_API_KEY") {
+    try {
+      const ai = new GoogleGenAI({
+        apiKey: geminiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          }
+        }
+      });
+
+      const conversation = validMessages.map((msg: any) => ({
+        role: msg.role === 'mentor' ? 'model' : 'user',
+        parts: [{ text: msg.content }]
+      }));
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: conversation,
+        config: {
+          systemInstruction
+        }
+      });
+
+      const replyText = response.text;
+      if (replyText) {
+        return res.json({ reply: replyText });
+      }
+    } catch (err: any) {
+      console.error('Gemini API Error, using smart mentor fallback:', err);
+    }
+  }
+
+  // 3. Fallback to smart mentor script
+  const fallbackReply = generateSmartMentorFallback(userMessage, accountTrades, accountName);
+  return res.json({ reply: fallbackReply, fallback: true });
 });
 
 // ==========================================

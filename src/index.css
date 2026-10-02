@@ -50,6 +50,23 @@ button, a, input, select, textarea {
   scrollbar-width: none;
 }
 
+/* Seamless AI Chat Input: absolutely no inner border, focus-visible outline or box shadow */
+.chat-clean-input,
+.chat-clean-input:focus,
+.chat-clean-input:focus-visible,
+.chat-clean-input:hover,
+.chat-clean-input:active {
+  border: 0 !important;
+  border-width: 0 !important;
+  border-color: transparent !important;
+  outline: none !important;
+  outline-width: 0 !important;
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
 /* Ensure browser autofill stays seamlessly dark on dark inputs */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
@@ -1786,6 +1803,29 @@ html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover 
 html.dark select option {
   background-color: #12151c;
   color: #e8eaf0;
+}
+
+/* ── AI Assistant: Clean seamless pill input (no inner box/borders/backgrounds) ── */
+html.dark input.chat-clean-input,
+html.dark input.chat-clean-input[type="text"],
+html.dark #ai-assistant-card input,
+html.dark #ai-assistant-card input[type="text"],
+html.dark #ai-assistant-card input:hover,
+html.dark #ai-assistant-card input:focus,
+html.dark #ai-assistant-card input:focus-visible,
+html.dark #ai-assistant-card input:active,
+#ai-assistant-card input,
+#ai-assistant-card input[type="text"],
+input.chat-clean-input {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-width: 0 !important;
+  border-color: transparent !important;
+  border-style: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
 }
 
 /* ── Keyboard focus, everywhere ────────────────────────────── */
