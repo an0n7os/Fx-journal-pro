@@ -932,47 +932,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                     : <RefreshCw className="h-4 w-4" />}
                   {vpsSyncing ? 'Connecting…' : phase === 'Queued' ? 'Connecting…' : 'Sync Now'}
                 </button>
-                <button
-                  onClick={() => setShowDisconnectConfirm(true)}
-                  disabled={vpsBusy}
-                  className="inline-flex items-center gap-1.5 border border-rose-200 dark:border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-rose-600 dark:text-rose-300 text-xs font-bold px-4 py-2.5 rounded-xl transition disabled:opacity-50"
-                >
-                  {vpsBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
-                  Disconnect Auto Sync
-                </button>
               </div>
-
-              {/* VPS disconnect confirmation */}
-              {showDisconnectConfirm && (
-                <div className="rounded-2xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 p-5">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="h-5 w-5 shrink-0 text-rose-500" />
-                    <div className="flex-1">
-                      <h4 className="text-sm font-bold text-rose-700 dark:text-rose-300">Disconnect Auto Sync?</h4>
-                      <p className="text-xs text-rose-600/80 dark:text-rose-300/80 mt-1 leading-relaxed">
-                        The stored encrypted credentials will be removed. No trading data is deleted.
-                        You can reconnect at any time by entering your details again.
-                      </p>
-                      <div className="mt-4 flex gap-2">
-                        <button
-                          onClick={handleVpsDisconnect}
-                          disabled={vpsBusy}
-                          className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50"
-                        >
-                          {vpsBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
-                          {vpsBusy ? 'Disconnecting…' : 'Yes, Disconnect'}
-                        </button>
-                        <button
-                          onClick={() => setShowDisconnectConfirm(false)}
-                          className="border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs font-bold px-4 py-2 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 text-[11px] text-emerald-700 dark:text-emerald-300 flex items-start gap-2">
                 <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
