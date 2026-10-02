@@ -1102,8 +1102,17 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-[1.02fr_0.98fr] gap-8 lg:gap-16 items-center">
-            {/* Left: #1 Best Trading Journal */}
-            <div className="animate-fade-up">
+            {/*
+              Left on a desktop, SECOND on a phone.
+
+              On a narrow screen the copy column is a badge, a two-line heading,
+              a paragraph, six ticked features and two buttons — roughly a full
+              screen of reading before anything shows what the product looks
+              like. The portfolio panel is the proof, so on a phone it goes
+              first and the copy follows it. The desktop two-column layout is
+              unchanged: `lg:order-*` puts them back.
+            */}
+            <div className="animate-fade-up order-2 lg:order-1 mt-8 lg:mt-0">
               <div className="lp-pill mb-5 sm:mb-6">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_2px_rgba(52,211,153,.55)]" />
                 <span className="lp-eyebrow">#1 Best Trading Journal</span>
@@ -1149,8 +1158,10 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
             </div>
 
-            {/* Right: the product itself — what the trader gets after MT5 sync */}
-            <div className="animate-fade-up lg:mt-0 mt-8">
+            {/* Right on a desktop, FIRST on a phone — see the note above. The
+                mt-8 moved to the copy column with the order swap, so nothing
+                pushes this away from the header any more. */}
+            <div className="animate-fade-up order-1 lg:order-2">
               <HeroPanel />
             </div>
           </div>
