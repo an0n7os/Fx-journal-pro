@@ -9,9 +9,10 @@
   NODE_ENV = "production"
 
 [functions]
-  # Bundled rather than copied from node_modules. metaapi.cloud-sdk alone is
-  # 45MB on disk; esbuild tree-shakes the whole function to 12MB, 2.2MB zipped,
-  # well inside Netlify's 50MB limit. Measured, not assumed.
+  # Bundled rather than copied from node_modules, so the function ships only
+  # what it reaches. This mattered most when metaapi.cloud-sdk was a
+  # dependency and was 45MB on its own; that is gone now, and the bundle is
+  # smaller again, but tree-shaking is still the right default here.
   node_bundler = "esbuild"
 
 # The API. The splat is kept in the target so req.path still starts with /api

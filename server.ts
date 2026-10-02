@@ -20,12 +20,8 @@ import { EA_TEMPLATE } from './src/eaTemplate.js';
 import { createMt5Router } from './src/mt5-integration-kit/backend/mt5Router.js';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-// metaapi.cloud-sdk's "exports.import" points at a browser build (esm-web) that
-// references `window` and crashes in Node. Import the CommonJS build directly.
-import MetaApiModule from 'metaapi.cloud-sdk/dist/index';
-// The SDK ships as CommonJS; keep this resilient to both esbuild/tsx interop
-// styles (__esModule true => the class is the default export).
-const MetaApi: any = (MetaApiModule as any).default || MetaApiModule;
+// metaapi.cloud-sdk is NOT a dependency any more — see getCloudApi() for why
+// and for how to put it back.
 import { toNodeHandler, fromNodeHeaders } from 'better-auth/node';
 import { auth as betterAuthInstance, autoMigrateBetterAuth } from './auth.js';
 
@@ -1197,16 +1193,52 @@ let cloudApi: any = null;
 const cloudWorkers = new Map<string, { account: any; connection: any; failing: boolean }>();
 const cloudJobLocks = new Set<string>();
 
-function getCloudApi(): any {
+/**
+ * The MetaApi client, loaded on first use — if the SDK is installed at all.
+ *
+ * metaapi.cloud-sdk is deliberately not a dependency of this project. It was
+ * 45MB on disk and carried thirteen of the sixteen production advisories npm
+ * audit reports, including both criticals, through axios, crypto-js, lodash,
+ * moment and socket.io-client. It paid for none of that: cloudSyncAvailable()
+ * requires `!IS_SERVERLESS`, and IS_SERVERLESS is always true on Netlify, so
+ * this path could not execute in production however it was configured.
+ *
+ * The code stays, because the cloud route is a real option — it is the hosted
+ * "MT5 API" that needs no Windows host. To take it:
+ *
+ *   npm i metaapi.cloud-sdk
+ *   MT5_CLOUD_SYNC_ENABLED=true, META_API_TOKEN=...
+ *
+ * and then make the sync run from a request or a background function rather
+ * than the setInterval worker, which a serverless platform freezes.
+ *
+ * The require is deferred rather than imported at the top so that a missing
+ * package is simply "cloud sync unavailable" instead of a server that will
+ * not boot. createRequire, not `await import`, because this file is bundled
+ * to CommonJS for Netlify and to ESM for Vercel, and a static specifier would
+ * fail the build when the package is absent.
+ */
+async function getCloudApi(): Promise<any> {
   const token = process.env.META_API_TOKEN?.trim();
   if (!token) return null;
-  if (!cloudApi) {
-    cloudApi = new MetaApi(token, {
-      application: 'journalpro',
-      requestTimeout: 60,
-      connectTimeout: 60
-    });
+  if (cloudApi) return cloudApi;
+
+  let MetaApi: any = null;
+  try {
+    // The SDK's "exports.import" points at a browser build that references
+    // `window` and crashes in Node, so the CommonJS build is loaded directly.
+    const mod = await import(/* @vite-ignore */ 'metaapi.cloud-sdk/dist/index' as string);
+    MetaApi = (mod as any).default?.default || (mod as any).default || mod;
+  } catch {
+    console.warn('[Cloud] metaapi.cloud-sdk is not installed — cloud sync is unavailable. `npm i metaapi.cloud-sdk` to enable it.');
+    return null;
   }
+
+  cloudApi = new MetaApi(token, {
+    application: 'journalpro',
+    requestTimeout: 60,
+    connectTimeout: 60
+  });
   return cloudApi;
 }
 
@@ -1425,7 +1457,7 @@ async function runCloudConnect(db: any, job: any, account: any) {
   if (!login || !server) throw new Error('MT5 login/server are not set on this account');
   account.isMt5Sync = true;
 
-  const api = getCloudApi();
+  const api = await getCloudApi();
   if (!api) throw new Error('META_API_TOKEN is not configured on this deployment');
 
   let ma: any = null;
@@ -1515,7 +1547,7 @@ async function runCloudSyncNow(db: any, job: any, account: any) {
   const server = String(account.mt5Server || '').trim();
   if (!login || !server) throw new Error('MT5 login/server are not set');
 
-  const api = getCloudApi();
+  const api = await getCloudApi();
   if (!api) throw new Error('META_API_TOKEN is not configured');
 
   let ma: any = null;
@@ -1563,7 +1595,7 @@ async function runCloudSyncNow(db: any, job: any, account: any) {
 
 async function runCloudDisconnect(db: any, job: any, account: any) {
   setCloudJob(db, job, 'IN_PROGRESS', 'Deprovisioning cloud terminal');
-  const api = getCloudApi();
+  const api = await getCloudApi();
   if (api) {
     const cached = cloudWorkers.get(account.id);
     if (cached) {
@@ -1601,7 +1633,7 @@ async function runCloudJob(db: any, job: any) {
 }
 
 async function processCloudJobs() {
-  const api = getCloudApi();
+  const api = await getCloudApi();
   if (!api) return;
   for (const db of userDatabases.values()) {
     if (!db || !Array.isArray(db.mt5ConnectJobs)) continue;
@@ -1617,7 +1649,7 @@ async function processCloudJobs() {
 }
 
 async function cloudSyncLoopTick() {
-  const api = getCloudApi();
+  const api = await getCloudApi();
   if (!api) return;
   for (const [uid, db] of userDatabases) {
     for (const account of db?.accounts || []) {
