@@ -642,7 +642,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const PhaseIcon = phaseIcon;
 
   const phaseLabel =
-    phase === 'Synced' ? 'Connected' : phase === 'Syncing' ? 'Syncing' : phase === 'Queued' ? 'In Queue' : phase;
+    phase === 'Synced' ? 'Connected' : phase === 'Syncing' ? 'Syncing' : phase === 'Queued' ? 'Connecting' : phase;
   const phaseColor =
     phase === 'Synced'
       ? 'text-emerald-600 dark:text-emerald-400'
@@ -725,7 +725,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
         <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-xl px-4 py-3">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
           <div className="flex-1">
-            Your sync is queued — we will connect to MT5, fetch your trades, and update the journal automatically.
+            Connecting to MT5 — we will connect to your account, fetch your trades, and update the journal automatically.
             {status.queueDepth && status.queueDepth > 1 ? ` (${status.queueDepth} jobs ahead)` : ''} This page refreshes automatically.
           </div>
         </div>
@@ -930,7 +930,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                   {vpsSyncing || phase === 'Queued'
                     ? <Loader2 className="h-4 w-4 animate-spin" />
                     : <RefreshCw className="h-4 w-4" />}
-                  {vpsSyncing ? 'Queuing…' : phase === 'Queued' ? 'Sync Queued…' : 'Sync Now'}
+                  {vpsSyncing ? 'Connecting…' : phase === 'Queued' ? 'Connecting…' : 'Sync Now'}
                 </button>
                 <button
                   onClick={() => setShowDisconnectConfirm(true)}
@@ -1098,7 +1098,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                   className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${vpsSyncing || phase === 'Queued' ? 'animate-spin' : ''}`} />
-                  {vpsSyncing ? 'Queuing…' : phase === 'Queued' ? 'In Queue…' : 'Sync Now'}
+                  {vpsSyncing ? 'Connecting…' : phase === 'Queued' ? 'Connecting…' : 'Sync Now'}
                 </button>
               )}
               {status?.syncMethod === 'CLOUD' && (
