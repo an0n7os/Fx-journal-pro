@@ -168,7 +168,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
   const [showModelModal, setShowModelModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [findScope, setFindScope] = useState<'account' | 'all' | 'today'>('account');
-  const [activeModel, setActiveModel] = useState('Google Gemma 4 (Free)');
+  const [activeModel, setActiveModel] = useState('OpenAI GPT-4o Mini');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Suggested Prompts for Mobile and Desktop
@@ -221,6 +221,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
           accountId: account.id,
           messages: newMessages.slice(-10),
           scope: findScope,
+          model: activeModel,
         }),
       });
       const data = await response.json();
@@ -492,7 +493,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
                 className="flex items-center gap-1.5 px-2.5 py-1 md:px-3 md:py-1.5 rounded-full bg-[#1e1e22] hover:bg-[#27272c] border border-[#2c2c32] text-[11px] md:text-xs text-neutral-300 hover:text-white transition cursor-pointer"
               >
                 <div className="w-3 md:w-3.5 h-3 md:h-3.5 rounded-full bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 shrink-0" />
-                <span className="font-medium">AI Assistant</span>
+                <span className="font-medium">{activeModel.includes('GPT') ? 'GPT-4o Mini' : 'Gemma 4'}</span>
                 <ChevronDown className="w-2.5 md:w-3 h-2.5 md:h-3 text-neutral-400" />
               </button>
 
@@ -502,16 +503,16 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
                     Select Model
                   </div>
                   <button
-                    onClick={() => { setActiveModel('Google Gemma 4 (Free)'); setShowModelModal(false); }}
+                    onClick={() => { setActiveModel('OpenAI GPT-4o Mini'); setShowModelModal(false); }}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${activeModel.includes('GPT') ? 'bg-purple-600/30 text-purple-200 font-medium' : 'text-neutral-300 hover:bg-neutral-800'}`}
+                  >
+                    OpenAI GPT-4o Mini (Fast & Smart)
+                  </button>
+                  <button
+                    onClick={() => { setActiveModel('Google Gemma 4'); setShowModelModal(false); }}
                     className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${activeModel.includes('Gemma') ? 'bg-purple-600/30 text-purple-200 font-medium' : 'text-neutral-300 hover:bg-neutral-800'}`}
                   >
                     Google Gemma 4 (Free)
-                  </button>
-                  <button
-                    onClick={() => { setActiveModel('OpenAI GPT-4o'); setShowModelModal(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${activeModel.includes('GPT') ? 'bg-purple-600/30 text-purple-200 font-medium' : 'text-neutral-300 hover:bg-neutral-800'}`}
-                  >
-                    OpenAI GPT-4o (Fallback)
                   </button>
                 </div>
               )}

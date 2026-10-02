@@ -6634,11 +6634,17 @@ RESTRICTIONS:
   const firstUserIdx = messages.findIndex((m: any) => m.role === 'user');
   const validMessages = firstUserIdx !== -1 ? messages.slice(firstUserIdx) : messages;
 
-  // 1. Try OpenRouter (Gemma free / GPT-4o)
+  // 1. Try OpenRouter (GPT-4o Mini / Gemma Free)
   if (openRouterKey && !openRouterKey.includes('MY_KEY')) {
     try {
-      const preferredModel = process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
-      const candidateModels = [...new Set([preferredModel, 'google/gemma-4-26b-a4b-it:free', 'openai/gpt-4o-mini', 'openai/gpt-4o'])];
+      const requestedModel = String(req.body?.model || '').toLowerCase();
+      let preferredModel = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+      if (requestedModel.includes('gpt')) {
+        preferredModel = 'openai/gpt-4o-mini';
+      } else if (requestedModel.includes('gemma')) {
+        preferredModel = 'google/gemma-4-26b-a4b-it:free';
+      }
+      const candidateModels = [...new Set([preferredModel, 'openai/gpt-4o-mini', 'google/gemma-4-26b-a4b-it:free', 'openai/gpt-4o'])];
 
       const promptMessages = [
         { role: 'system', content: systemInstruction },
