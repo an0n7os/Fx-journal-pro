@@ -7,6 +7,19 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /*
+    Tailwind v4 ships no `xs`, and four places in LoginPage.tsx were already
+    written against one — so `text-[30px] xs:text-[36px] sm:text-[48px]` had no
+    middle step and the hero heading jumped straight from 30px to 48px at
+    640px. The classes generated nothing at all; the built CSS carried only
+    sm/md/lg/xl/2xl.
+
+    400px, because that is where the phones this skips over begin: 375 and 390
+    keep the small type, a 414 iPhone Plus and a 412 Pixel get the step up the
+    author intended.
+  */
+  --breakpoint-xs: 25rem;
 }
 
 :root {
