@@ -1465,7 +1465,7 @@ export default function App() {
         return;
       }
       if (!newAccMt5InvestorPassword.trim()) {
-        showAlert('Please enter your MT5 Password (trading password or investor password).', { title: 'Password is empty', type: 'warning' });
+        showAlert('Please enter your MT5 Investor Password.', { title: 'Password is empty', type: 'warning' });
         focusField('mt5_investor_key_nonpwd');
         return;
       }
@@ -9156,7 +9156,7 @@ export default function App() {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-1.5">
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Trading Password</label>
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Investor Password</label>
                       <button
                         type="button"
                         onClick={() => setShowMt5PasswordInfo(prev => !prev)}
@@ -9167,7 +9167,7 @@ export default function App() {
                       </button>
                     </div>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 font-semibold flex items-center gap-1">
-                      <Shield className="w-2.5 h-2.5" /> Encrypted &amp; Safe
+                      <Shield className="w-2.5 h-2.5" /> Read-Only &amp; Safe
                     </span>
                   </div>
 
@@ -9175,7 +9175,7 @@ export default function App() {
                     <div className="mb-2 p-2.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-[11px] leading-relaxed text-violet-300 flex items-start gap-2">
                       <Info className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />
                       <div>
-                        You can enter your <strong>trading password</strong> or <strong>investor password</strong>. Stored passwords are encrypted in our system.
+                        Enter your <strong>investor password</strong> (read-only). We can only read your trade history and cannot place or modify any trades.
                       </div>
                     </div>
                   )}
@@ -9197,7 +9197,7 @@ export default function App() {
                       style={{ WebkitTextSecurity: showInvestorPassword ? 'none' : 'disc' } as any}
                       value={newAccMt5InvestorPassword}
                       onChange={(e) => setNewAccMt5InvestorPassword(e.target.value)}
-                      placeholder="Enter your MT5 password"
+                      placeholder="Enter your MT5 investor password"
                       className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 pr-10 w-full focus:ring-violet-500 focus:border-violet-500 font-mono tracking-wider placeholder:font-sans placeholder:tracking-normal"
                     />
                     <button
@@ -9214,7 +9214,7 @@ export default function App() {
                       <Shield className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      You can enter your <strong className="text-emerald-200 font-semibold">trading password</strong> or <strong className="text-emerald-200 font-semibold">investor password</strong>. Stored passwords are encrypted in our system.
+                      Always enter your <strong className="text-emerald-200 font-semibold">investor password</strong> (read-only). We cannot place or modify any trades, keeping your funds 100% safe.
                     </div>
                   </div>
                 </div>

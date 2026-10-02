@@ -1377,7 +1377,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                 </li>
               </ol>
               <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-800 dark:text-emerald-300 p-3 rounded-xl text-[11px] font-medium leading-relaxed">
-                <strong>Password Notice:</strong> You can enter your trading password or investor password. Stored passwords are encrypted in our system.
+                <strong>Password Notice:</strong> Always enter your investor (read-only) password. Stored passwords are encrypted in our system.
               </div>
             </div>
           </div>
