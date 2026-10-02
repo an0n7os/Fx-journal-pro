@@ -172,7 +172,7 @@ const ERROR_COPY: Record<string, string> = {
   MT5_OFFLINE: 'MT5 is not connected to the broker. Reconnect MT5 and keep the EA attached to a chart.',
   E_CONNECTION_LOST: 'MT5 cannot reach the server. Check the WebRequest allow-list and your internet connection.',
   CLOUD_NOT_CONFIGURED: 'Cloud sync (investor password) is not configured on this deployment yet. Use the EA method instead.',
-  CLOUD_WORKER_UNAVAILABLE: 'Cloud sync has no broker worker connected (META_API_TOKEN is missing on the server). Use the EA method, which needs no extra setup.',
+  CLOUD_WORKER_UNAVAILABLE: 'Cloud sync is not running on this deployment yet. Use the MT5 EA method, which needs no extra setup.',
   INVALID_PASSWORD: 'The investor password was rejected. Check it and try again.',
   E_AUTH: 'The investor password was rejected by the broker. Use the read-only Investor password (not your main password) and check the broker server name.',
   E_SRV_NOT_FOUND: 'The broker server could not be found. Check the exact server name shown in MetaTrader (Help → About).',
@@ -516,7 +516,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setVpsError(d.error || 'VPS connect failed. Please try again.');
+        setVpsError(d.error || 'Could not connect to MT5. Please try again.');
         return;
       }
       setVpsPassword('');
@@ -525,7 +525,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
       await pollStatus();
       onRefresh();
     } catch (e) {
-      setVpsError('VPS connect failed. Please try again.');
+      setVpsError('Could not connect to MT5. Please try again.');
     } finally {
       setVpsBusy(false);
     }
@@ -731,7 +731,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
         <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-xl px-4 py-3">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
           <div className="flex-1">
-            Your sync is queued — our VPS worker will connect to MT5, fetch your trades, and update the journal automatically.
+            Your sync is queued — we will connect to MT5, fetch your trades, and update the journal automatically.
             {status.queueDepth && status.queueDepth > 1 ? ` (${status.queueDepth} jobs ahead)` : ''} This page refreshes automatically.
           </div>
         </div>
@@ -740,10 +740,10 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
         <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-200 text-xs font-semibold rounded-xl px-4 py-3">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-px" />
           <div className="flex-1 space-y-1">
-            <p>Your sync is waiting, but no sync worker has picked it up.</p>
+            <p>Your sync is waiting, but nothing has picked it up yet.</p>
             <p className="font-medium opacity-90">
-              Your details are saved and the job stays in the queue — it will run as soon as a worker is online.
-              Nothing needs re-entering. To sync now, use the MT5 EA method instead: it runs in your own terminal and needs no worker.
+              Your details are saved and the job stays in the queue — it will run as soon as Auto Sync is back online.
+              Nothing needs re-entering. To sync right now, use the MT5 EA method instead — it runs inside your own MT5 terminal.
             </p>
           </div>
         </div>
@@ -755,7 +755,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
             {latestCloudJob?.statusMessage || 'Provisioning your cloud terminal… this can take a few minutes. The page refreshes automatically.'}
           </div>
           {!status.workerConfigured && (
-            <span className="shrink-0 font-mono text-[10px] opacity-80">worker offline</span>
+            <span className="shrink-0 font-mono text-[10px] opacity-80">sync offline</span>
           )}
         </div>
       )}
@@ -869,7 +869,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                       RECOMMENDED
                     </span>
                   </h4>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">VPS worker syncs your trades</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">We sync your trades for you</p>
                 </div>
               </div>
             )}
@@ -1081,7 +1081,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <RefreshCw className="h-5 w-5 text-emerald-500" />
-              <h3 className="dx-section-title">Auto Sync via VPS Worker</h3>
+              <h3 className="dx-section-title">MT5 Auto Sync</h3>
             </div>
             {/* The badge used to read "VPS Connected" whenever credentials were
                 stored, which is a statement about this account, not about the
@@ -1090,21 +1090,21 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
             {status?.syncMethod === 'VPS' && status.cloudConnected && (
               workerOnline ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-1">
-                  <Wifi className="h-3 w-3" /> Worker online
+                  <Wifi className="h-3 w-3" /> Auto Sync ready
                 </span>
               ) : (
                 <span
                   className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-[10px] font-bold px-2.5 py-1"
-                  title="Your MT5 details are saved. No sync worker has checked in yet, so queued jobs are waiting."
+                  title="Your MT5 details are saved. Auto Sync is not running yet, so queued syncs are waiting."
                 >
-                  <WifiOff className="h-3 w-3" /> No worker online
+                  <WifiOff className="h-3 w-3" /> Auto Sync offline
                 </span>
               )
             )}
           </div>
 
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            Enter your MT5 login and <strong>Investor (read-only) password</strong>. Our VPS worker will connect to your
+            Enter your MT5 login and <strong>Investor (read-only) password</strong>. We connect to your
             account, fetch your complete trade history, and sync it to your journal. The connection is only held open
             during the sync — it disconnects immediately after. Your password is <strong>encrypted before storage</strong>
             and never shown again.
@@ -1122,7 +1122,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 p-3">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Sync Method</div>
-                  <div className="text-sm font-black text-slate-800 dark:text-white">VPS Auto</div>
+                  <div className="text-sm font-black text-slate-800 dark:text-white">MT5 Auto</div>
                 </div>
                 <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 p-3">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">MT5 Login</div>
@@ -1174,7 +1174,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                   className="inline-flex items-center gap-1.5 border border-rose-200 dark:border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-rose-600 dark:text-rose-300 text-xs font-bold px-4 py-2.5 rounded-xl transition disabled:opacity-50"
                 >
                   {vpsBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
-                  Disconnect VPS Sync
+                  Disconnect Auto Sync
                 </button>
               </div>
 
@@ -1184,7 +1184,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                   <div className="flex items-start gap-3">
                     <AlertTriangle className="h-5 w-5 shrink-0 text-rose-500" />
                     <div className="flex-1">
-                      <h4 className="text-sm font-bold text-rose-700 dark:text-rose-300">Disconnect VPS sync?</h4>
+                      <h4 className="text-sm font-bold text-rose-700 dark:text-rose-300">Disconnect Auto Sync?</h4>
                       <p className="text-xs text-rose-600/80 dark:text-rose-300/80 mt-1 leading-relaxed">
                         The stored encrypted credentials will be removed. No trading data is deleted.
                         You can reconnect at any time by entering your details again.
@@ -1213,7 +1213,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
               <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 text-[11px] text-emerald-700 dark:text-emerald-300 flex items-start gap-2">
                 <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
                 <span>
-                  <strong>Investor password only.</strong> Our VPS worker uses read-only Investor password access — it cannot
+                  <strong>Investor password only.</strong> We use read-only Investor password access — we cannot
                   place, modify, or close trades. The MT5 session is opened only for the sync duration, then closed immediately.
                 </span>
               </div>
@@ -1283,7 +1283,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                 <div className="space-y-2">
                   {[
                     { n: '1', t: 'You click Connect → your credentials are encrypted and stored securely.' },
-                    { n: '2', t: 'Our VPS worker picks up the job, logs into MT5 with your Investor password (read-only).' },
+                    { n: '2', t: 'We log into MT5 with your Investor password (read-only).' },
                     { n: '3', t: 'It fetches your full trade history and sends it to your journal.' },
                     { n: '4', t: 'The MT5 session is closed immediately after sync completes.' },
                     { n: '5', t: 'Click "Sync Now" any time to refresh with new trades.' },
@@ -1310,7 +1310,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                 <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
                 <span>
                   <strong className="text-slate-700 dark:text-slate-200">Investor password only — read-only.</strong> Use your
-                  MT5 Investor password, not your main trading password. Our VPS cannot place or modify any trades.
+                  MT5 Investor password, not your main trading password. We cannot place or modify any trades.
                   Your password is AES-256-GCM encrypted before it is stored.
                 </span>
               </div>
