@@ -303,7 +303,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   useEffect(() => {
     if (!account) return;
     pollStatus();
-    const id = setInterval(pollStatus, 5000);
+    const id = setInterval(pollStatus, 2500);
     return () => clearInterval(id);
   }, [account, pollStatus]);
 

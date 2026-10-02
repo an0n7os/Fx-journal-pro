@@ -60,13 +60,12 @@ API_URL = os.environ.get("FXJP_API_URL", "http://localhost:3000/api/mt5").rstrip
 WORKER_TOKEN = os.environ.get("FXJP_WORKER_TOKEN", "")
 WORKER_ID = os.environ.get("FXJP_WORKER_ID", "worker-1")
 TERMINAL_PATH = os.environ.get("MT5_TERMINAL_PATH", "")
-POLL_SECONDS = int(os.environ.get("FXJP_POLL_SECONDS", "10"))
+POLL_SECONDS = int(os.environ.get("FXJP_POLL_SECONDS", "3"))
 
-# Deals per request to the backend. The endpoint accepts 500; staying under it
-# keeps each request small enough to retry cheaply on a flaky VPS link.
-BATCH_SIZE = 200
+# Deals per request to the backend. The endpoint accepts 500.
+BATCH_SIZE = 500
 # Refresh the lease this often while a long history is being pulled.
-HEARTBEAT_SECONDS = 60
+HEARTBEAT_SECONDS = 30
 
 logging.basicConfig(
     level=logging.INFO,
