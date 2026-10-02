@@ -323,329 +323,305 @@ export default function ProUpgradeModal({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#07080c]/85 backdrop-blur-md animate-fade-in overflow-y-auto"
+      className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-xl animate-fade-in overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pro-upgrade-title"
     >
       <div
-        className="relative w-full max-w-lg lg:max-w-4xl bg-[#0b0d13] border-t sm:border border-white/[0.08] rounded-t-[28px] sm:rounded-2xl shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)] max-h-[92vh] sm:max-h-none overflow-y-auto my-0 sm:my-6 pb-safe text-slate-200 animate-in slide-in-from-bottom sm:slide-in-from-none sm:zoom-in-95 duration-300"
+        className="relative w-full max-w-md lg:max-w-4xl bg-[#0c0e15]/95 border-t sm:border border-white/[0.08] rounded-t-[32px] sm:rounded-3xl shadow-[0_32px_80px_-20px_rgba(0,0,0,0.95)] max-h-[94vh] sm:max-h-none overflow-y-auto my-0 sm:my-6 pb-safe text-slate-200 animate-in slide-in-from-bottom sm:slide-in-from-none sm:zoom-in-95 duration-250"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Mobile sheet drag handle */}
-        <div className="sm:hidden flex justify-center pt-2.5 pb-0.5">
-          <span className="h-1 w-9 rounded-full bg-white/20" aria-hidden="true" />
+        {/* Apple iOS sheet drag handle */}
+        <div className="sm:hidden flex justify-center pt-2.5 pb-1">
+          <span className="h-1 w-9 rounded-full bg-white/25" aria-hidden="true" />
         </div>
-        {/* One accent hairline in the product's violet. The previous
-            violet/fuchsia/indigo bar was the only rainbow in the app. */}
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-violet-500/70 to-transparent" />
-        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-72 h-72 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Top subtle hairline glow */}
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent" />
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-48 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
 
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 z-20 p-2 rounded-xl text-slate-400 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] active:scale-95 transition"
+          className="absolute right-3.5 top-3.5 z-20 h-7 w-7 rounded-full text-slate-400 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] active:scale-90 flex items-center justify-center transition-all"
         >
-          <X className="h-4 w-4" />
+          <X className="h-3.5 w-3.5" />
         </button>
 
-        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:items-start">
-        {/* Left on desktop: the offer. */}
-        <div className="lg:border-r lg:border-white/[0.06] lg:h-full">
-
-        {/* Header */}
-        <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-4 sm:pb-6 relative z-10">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/10 border border-violet-500/25 text-violet-300 text-[10px] font-bold uppercase tracking-[0.14em] mb-4">
-            <Sparkles className="h-3 w-3" />
-            Pro plan
-          </div>
-
-          <h2 id="pro-upgrade-title" className="text-2xl sm:text-[28px] leading-tight font-black text-white font-display tracking-tight">
-            Everything in FX Journal Pro
-          </h2>
-          <p className="text-[13px] text-slate-400 mt-2 max-w-sm leading-relaxed">
-            Automatic MT5 sync, an AI mentor that reads your own trade history,
-            and as many accounts as you trade.
-          </p>
-
-          {/* The price belongs with the decision, not buried in the payment card */}
-          {/* The period and the USD note are one span, not two flex children:
-              split, they wrapped separately on a phone and left a line
-              beginning with a bare "·". */}
-          {/* The price belongs with the decision, not buried in the payment card */}
-          {/* The period and the USD note are one span, not two flex children:
-              split, they wrapped separately on a phone and left a line
-              beginning with a bare "·". */}
-          <div className="flex items-baseline flex-wrap gap-x-2.5 gap-y-1 mt-5">
-            {appliedCoupon && appliedCoupon.offerPrice < 499 ? (
-              <>
-                <span className="text-3xl sm:text-4xl font-black text-emerald-400 font-display tracking-tight tabular-nums">₹{appliedCoupon.offerPrice}</span>
-                <span className="text-xl font-bold line-through text-slate-500 tabular-nums">₹499</span>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Save ₹{appliedCoupon.discountAmount} ({appliedCoupon.discountPercent}% OFF)
-                </span>
-              </>
-            ) : appliedCoupon ? (
-              <>
-                <span className="text-3xl sm:text-4xl font-black text-white font-display tracking-tight tabular-nums">₹499</span>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  Mentor Code Applied
-                </span>
-              </>
-            ) : (
-              <span className="text-3xl sm:text-4xl font-black text-white font-display tracking-tight tabular-nums">₹{amountRupees}</span>
-            )}
-            <span className="text-sm text-slate-400">
-              / 30 days access <span className="text-xs text-slate-600">· about $4.90</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Benefits.
-            items-center rather than items-start: with single-line labels the
-            tick reads as centred on its text, and there is no longer a first
-            line to align it to. */}
-        {/* Two across on desktop as well: eight benefits stacked in one column
-            ran the left side far past the pay button and left the right half
-            half empty. */}
-        <div className="px-5 sm:px-7 py-3 sm:py-5 border-y lg:border-b-0 border-white/[0.06] bg-white/[0.015] grid grid-cols-2 gap-x-3 sm:gap-x-5 gap-y-2 sm:gap-y-3">
-          {PRO_BENEFITS.map((benefit) => (
-            <div key={benefit} className="flex items-center gap-1.5 sm:gap-2.5 text-[11px] sm:text-[12.5px] text-slate-300 leading-tight">
-              <span className="flex h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 items-center justify-center rounded-full bg-violet-500/15 border border-violet-500/25">
-                <Check className="h-2 w-2 sm:h-2.5 sm:w-2.5 text-violet-300" strokeWidth={3} />
-              </span>
-              <span className="truncate">{benefit}</span>
+        <div className="lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
+          {/* Left on desktop / Top on mobile: The Plan Offer */}
+          <div className="lg:border-r lg:border-white/[0.06] lg:h-full px-4 sm:px-6 pt-3 sm:pt-6 pb-3 sm:pb-5">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-violet-500/15 to-indigo-500/15 border border-violet-500/25 text-violet-300 text-[10.5px] font-semibold uppercase tracking-wider mb-2">
+              <Sparkles className="h-3 w-3 text-violet-400" />
+              Pro Plan
             </div>
-          ))}
-        </div>
 
-        </div>{/* /left column */}
+            <h2 id="pro-upgrade-title" className="text-xl sm:text-2xl font-bold text-white font-display tracking-tight leading-snug">
+              Everything in FX Journal Pro
+            </h2>
+            <p className="text-[12px] sm:text-[13px] text-slate-400 mt-1 leading-relaxed max-w-sm">
+              Automatic MT5 sync, AI trading mentor that reads your trade history, and unlimited accounts.
+            </p>
 
-        {/* Right on desktop: coupon, payment methods and the pay button.
-            lg:pt-14 clears the close button, which sits at the modal's
-            top-right and therefore lands on top of this column's first card
-            once the layout is two columns. */}
-        <div className="px-5 sm:px-7 py-4 sm:py-6 lg:pt-14 space-y-4 sm:space-y-5 relative z-10">
-          {statusMessage && (
-            <div className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 border ${statusMessage.type === 'success'
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                : statusMessage.type === 'info'
-                  ? 'bg-sky-500/10 border-sky-500/30 text-sky-200'
-                  : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
-              }`}>
-              {statusMessage.type === 'success' ? (
-                <CheckCircle2 className="h-4 w-4 shrink-0 mt-px text-emerald-400" />
-              ) : statusMessage.type === 'info' ? (
-                // A payment still settling is not a failure, and a red cross on
-                // it reads as "your money is gone".
-                <Loader2 className="h-4 w-4 shrink-0 mt-px text-sky-400 animate-spin" />
+            {/* Apple-style Price block */}
+            <div className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5 mt-3 sm:mt-4">
+              {appliedCoupon && appliedCoupon.offerPrice < 499 ? (
+                <>
+                  <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-display tracking-tight tabular-nums">
+                    ₹{appliedCoupon.offerPrice}
+                  </span>
+                  <span className="text-base sm:text-lg font-semibold line-through text-slate-500 tabular-nums">
+                    ₹499
+                  </span>
+                  <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                    Save ₹{appliedCoupon.discountAmount} ({appliedCoupon.discountPercent}% OFF)
+                  </span>
+                </>
+              ) : appliedCoupon ? (
+                <>
+                  <span className="text-2xl sm:text-3xl font-extrabold text-white font-display tracking-tight tabular-nums">
+                    ₹499
+                  </span>
+                  <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25">
+                    Mentor Code Applied
+                  </span>
+                </>
               ) : (
-                <AlertCircle className="h-4 w-4 shrink-0 mt-px text-rose-400" />
+                <span className="text-2xl sm:text-3xl font-extrabold text-white font-display tracking-tight tabular-nums">
+                  ₹{amountRupees}
+                </span>
               )}
-              <span className="leading-relaxed">{statusMessage.text}</span>
+              <span className="text-xs sm:text-sm text-slate-400">
+                / 30 days <span className="text-[11px] text-slate-500">· about $4.90 (₹16/day)</span>
+              </span>
             </div>
-          )}
 
-          {/* A one-item tab strip is not a choice, and it read as a second
-              primary button. The switcher appears only when the bypass exists,
-              which is a development build with the server flag on. */}
-          {DEV_BYPASS && config.testBilling && (
-            <div className="flex rounded-xl bg-white/[0.03] p-1 border border-white/[0.06]">
-              {([
-                { id: 'gateway', label: 'Pay with Cashfree', icon: CreditCard },
-                { id: 'test', label: 'Test Mode', icon: Zap },
-              ] as const).map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-[11px] font-bold rounded-lg transition ${activeTab === t.id
-                      ? 'bg-violet-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                    }`}
-                >
-                  <t.icon className="h-3.5 w-3.5" />
-                  {t.label}
-                </button>
+            {/* Apple-style Inset Grouped Benefits Card */}
+            <div className="mt-3 sm:mt-4 rounded-2xl bg-white/[0.025] border border-white/[0.06] p-2.5 sm:p-3.5 grid grid-cols-2 gap-x-3 gap-y-2">
+              {PRO_BENEFITS.map((benefit) => (
+                <div key={benefit} className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-300 leading-tight">
+                  <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-violet-500/20 text-violet-300">
+                    <Check className="h-2 w-2 text-violet-300" strokeWidth={3} />
+                  </span>
+                  <span className="truncate">{benefit}</span>
+                </div>
               ))}
             </div>
-          )}
+          </div>
 
-          {activeTab === 'gateway' && (
-            <div className="space-y-4">
-              {/* Mentor Coupon / Discount Section */}
-              <div className="rounded-xl border border-white/[0.08] bg-slate-900/60 p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-                    <Ticket className="h-3.5 w-3.5 text-amber-400" />
-                    <span>Mentor Coupon Code</span>
+          {/* Right on desktop / Bottom on mobile: Checkout & Actions */}
+          <div className="px-4 sm:px-6 py-3 sm:py-6 lg:pt-8 space-y-3 relative z-10">
+            {statusMessage && (
+              <div className={`p-2.5 sm:p-3 rounded-xl text-xs flex items-start gap-2 border ${
+                statusMessage.type === 'success'
+                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
+                  : statusMessage.type === 'info'
+                    ? 'bg-sky-500/10 border-sky-500/25 text-sky-200'
+                    : 'bg-rose-500/10 border-rose-500/25 text-rose-200'
+              }`}>
+                {statusMessage.type === 'success' ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-px text-emerald-400" />
+                ) : statusMessage.type === 'info' ? (
+                  <Loader2 className="h-4 w-4 shrink-0 mt-px text-sky-400 animate-spin" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-px text-rose-400" />
+                )}
+                <span className="leading-snug">{statusMessage.text}</span>
+              </div>
+            )}
+
+            {DEV_BYPASS && config.testBilling && (
+              <div className="flex rounded-xl bg-white/[0.03] p-0.5 border border-white/[0.06]">
+                {([
+                  { id: 'gateway', label: 'Pay with Cashfree', icon: CreditCard },
+                  { id: 'test', label: 'Test Mode', icon: Zap },
+                ] as const).map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium rounded-lg transition ${
+                      activeTab === t.id
+                        ? 'bg-violet-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <t.icon className="h-3 w-3" />
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'gateway' && (
+              <div className="space-y-2.5 sm:space-y-3">
+                {/* Apple-style Primary CTA Button - Placed Prominently */}
+                <button
+                  type="button"
+                  onClick={handleGatewayCheckout}
+                  disabled={loading || (configLoaded && !config.configured)}
+                  className="w-full h-11 sm:h-12 bg-gradient-to-r from-violet-600 via-indigo-600 to-violet-600 hover:brightness-110 active:scale-[0.98] text-white font-semibold text-sm rounded-xl sm:rounded-2xl transition-all shadow-md shadow-violet-600/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Opening secure checkout…
+                    </>
+                  ) : (
+                    <>
+                      {appliedCoupon && appliedCoupon.offerPrice < 499 ? (
+                        <>
+                          Pay <span className="line-through opacity-60 font-normal mr-1">₹499</span> ₹{appliedCoupon.offerPrice} for Pro
+                        </>
+                      ) : (
+                        <>Pay ₹{amountRupees} for Pro</>
+                      )}
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </button>
+
+                {/* Sleek Apple-style Inset Mentor Coupon */}
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+                      <Ticket className="h-3 w-3 text-amber-400" />
+                      <span>Mentor Coupon</span>
+                    </div>
+                    {appliedCoupon && (
+                      <span className="text-[10.5px] font-semibold text-emerald-400 flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Save ₹{appliedCoupon.discountAmount}
+                      </span>
+                    )}
                   </div>
-                  {appliedCoupon && (
-                    <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="h-3 w-3" />
-                      {appliedCoupon.discountAmount > 0 ? `Offer Applied: Save ₹${appliedCoupon.discountAmount}` : 'Mentor Code Applied'}
-                    </span>
+
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2.5 py-1.5 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-bold text-emerald-300 uppercase">{appliedCoupon.code}</span>
+                        <span className="text-[10px] text-slate-400">({appliedCoupon.partnerName})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setAppliedCoupon(null); setCouponInput(''); }}
+                        className="text-[10.5px] text-slate-400 hover:text-rose-400 underline transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={couponInput}
+                          onChange={(e) => {
+                            setCouponInput(e.target.value.toUpperCase());
+                            setCouponError(null);
+                          }}
+                          placeholder="Coupon code (e.g. VIP60)"
+                          className="flex-1 h-8 bg-black/40 border border-white/[0.08] rounded-lg px-2.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 uppercase tracking-wider"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleApplyCoupon();
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleApplyCoupon()}
+                          disabled={couponValidating || !couponInput.trim()}
+                          className="h-8 px-3 bg-white/[0.08] hover:bg-white/[0.14] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed border border-white/[0.08] rounded-lg text-xs font-medium text-white transition flex items-center gap-1"
+                        >
+                          {couponValidating ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Apply'}
+                        </button>
+                      </div>
+                      {couponError && (
+                        <p className="text-[10.5px] text-rose-400 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3 shrink-0" />
+                          {couponError}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
 
-                {appliedCoupon ? (
-                  <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/25 rounded-lg px-3 py-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-emerald-300 tracking-wider uppercase">{appliedCoupon.code}</span>
-                      <span className="text-[11px] text-slate-400">({appliedCoupon.partnerName})</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => { setAppliedCoupon(null); setCouponInput(''); }}
-                      className="text-[11px] text-slate-400 hover:text-rose-400 underline transition-colors"
-                    >
-                      Remove
-                    </button>
+                {/* Minimalist Apple-style Payment Methods Chips */}
+                <div className="rounded-xl border border-white/[0.05] p-2 bg-white/[0.01]">
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 uppercase font-semibold tracking-wider mb-1">
+                    <span>Pay with</span>
+                    <span>Instant Activation</span>
                   </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={couponInput}
-                        onChange={(e) => {
-                          setCouponInput(e.target.value.toUpperCase());
-                          setCouponError(null);
-                        }}
-                        // Short enough to survive the narrower desktop column:
-                        // the long version was clipped mid-word at "(E.G. V".
-                        placeholder="Enter code — e.g. VIP60"
-                        className="flex-1 bg-slate-950/80 border border-slate-700/80 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 uppercase tracking-wide"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleApplyCoupon();
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleApplyCoupon()}
-                        disabled={couponValidating || !couponInput.trim()}
-                        className="px-3.5 py-2 bg-white/[0.08] hover:bg-white/[0.14] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed border border-white/[0.1] rounded-lg text-xs font-semibold text-white transition flex items-center gap-1.5"
+                  <div className="flex flex-wrap items-center gap-1">
+                    {PAY_METHODS.map((m) => (
+                      <span
+                        key={m}
+                        className="rounded-md bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-slate-400"
                       >
-                        {couponValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Apply'}
-                      </button>
-                    </div>
-                    {couponError && (
-                      <p className="text-[11px] text-rose-400 flex items-center gap-1 mt-1">
-                        <AlertCircle className="h-3 w-3 shrink-0" />
-                        {couponError}
-                      </p>
-                    )}
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {configLoaded && !config.configured && (
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-3 py-2">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-400 mt-0.5" />
+                    <p className="text-[11px] leading-relaxed text-amber-200">
+                      Payments are not switched on yet. Nothing will be charged — please try again shortly.
+                    </p>
                   </div>
                 )}
               </div>
+            )}
 
-              {/* Payment methods as chips */}
-              <div className="rounded-xl border border-white/[0.06] px-4 py-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Pay with</p>
-                {/* A fixed three-across grid rather than wrapping chips: six
-                    of them wrapped to five and a lonely "NetBanking", which
-                    reads as a stray rather than a row. */}
-                <div className="mt-2.5 grid grid-cols-3 gap-1.5">
-                  {PAY_METHODS.map((m) => (
-                    <span
-                      key={m}
-                      className="rounded-md bg-white/[0.04] border border-white/[0.07] px-2 py-1 text-center text-[11px] font-semibold text-slate-300"
-                    >
-                      {m}
-                    </span>
-                  ))}
+            {DEV_BYPASS && activeTab === 'test' && config.testBilling && (
+              <div className="space-y-3">
+                <div className="p-3 rounded-xl bg-amber-500/[0.07] border border-amber-500/20 flex items-start gap-2.5">
+                  <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-semibold text-xs text-amber-200">Developer bypass — skips payment</h3>
+                    <p className="text-[10.5px] text-amber-300/75 mt-0.5 leading-relaxed">
+                      Flips account plan for local testing with ALLOW_TEST_BILLING=true.
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-3 pt-3 border-t border-white/[0.05] text-[11.5px] text-slate-400">
-                  30 days of Pro access
-                </p>
-              </div>
 
-              {configLoaded && !config.configured && (
-                <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-4 py-3">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-400 mt-px" />
-                  <p className="text-[11.5px] leading-relaxed text-amber-200">
-                    Payments are not switched on yet. Nothing will be charged — please try again shortly.
-                  </p>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={handleGatewayCheckout}
-                disabled={loading || (configLoaded && !config.configured)}
-                className="w-full bg-violet-600 hover:bg-violet-500 active:translate-y-px text-white font-bold text-sm py-3.5 px-6 rounded-xl transition shadow-lg shadow-violet-950/50 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Opening checkout…
-                  </>
-                ) : (
-                  <>
-                    {appliedCoupon && appliedCoupon.offerPrice < 499 ? (
-                      <>
-                        Pay <span className="line-through opacity-60 font-normal mr-1">₹499</span> ₹{appliedCoupon.offerPrice} for Pro
-                      </>
-                    ) : (
-                      <>Pay ₹{amountRupees} for Pro</>
-                    )}
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-
-          {DEV_BYPASS && activeTab === 'test' && config.testBilling && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-amber-500/[0.07] border border-amber-500/20 flex items-start gap-3">
-                <Zap className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-bold text-xs text-amber-200">Developer bypass — skips the ₹{amountRupees} payment</h3>
-                  <p className="text-[11px] text-amber-300/75 mt-1 leading-relaxed">
-                    Flips this account's plan with no money taken, so you can use Pro
-                    while building. Only in a dev build with ALLOW_TEST_BILLING=true;
-                    <code className="mx-1 px-1 rounded bg-amber-500/10">npm run build</code>
-                    drops this whole panel from the bundle.
-                  </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleTestModeToggle('pro')}
+                    disabled={loading}
+                    className="p-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-medium text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50"
+                  >
+                    <Star className="h-3.5 w-3.5" />
+                    Unlock Pro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTestModeToggle('free')}
+                    disabled={loading}
+                    className="p-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 font-medium text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 text-slate-400" />
+                    Back to Free
+                  </button>
                 </div>
               </div>
-
-              <div className="grid sm:grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => handleTestModeToggle('pro')}
-                  disabled={loading}
-                  className="p-3.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition disabled:opacity-50"
-                >
-                  <Star className="h-4 w-4" />
-                  Unlock Pro free
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleTestModeToggle('free')}
-                  disabled={loading}
-                  className="p-3.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 font-bold text-xs flex items-center justify-center gap-2 transition disabled:opacity-50"
-                >
-                  <RefreshCw className="h-4 w-4 text-slate-400" />
-                  Back to Free
-                </button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-        </div>{/* /two-column grid */}
 
         {/* Footer */}
-        <div className="px-6 py-3.5 bg-black/40 border-t border-white/[0.06] flex flex-col items-center justify-center text-center gap-1 text-[11.5px] text-slate-400">
-          <div className="flex items-center justify-center gap-1.5 text-slate-300">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-            <span>Payment handled by Cashfree — we never see your card</span>
+        <div className="px-4 py-2.5 bg-black/40 border-t border-white/[0.05] flex flex-col items-center justify-center text-center gap-0.5 text-[10.5px] text-slate-400">
+          <div className="flex items-center justify-center gap-1 text-slate-300">
+            <ShieldCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+            <span>Secured by Cashfree · 256-bit encryption</span>
           </div>
-          <div className="text-slate-500 text-[11px]">
-            7-day refund if Pro doesn't work as described
+          <div className="text-slate-500 text-[10px]">
+            Instant activation · 7-day money-back guarantee
           </div>
         </div>
       </div>
