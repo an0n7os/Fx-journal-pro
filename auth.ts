@@ -11,7 +11,13 @@ import crypto from 'node:crypto';
 // A static ESM import causes esbuild to inline pg's CJS internals into the
 // ESM bundle, which then breaks with "Dynamic require of 'pg' is not
 // supported" when Node tries to execute it.
-const nodeRequire = createRequire(import.meta.url);
+const getNodeRequire = () => {
+  if (typeof require !== 'undefined') return require;
+  if (typeof import.meta !== 'undefined' && import.meta?.url) {
+    return createRequire(import.meta.url);
+  }
+  return createRequire(path.join(process.cwd(), 'dummy.js'));
+};
 
 const IS_SERVERLESS = !!(
   process.env.VERCEL ||
@@ -55,7 +61,7 @@ function getDatabaseAdapter(): any {
   if (process.env.DATABASE_URL) {
     // Load pg via createRequire so its CJS dynamic-require calls work even
     // when this file is bundled as ESM.
-    const pgModule = nodeRequire('pg');
+    const pgModule = getNodeRequire()('pg');
     const Pool = pgModule.Pool ?? pgModule.default?.Pool;
     return new Pool({
       connectionString: process.env.DATABASE_URL,
@@ -66,7 +72,7 @@ function getDatabaseAdapter(): any {
 
   // Local development: load SQLite dynamically so serverless bundlers never fail
   try {
-    const sqliteModule = nodeRequire('node:sqlite');
+    const sqliteModule = getNodeRequire()('node:sqlite');
     return new sqliteModule.DatabaseSync(DB_PATH);
   } catch (e) {
     console.warn('[Better Auth] Could not load SQLite, falling back to in-memory adapter:', e);

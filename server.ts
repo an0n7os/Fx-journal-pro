@@ -7089,6 +7089,11 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
 
   try {
     const origin = publicOrigin(req);
+    let returnOrigin = origin;
+    if (auth.mode === 'production' && !returnOrigin.startsWith('https://')) {
+      const publicHttps = process.env.PUBLIC_SITE_URL?.trim() || process.env.PUBLIC_APP_URL?.trim() || 'https://www.fxjournalpro.com';
+      returnOrigin = publicHttps.replace(/\/+$/, '');
+    }
     const orderId = newCashfreeOrderId(currentUser.id);
     const tags: CashfreeOrderTags = {
       user_id: currentUser.id,
@@ -7118,8 +7123,8 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
         order_meta: {
           // Where the customer lands if Cashfree has to leave the modal (UPI
           // apps, bank pages). The query placeholder is filled in by Cashfree.
-          return_url: `${origin}/?cf_order_id={order_id}`,
-          notify_url: `${origin}/api/payments/webhook`,
+          return_url: `${returnOrigin}/?cf_order_id={order_id}`,
+          notify_url: `${returnOrigin}/api/payments/webhook`,
         },
         order_note: 'FX Journal Pro — 30 days',
         order_tags: tags,
@@ -7128,7 +7133,25 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
 
     if (!order?.payment_session_id) {
       console.error('[payments/order] Cashfree returned no payment_session_id:', order);
-      return res.status(502).json({ error: 'Could not initiate the payment. Please try again.' });
+      if (allowTestBilling()) {
+        return res.json({
+          sandboxMode: true,
+          provider: 'cashfree',
+          mode: 'sandbox',
+          orderId: `order_test_${currentUser.id.slice(-6)}_${crypto.randomUUID()}`,
+          paymentSessionId: null,
+          amount: orderAmountPaise,
+          amountRupees: appliedOfferPrice,
+          originalPrice: 499,
+          mentorCommission,
+          discountApplied: !!partner && appliedOfferPrice < 499,
+          couponCode: partner?.code || null,
+          currency: 'INR',
+          message: 'Cashfree test billing: simulated Pro upgrade.',
+        });
+      }
+      const rawMsg = order?.message || order?.error_description || 'Could not initiate the payment.';
+      return res.status(502).json({ error: rawMsg });
     }
 
     res.json({
@@ -7146,7 +7169,28 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
     });
   } catch (err: any) {
     console.error('[payments/order]', err?.message || err);
-    res.status(502).json({ error: 'Could not initiate the payment. Please try again.' });
+    if (allowTestBilling()) {
+      console.log('[payments/order] Cashfree live API unavailable/disabled; falling back to simulated test billing.');
+      return res.json({
+        sandboxMode: true,
+        provider: 'cashfree',
+        mode: 'sandbox',
+        orderId: `order_test_${currentUser.id.slice(-6)}_${crypto.randomUUID()}`,
+        paymentSessionId: null,
+        amount: orderAmountPaise,
+        amountRupees: appliedOfferPrice,
+        originalPrice: 499,
+        mentorCommission,
+        discountApplied: !!partner && appliedOfferPrice < 499,
+        couponCode: partner?.code || null,
+        currency: 'INR',
+        message: 'Cashfree test billing: simulated Pro upgrade.',
+      });
+    }
+    const cleanError = err?.message?.includes('transactions are not enabled')
+      ? 'Cashfree account notice: Transactions are not enabled yet for your Cashfree merchant account. Please complete KYC and activate Payment Methods in your Cashfree dashboard.'
+      : (err?.message || 'Could not initiate the payment. Please try again.');
+    res.status(502).json({ error: cleanError });
   }
 });
 
