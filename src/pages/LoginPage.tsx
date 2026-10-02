@@ -1131,7 +1131,13 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 ))}
               </div>
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-8 sm:mt-9">
+              {/* gap-4 while stacked, not gap-3: the primary's glow is
+                  0 10px 28px -12px, so it reaches about 26px below its own box.
+                  At 12px apart that haze landed across the top edge of Sign In
+                  and smeared the boundary between the two buttons. Side by side
+                  on a wider screen the glow has nowhere to land, so gap-3 is
+                  still right there. */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-3 mt-8 sm:mt-9">
                 <button
                   onClick={() => openAuthModal('register')}
                   className="lp-btn-primary group inline-flex items-center justify-center gap-2 font-semibold rounded-2xl sm:rounded-full px-7 py-3.5 text-base sm:text-sm min-h-[48px] active:scale-[0.98] transition"

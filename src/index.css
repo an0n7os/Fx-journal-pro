@@ -1325,16 +1325,24 @@ html.dark #ai-mentor-card input[type="text"]::placeholder,
   transform: translateY(1px);
 }
 
+/*
+   The secondary button needs a visible edge, not a hairline.
+   --lp-hair is .07 alpha, which is right for a divider between two panels
+   that already differ. Against the near-black page it is not an edge at all:
+   full width at 343x54 the button read as a flat dark slab rather than
+   something tappable, with only its label to say otherwise. --lp-hair-hi is
+   the token that already exists for a line that has to be seen.
+*/
 .lp-btn-ghost {
-  background: rgba(255, 255, 255, .035);
-  border: 1px solid var(--lp-hair);
+  background: rgba(255, 255, 255, .055);
+  border: 1px solid var(--lp-hair-hi);
   color: #fff;
   transition: background-color .2s ease, border-color .2s ease;
 }
 
 .lp-btn-ghost:hover {
-  background: rgba(255, 255, 255, .075);
-  border-color: var(--lp-hair-hi);
+  background: rgba(255, 255, 255, .1);
+  border-color: rgba(255, 255, 255, .22);
 }
 
 /* ── Section rules ─────────────────────────────────────────── */
