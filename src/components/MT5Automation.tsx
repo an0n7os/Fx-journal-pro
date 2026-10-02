@@ -157,7 +157,8 @@ type Phase =
   | 'Syncing'
   | 'Synced'
   | 'Error'
-  | 'Disconnected';
+  | 'Disconnected'
+  | 'Incorrect Password';
 
 const ERROR_COPY: Record<string, string> = {
   EA_AUTH_FAILED: 'This EA file no longer works. Download a fresh copy from your account page.',
@@ -578,6 +579,18 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
 
   function derivePhase(): Phase {
     if (downloading || copying || resetting) return 'Collecting';
+
+    // Helper: detect credential/auth failures across jobs and unresolved errors
+    const AUTH_CODES = ['MT5_LOGIN_FAILED', 'INVALID_PASSWORD', 'E_AUTH', 'AUTH_FAILED', 'INVESTOR_PASSWORD_REJECTED', 'MT5_WRONG_LOGIN'];
+    const isAuthError = (code?: string | null, msg?: string | null) =>
+      AUTH_CODES.includes(code ?? '') || /password|login.?fail|auth.?fail|invalid.?account/i.test(msg ?? '');
+    const hasAuthFailedJob = (status?.connectJobs || []).some(
+      (j) => j.status === 'FAILED' && isAuthError(j.errorCode, j.errorMessage ?? j.lastError ?? j.statusMessage)
+    );
+    const hasAuthUnresolved = (status?.lastErrors || []).some(
+      (e) => !e.resolvedAt && isAuthError(e.errorCode, e.errorMessage)
+    );
+
     // VPS method
     if (status?.syncMethod === 'VPS' && status.cloudConnected) {
       if (status.eaStatus === 'Connected' || status.status === 'Connected') return 'Synced';
@@ -586,6 +599,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
       if (status.status === 'Error') return 'Error';
       const pendingVps = (status.connectJobs || []).some((j) => j.status === 'PENDING' || j.status === 'RUNNING');
       if (pendingVps) return 'Queued';
+      if (hasAuthFailedJob || hasAuthUnresolved) return 'Incorrect Password';
       return 'Validating';
     }
     // Cloud (MetaApi) method
@@ -593,6 +607,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
       if (status.status === 'Connected') return 'Synced';
       if (status.status === 'Disconnected') return 'Disconnected';
       if (status.status === 'Error') return 'Error';
+      if (hasAuthFailedJob || hasAuthUnresolved) return 'Incorrect Password';
       return 'Validating';
     }
     if (status?.status === 'Disconnected' || status?.eaStatus === 'Disconnected') return 'Disconnected';
@@ -632,7 +647,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const connected = phase === 'Synced' || phase === 'Syncing';
   const phaseIcon = connected
     ? Wifi
-    : phase === 'Error'
+    : phase === 'Error' || phase === 'Incorrect Password'
       ? XCircle
       : phase === 'Disconnected'
         ? WifiOff
@@ -642,7 +657,15 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const PhaseIcon = phaseIcon;
 
   const phaseLabel =
-    phase === 'Synced' ? 'Connected' : phase === 'Syncing' ? 'Syncing' : phase === 'Queued' ? 'Connecting' : phase;
+    phase === 'Synced'
+      ? 'Connected'
+      : phase === 'Syncing'
+        ? 'Syncing'
+        : phase === 'Queued'
+          ? 'Connecting'
+          : phase === 'Incorrect Password'
+            ? 'Incorrect Password'
+            : phase;
   const phaseColor =
     phase === 'Synced'
       ? 'text-emerald-600 dark:text-emerald-400'
@@ -652,9 +675,11 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
           ? 'text-indigo-600 dark:text-indigo-400'
           : phase === 'Error'
             ? 'text-rose-600 dark:text-rose-400'
-            : phase === 'Disconnected'
-              ? 'text-slate-500 dark:text-slate-400'
-              : 'text-indigo-600 dark:text-indigo-400';
+            : phase === 'Incorrect Password'
+              ? 'text-rose-600 dark:text-rose-400'
+              : phase === 'Disconnected'
+                ? 'text-slate-500 dark:text-slate-400'
+                : 'text-indigo-600 dark:text-indigo-400';
 
   const latestError = (status?.lastErrors || []).filter((e) => !e.resolvedAt)[0];
   const latestCloudJob = (status?.connectJobs || []).filter((j) => j.action === 'CONNECT').slice(-1)[0];
@@ -738,6 +763,20 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
             <p className="font-medium opacity-90">
               Your details are saved and the job stays in the queue — it will run as soon as Auto Sync is back online.
               Nothing needs re-entering. To sync right now, use the MT5 EA method instead — it runs inside your own MT5 terminal.
+            </p>
+          </div>
+        </div>
+      )}
+      {phase === 'Incorrect Password' && (
+        <div className="flex items-start gap-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-800 dark:text-rose-200 text-xs font-semibold rounded-xl px-4 py-3">
+          <XCircle className="h-4 w-4 shrink-0 mt-px text-rose-500" />
+          <div className="flex-1 space-y-1">
+            <p className="font-bold">Incorrect MT5 Password</p>
+            <p className="font-medium opacity-90">
+              The broker rejected the password for MT5 login{' '}
+              {status?.terminalLogin || account?.eaTerminalLogin ? `#${status?.terminalLogin || account?.eaTerminalLogin}` : ''}.
+              {' '}Please make sure you are using the read-only <strong>Investor password</strong>, not your main trading password.
+              Re-enter your credentials below and try again.
             </p>
           </div>
         </div>
