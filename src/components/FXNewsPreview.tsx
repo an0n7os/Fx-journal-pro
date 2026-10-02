@@ -249,13 +249,19 @@ export default function FXNewsPreview() {
           </span>
         </div>
 
-        {/* Content Area */}
-        <div className="p-4 sm:p-6">
+        {/*
+          Content area, measured at 375px before tightening: a 124px header, a
+          28px filter row and a 38px alert banner, separated by 20 + 16 + 16px
+          of margin — 242px of chrome above the first headline, in a card that
+          was 747px tall. The numbers below are all `x sm:y`, so the desktop
+          panel is untouched and only the phone gets the denser rhythm.
+        */}
+        <div className="p-3.5 sm:p-6">
           {/* Header Row */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="lp-chip h-9 w-9 shrink-0">
-                <Newspaper className="h-[17px] w-[17px] text-violet-300" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 mb-3 sm:mb-5">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <span className="lp-chip h-8 w-8 sm:h-9 sm:w-9 shrink-0">
+                <Newspaper className="h-4 w-4 sm:h-[17px] sm:w-[17px] text-violet-300" />
               </span>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -266,7 +272,10 @@ export default function FXNewsPreview() {
                     PRO
                   </span>
                 </div>
-                <p className="lp-eyebrow mt-0.5">Market Intelligence &middot; Live Terminal</p>
+                {/* "Market Intelligence · Live Terminal" says nothing the title
+                    and the LIVE badge above it do not. On a phone it was a
+                    whole line of the header, so it waits for the room. */}
+                <p className="lp-eyebrow mt-0.5 hidden sm:block">Market Intelligence &middot; Live Terminal</p>
               </div>
             </div>
 
@@ -293,14 +302,18 @@ export default function FXNewsPreview() {
                   }`}
               >
                 <CalendarRange className="h-3 w-3 text-violet-300" />
-                Economic Calendar
+                {/* "Economic Calendar" wrapped to two lines in a half-width
+                    pill at 375px, which made this tab taller than the one
+                    beside it and the whole control ragged. */}
+                <span className="sm:hidden">Calendar</span>
+                <span className="hidden sm:inline">Economic Calendar</span>
                 <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
               </button>
             </div>
           </div>
 
           {/* Interactive Currency Filter Bar */}
-          <div className="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1 no-scrollbar">
+          <div className="flex items-center gap-1.5 mb-2.5 sm:mb-4 overflow-x-auto pb-1 no-scrollbar">
             <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider mr-1 shrink-0">Pairs:</span>
             {CURRENCY_FILTERS.map((curr) => {
               const active = selectedCurrency === curr;
@@ -321,7 +334,7 @@ export default function FXNewsPreview() {
           </div>
 
           {/* High-Impact Volatility Alert Banner */}
-          <div className="mb-4 bg-gradient-to-r from-rose-500/15 via-violet-500/10 to-transparent border border-rose-500/25 rounded-xl px-3.5 py-2 flex items-center justify-between gap-3">
+          <div className="mb-2.5 sm:mb-4 bg-gradient-to-r from-rose-500/15 via-violet-500/10 to-transparent border border-rose-500/25 rounded-xl px-3 sm:px-3.5 py-1.5 sm:py-2 flex items-center justify-between gap-2 sm:gap-3">
             <div className="flex items-center gap-2 text-xs font-medium text-slate-200 min-w-0 truncate">
               <Radio className="h-3.5 w-3.5 text-rose-400 animate-pulse shrink-0" />
               <span className="truncate">Upcoming High-Impact: <strong className="text-white font-semibold">US Core CPI (MoM)</strong></span>
@@ -333,7 +346,7 @@ export default function FXNewsPreview() {
 
           {/* TAB 1: NEWS */}
           {tab === 'news' && (
-            <div className="grid sm:grid-cols-2 gap-3 animate-in fade-in duration-200">
+            <div className="grid sm:grid-cols-2 gap-2.5 sm:gap-3 animate-in fade-in duration-200">
               {filteredNews.map((a) => {
                 const isBullish = /bullish/i.test(a.sentiment?.label || '');
                 const isBearish = /bearish/i.test(a.sentiment?.label || '');
@@ -341,10 +354,10 @@ export default function FXNewsPreview() {
                 return (
                   <div
                     key={a.id}
-                    className="group/card rounded-xl border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06] hover:border-violet-500/40 p-3.5 flex flex-col justify-between transition-all duration-200 shadow-sm"
+                    className="group/card rounded-xl border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06] hover:border-violet-500/40 p-3 sm:p-3.5 flex flex-col justify-between transition-all duration-200 shadow-sm"
                   >
                     <div>
-                      <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
                         <span className="lp-eyebrow text-[9px] text-violet-300/90 truncate">
                           {a.category || 'Forex'}
                         </span>
@@ -366,12 +379,12 @@ export default function FXNewsPreview() {
                         {a.title}
                       </h4>
 
-                      <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed line-clamp-2">
+                      <p className="text-[11px] text-slate-400 mt-1 sm:mt-1.5 leading-relaxed line-clamp-2">
                         {a.summary}
                       </p>
                     </div>
 
-                    <div className="mt-3 pt-2.5 flex items-center justify-between gap-2 border-t border-white/[0.05]">
+                    <div className="mt-2 sm:mt-3 pt-2 sm:pt-2.5 flex items-center justify-between gap-2 border-t border-white/[0.05]">
                       <span className="flex items-center gap-1 text-[10px] font-mono text-slate-400 truncate">
                         <Clock className="h-2.5 w-2.5 text-slate-500 shrink-0" />
                         <span className="text-slate-300 font-semibold">{a.source}</span> &middot; {timeAgo(a.publishedAt)}
@@ -442,10 +455,10 @@ export default function FXNewsPreview() {
           )}
 
           {/* Bottom subtle note matching HeroPanel */}
-          <div className="lp-eyebrow mt-4 pt-3.5 border-t border-white/[0.07] flex items-center justify-between text-[10px]">
+          <div className="lp-eyebrow mt-3 sm:mt-4 pt-2.5 sm:pt-3.5 border-t border-white/[0.07] flex items-center justify-between text-[10px]">
             <span className="flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5 text-violet-300" />
-              Live auto-refresh before high-impact economic releases
+              <span className="truncate">Live auto-refresh before high-impact releases</span>
             </span>
             <span className="text-slate-400 hidden sm:inline">GMT/UTC Synchronized</span>
           </div>
