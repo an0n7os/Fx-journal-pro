@@ -9748,10 +9748,20 @@ app.get('/api/user/partner-link', async (req, res) => {
     partnerUsername = p?.name || (p?.email || '').split('@')[0] || partnerName;
     referralCode = p?.referralCode || null;
   } else {
-    let { data } = await supabase.from('users').select('id, name, email, referral_code').eq('id', referredBy).maybeSingle();
+    // users has no referral_code column — partner_profiles owns the code, and
+    // this select used to ask for one that does not exist, so Postgres failed
+    // the whole query ("column users.referral_code does not exist") and this
+    // route answered with nothing.
+    let { data } = await supabase.from('users').select('id, name, email').eq('id', referredBy).maybeSingle();
     if (!data) {
-      const resCode = await supabase.from('users').select('id, name, email, referral_code').eq('referral_code', referredBy).maybeSingle();
-      data = resCode.data;
+      // referredBy may be a code rather than a user id. Resolve it where codes
+      // actually live, then fetch that partner.
+      const { data: byCode } = await supabase
+        .from('partner_profiles').select('user_id').ilike('referral_code', referredBy).maybeSingle();
+      if (byCode?.user_id) {
+        const resUser = await supabase.from('users').select('id, name, email').eq('id', byCode.user_id).maybeSingle();
+        data = resUser.data;
+      }
     }
     const partnerUserId = data?.id || referredBy;
     const { data: profile } = await supabase.from('partner_profiles').select('referral_code').eq('user_id', partnerUserId).maybeSingle();
@@ -9850,11 +9860,12 @@ app.post('/api/user/link-partner', async (req, res) => {
       partnerEmail = p?.email || null;
       partnerUsername = p?.name || (p?.email || '').split('@')[0] || partnerName;
     } else {
-      const { data } = await supabase.from('users').select('name, email, referral_code').eq('id', partner.userId).maybeSingle();
+      // No referral_code on users; `partner` already carries the authoritative
+      // code from findPartnerByCode, which reads partner_profiles.
+      const { data } = await supabase.from('users').select('name, email').eq('id', partner.userId).maybeSingle();
       partnerName = data?.name || String(data?.email || '').split('@')[0] || partnerName;
       partnerEmail = data?.email || null;
       partnerUsername = data?.name || String(data?.email || '').split('@')[0] || partnerName;
-      if (data?.referral_code) referralCode = data.referral_code;
     }
   }
 
@@ -11058,7 +11069,10 @@ app.get('/api/admin/dashboard', async (req, res) => {
   const scope = await scopeUserIds(ctx.role, ctx.user?.id || null);
   if (useSupabase) {
     const [{ data: rawUsers }, { data: rawTrades }, { data: allTickets }, { data: rawPayments }] = await Promise.all([
-      supabase.from('users').select('id, status, created_at, is_pro, referral_code, referred_by'),
+      // referral_code is not a column on users and was never read out of this
+      // result — asking for it failed the whole select, so the admin dashboard
+      // loaded with no users, no counts and no revenue.
+      supabase.from('users').select('id, status, created_at, is_pro, referred_by'),
       supabase.from('trades').select('id, user_id'),
       supabase.from('support_tickets').select('id, status'),
       supabase.from('payments').select('user_id, amount, status'),
@@ -11419,10 +11433,14 @@ app.get('/api/admin/billing', async (req, res) => {
     });
   }
 
-  const [{ data: payments }, { data: subs }, { data: users }] = await Promise.all([
+  const [{ data: payments }, { data: subs }, { data: users }, { data: partnerCodes }] = await Promise.all([
     supabase.from('payments').select('*').order('paid_at', { ascending: false }).limit(100),
     supabase.from('subscriptions').select('*').order('created_at', { ascending: false }).limit(200),
-    supabase.from('users').select('id, email, name, is_pro, referral_code, referred_by')
+    supabase.from('users').select('id, email, name, is_pro, referred_by'),
+    // The referral codes, from the table that has them. Selecting
+    // users.referral_code failed this whole query, so Billing & Payments
+    // loaded empty.
+    supabase.from('partner_profiles').select('user_id, referral_code')
   ]);
 
   const userMap = new Map<string, any>((users || []).map((u: any) => [u.id, u]));
@@ -11446,8 +11464,11 @@ app.get('/api/admin/billing', async (req, res) => {
     (users || []).map((u: any) => ({ id: u.id, referredBy: u.referred_by })),
     payments || [],
   );
+  const codeByUser = new Map<string, string>(
+    (partnerCodes || []).map((p: any) => [p.user_id, p.referral_code]),
+  );
   const referralLeaderboard = (users || []).map((u: any) => {
-    const refCode = u.referral_code || ('FX-' + (u.id || '').replace(/\D/g, '').slice(-4).padStart(4, '8') || 'FX-100');
+    const refCode = codeByUser.get(u.id) || ('FX-' + (u.id || '').replace(/\D/g, '').slice(-4).padStart(4, '8') || 'FX-100');
     const directRefs = (users || []).filter((o: any) => o.referred_by && (o.referred_by === u.id || o.referred_by === refCode));
     const paidRefs = directRefs.filter((o: any) => !!o.is_pro).length;
     return {
