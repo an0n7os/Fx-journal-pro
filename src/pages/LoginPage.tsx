@@ -1013,6 +1013,19 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           </div>
         </div>
 
+      </header>
+
+      {/*
+        Outside <header>, and it has to stay outside.
+
+        .lp-nav carries backdrop-filter, and an element with a backdrop-filter
+        becomes the containing block for its position:fixed descendants. With
+        the drawer nested inside the header, `top-[58px] bottom-0` resolved
+        against the header's own 59px box instead of the viewport, so the panel
+        was 49px tall: the handle and the "Platform Navigation" label showed and
+        every link below them was clipped by overflow-y-auto. The dimming
+        backdrop was the same size, which is why the page behind never dimmed.
+      */}
         {/* Dedicated Mobile Menu Overlay */}
         {mobileMenuOpen && (
           <>
@@ -1082,8 +1095,6 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           </div>
           </>
         )}
-
-      </header>
 
       {/* ── Hero ── */}
       <section id="top" className="relative pt-20 sm:pt-28 md:pt-32 pb-10 sm:pb-14 md:pb-20 overflow-hidden">
