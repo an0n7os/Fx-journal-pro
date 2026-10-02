@@ -38,6 +38,22 @@ journal rows are untouched by all of this — a synced trade is keyed
 
 ## Setting up the VPS
 
+Everything below the terminal install is scripted. On the VPS, from the
+`worker` directory:
+
+    powershell -ExecutionPolicy Bypass -File setup-windows.ps1 `
+        -WorkerToken  "<the backend's MT5_WORKER_TOKEN>" `
+        -TerminalPath "C:\MT5\terminal1\terminal64.exe"
+
+That makes a virtualenv, installs the dependencies, writes this worker's
+`.env` with an ACL only Administrators can read, checks the backend actually
+accepts the token, and registers a scheduled task that restarts on failure.
+Run it once per worker with a different `-WorkerId` and `-TerminalPath`.
+
+It deliberately does not install MetaTrader — that installer is interactive
+and each worker needs its own copy. The rest of this section is what the
+script automates, and what to do by hand if you would rather.
+
 Per terminal, one isolated installation. **Two workers must never share a
 terminal directory** — MetaTrader keeps per-installation state, and a second
 process logging in underneath the first is how sessions get crossed.
@@ -67,7 +83,14 @@ Disconnect is reliable, start more processes — each with its own
 already hands one job to one worker, and extra jobs wait.
 
 For production, run each worker under NSSM or a Scheduled Task set to restart
-on failure, so a crash or a VPS reboot brings it back.
+on failure, so a crash or a VPS reboot brings it back. `setup-windows.ps1`
+registers that task for you.
+
+The task triggers **at logon, not at startup**, and that is not an oversight:
+MetaTrader 5 is a desktop application and needs an interactive session. A task
+running as SYSTEM lands in session 0 with no desktop and the terminal never
+comes up. Set the VPS to log its user in automatically, and the workers start
+with the session.
 
 ## Backend configuration
 
