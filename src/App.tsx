@@ -6003,12 +6003,12 @@ export default function App() {
             {/* 5. PERFORMANCE ANALYTICS VIEW */}
             {activeTab === 'analytics' && (
               <div className="space-y-4 sm:space-y-6 md:space-y-8">
-                {/* KNOW YOUR TRADES: Trading Style & Behavior Analysis */}
-                <KnowYourTrades
-                  trades={trades}
-                  accounts={accounts}
-                  currency={activeAccount?.currency || 'USD'}
-                />
+                {/* Know Your Trades used to open this tab. It is a Pro section
+                    now and has moved into the gated block below, rather than
+                    being blurred where it stood: a free trader would have met
+                    Analytics with a blurred panel as the first thing on the
+                    page, and gating it in place needed a second lock card on a
+                    tab that deliberately carries only one. */}
 
                 <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                   {/* Equity Curve Area Chart */}
@@ -6486,9 +6486,9 @@ export default function App() {
                       </div>
                       <h4 className="text-lg font-bold text-white mb-1.5">Advanced Analytics</h4>
                       <p className="text-xs text-slate-300 max-w-md mb-4 leading-relaxed">
-                        Session breakdowns, pair metrics, win and loss streaks, your equity and
-                        drawdown curve and day-of-week edge — everything below unlocks with{' '}
-                        <strong>FX Journal Pro</strong>.
+                        Your trading style by hold time, session breakdowns, pair metrics, win and
+                        loss streaks, your equity and drawdown curve and day-of-week edge —
+                        everything below unlocks with <strong>FX Journal Pro</strong>.
                       </p>
                       <button
                         onClick={() => setShowProModal(true)}
@@ -6500,6 +6500,12 @@ export default function App() {
                   )}
 
                   <div className={`space-y-6 ${!isProActive ? 'filter blur-[3px] opacity-60 pointer-events-none select-none' : ''}`}>
+                <KnowYourTrades
+                  trades={trades}
+                  accounts={accounts}
+                  currency={activeAccount?.currency || 'USD'}
+                />
+
                 <section className="dx-panel p-5 sm:p-6 shadow-xs">
                   <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Summary Session</h3>
