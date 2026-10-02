@@ -1131,13 +1131,18 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 ))}
               </div>
 
-              {/* gap-4 while stacked, not gap-3: the primary's glow is
-                  0 10px 28px -12px, so it reaches about 26px below its own box.
-                  At 12px apart that haze landed across the top edge of Sign In
-                  and smeared the boundary between the two buttons. Side by side
-                  on a wider screen the glow has nowhere to land, so gap-3 is
-                  still right there. */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-3 mt-8 sm:mt-9">
+              {/* Side by side from 352px up, stacked below it.
+                  Measured: at 375px a row is 54px against 123px stacked, with
+                  "Get Started Free" at 208px and "Sign In" at 110px, neither
+                  wrapping. At 320px the same row is 78px, because both labels
+                  break — "Get Started / Free" and "Sign / In" — so the small
+                  phones keep the stack. 352px is where both still fit on one
+                  line; it is an arbitrary variant rather than a new breakpoint
+                  because this is the only place that needs it.
+                  gap-4 only while stacked: the primary's glow is
+                  0 10px 28px -12px and reaches about 26px down onto Sign In.
+                  Beside it, the glow has nowhere to land. */}
+              <div className="flex flex-col min-[352px]:flex-row items-stretch min-[352px]:items-center gap-4 min-[352px]:gap-3 mt-8 sm:mt-9">
                 <button
                   onClick={() => openAuthModal('register')}
                   className="lp-btn-primary group inline-flex items-center justify-center gap-2 font-semibold rounded-2xl sm:rounded-full px-7 py-3.5 text-base sm:text-sm min-h-[48px] active:scale-[0.98] transition"
