@@ -408,13 +408,13 @@ export default function ProUpgradeModal({
         {/* Two across on desktop as well: eight benefits stacked in one column
             ran the left side far past the pay button and left the right half
             half empty. */}
-        <div className="px-5 sm:px-7 py-3.5 sm:py-5 border-y lg:border-b-0 border-white/[0.06] bg-white/[0.015] grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2 sm:gap-y-3">
+        <div className="px-5 sm:px-7 py-3 sm:py-5 border-y lg:border-b-0 border-white/[0.06] bg-white/[0.015] grid grid-cols-2 gap-x-3 sm:gap-x-5 gap-y-2 sm:gap-y-3">
           {PRO_BENEFITS.map((benefit) => (
-            <div key={benefit} className="flex items-center gap-2.5 text-[12.5px] text-slate-300">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-500/15 border border-violet-500/25">
-                <Check className="h-2.5 w-2.5 text-violet-300" strokeWidth={3} />
+            <div key={benefit} className="flex items-center gap-1.5 sm:gap-2.5 text-[11px] sm:text-[12.5px] text-slate-300 leading-tight">
+              <span className="flex h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 items-center justify-center rounded-full bg-violet-500/15 border border-violet-500/25">
+                <Check className="h-2 w-2 sm:h-2.5 sm:w-2.5 text-violet-300" strokeWidth={3} />
               </span>
-              <span className="leading-none">{benefit}</span>
+              <span className="truncate">{benefit}</span>
             </div>
           ))}
         </div>

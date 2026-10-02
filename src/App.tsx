@@ -4754,7 +4754,7 @@ export default function App() {
 
         {/* Main Content Area */}
         <main
-          className="flex-1 overflow-y-auto bg-[#FBFBFA] dark:bg-slate-950 px-3.5 sm:px-4 md:px-12 pt-3 sm:pt-4 md:pt-8 pb-32 md:pb-6 space-y-4 sm:space-y-6 md:space-y-8"
+          className={`flex-1 overflow-y-auto bg-[#FBFBFA] dark:bg-slate-950 px-3.5 sm:px-4 md:px-12 pt-3 sm:pt-4 md:pt-8 ${activeTab === 'insights' ? 'pb-20 md:pb-6 space-y-0' : 'pb-32 md:pb-6 space-y-4 sm:space-y-6 md:space-y-8'}`}
           onScroll={handleMainScroll}
         >
           <React.Suspense fallback={<TabLoading />}>
@@ -5440,7 +5440,7 @@ export default function App() {
             {/* 2. TRADING JOURNAL VIEW */}
             {activeTab === 'journal' && (
               <div className="space-y-6">
-                <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm space-y-4">
+                <div className="dx-panel p-4 sm:p-6 shadow-xs space-y-4">
 
                   {/* Filter controls */}
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
@@ -5450,13 +5450,13 @@ export default function App() {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search comments or pairs..."
-                        className="bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 w-full sm:w-48 focus:ring-blue-500 focus:border-blue-500"
+                        className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white rounded-lg px-3 py-2 w-full sm:w-48 focus:ring-violet-500 focus:border-violet-500 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                       />
 
                       <select
                         value={journalFilterSymbol}
                         onChange={(e) => setJournalFilterSymbol(e.target.value)}
-                        className="bg-slate-50 border border-slate-200 text-xs rounded-lg px-2.5 py-2 text-slate-600"
+                        className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs rounded-lg px-2.5 py-2 text-slate-700 dark:text-slate-200 focus:ring-violet-500 focus:border-violet-500"
                       >
                         <option value="">All Pairs</option>
                         {Array.from(new Set(trades.map(t => t.symbol))).map(sym => (
@@ -5467,7 +5467,7 @@ export default function App() {
                       <select
                         value={journalFilterEmotion}
                         onChange={(e) => setJournalFilterEmotion(e.target.value)}
-                        className="bg-slate-50 border border-slate-200 text-xs rounded-lg px-2.5 py-2 text-slate-600"
+                        className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs rounded-lg px-2.5 py-2 text-slate-700 dark:text-slate-200 focus:ring-violet-500 focus:border-violet-500"
                       >
                         <option value="">All Emotions</option>
                         <option value="Calm">Calm</option>
@@ -5544,14 +5544,14 @@ export default function App() {
                         onClick={refreshTrades}
                         disabled={tradesRefreshing}
                         title="Reload trades from Supabase"
-                        className="shrink-0 whitespace-nowrap border border-violet-200 hover:bg-violet-50 text-violet-700 text-xs font-semibold rounded-lg px-3 py-2 transition flex items-center gap-1 bg-white disabled:opacity-50"
+                        className="shrink-0 whitespace-nowrap border border-violet-200 dark:border-violet-800/60 hover:bg-violet-50 dark:hover:bg-violet-950/40 text-violet-700 dark:text-violet-300 text-xs font-semibold rounded-lg px-3 py-2 transition flex items-center gap-1 bg-white dark:bg-[#0a0d14] disabled:opacity-50"
                       >
                         <RefreshCw className={`h-3.5 w-3.5 ${tradesRefreshing ? 'animate-spin' : ''}`} />
                         {tradesRefreshing ? 'Syncing...' : 'Sync Trades'}
                       </button>
                       <button
                         onClick={() => setShowExportModal(true)}
-                        className="shrink-0 whitespace-nowrap border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg px-3 py-2 transition flex items-center gap-1 bg-white"
+                        className="shrink-0 whitespace-nowrap border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-lg px-3 py-2 transition flex items-center gap-1 bg-white dark:bg-[#0a0d14]"
                       >
                         <Download className="h-3.5 w-3.5" />
                         Export CSV
@@ -5715,7 +5715,7 @@ export default function App() {
                         </div>
 
                         {/* Mobile Trades List (Reference Image Style) */}
-                        <div className="md:hidden flex flex-col space-y-0 mt-2 border-t border-slate-100 dark:border-slate-800 -mx-6 px-6">
+                        <div className="md:hidden flex flex-col space-y-0 mt-2 border-t border-slate-100 dark:border-slate-800 -mx-4 px-4 sm:-mx-6 sm:px-6">
                           {paginatedTrades.map(t => (
                             <div
                               key={t.id}
@@ -5857,7 +5857,7 @@ export default function App() {
               <div className="space-y-5 max-w-7xl">
 
                 {/* Universal View: Grid */}
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                   {accounts.length === 0 && (
                     <div className="col-span-full py-16 text-center text-slate-500 text-sm border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl">
                       No accounts connected yet.
@@ -8817,40 +8817,40 @@ export default function App() {
             </button>
             <form onSubmit={handleEditAccount} className="space-y-4">
               <div>
-                <h3 className="font-extrabold text-slate-900 text-base">Edit Trading Portfolio</h3>
+                <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Edit Trading Portfolio</h3>
                 <p className="text-[11px] text-slate-400">Modify the alias name and starting capital for {editingAccount.broker}.</p>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Account Alias / Name</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Account Alias / Name</label>
                 <input
                   type="text"
                   required
                   value={editAccName}
                   onChange={(e) => setEditAccName(e.target.value)}
                   placeholder="Primary Live Scalper"
-                  className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full font-semibold focus:ring-slate-500 focus:border-slate-500"
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full font-semibold focus:ring-violet-500 focus:border-violet-500"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Starting Capital / Balance</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Starting Capital / Balance</label>
                 <input
                   type="number"
                   required
                   value={editAccStartingBalance}
                   onChange={(e) => setEditAccStartingBalance(e.target.value)}
                   placeholder="10000"
-                  className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full font-semibold focus:ring-slate-500 focus:border-slate-500"
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full font-semibold focus:ring-violet-500 focus:border-violet-500"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Account Currency</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Account Currency</label>
                 <select
                   value={editAccCurrency}
                   onChange={(e) => setEditAccCurrency(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full font-semibold focus:ring-slate-500 focus:border-slate-500"
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full font-semibold focus:ring-violet-500 focus:border-violet-500"
                 >
                   <option value="USD">USD ($)</option>
                   <option value="EUR">EUR (€)</option>
@@ -8923,15 +8923,15 @@ export default function App() {
             {accountCreationMethod === 'select' && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">Connect New Portfolio Account</h3>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Connect New Portfolio Account</h3>
                   <p className="text-[11px] text-slate-400">Choose how you want to connect and log trades.</p>
                 </div>
                 <div className="grid gap-3">
-                  <button onClick={() => setAccountCreationMethod('manual')} className="border-2 border-slate-100 hover:border-slate-300 hover:bg-slate-50 rounded-xl p-4 text-left transition flex gap-3 items-center">
-                    <div className="bg-slate-100 p-2 rounded-lg text-slate-600"><Edit3 className="w-5 h-5" /></div>
+                  <button onClick={() => setAccountCreationMethod('manual')} className="border-2 border-slate-100 dark:border-white/10 hover:border-slate-300 dark:hover:border-violet-500/40 hover:bg-slate-50 dark:hover:bg-white/[0.04] rounded-xl p-4 text-left transition flex gap-3 items-center">
+                    <div className="bg-slate-100 dark:bg-white/10 p-2 rounded-lg text-slate-600 dark:text-slate-300"><Edit3 className="w-5 h-5" /></div>
                     <div>
-                      <div className="font-bold text-slate-800 text-sm">Manual Account Opening</div>
-                      <div className="text-[11px] text-slate-500">Create an empty portfolio to manually log your trades one-by-one.</div>
+                      <div className="font-bold text-slate-800 dark:text-white text-sm">Manual Account Opening</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">Create an empty portfolio to manually log your trades one-by-one.</div>
                     </div>
                   </button>
                   <button
@@ -8945,12 +8945,12 @@ export default function App() {
                       setShowInvestorPassword(false);
                       setNewAccInstitutionType('Broker');
                     }}
-                    className="border-2 border-slate-100 hover:border-slate-300 hover:bg-slate-50 rounded-xl p-4 text-left transition flex gap-3 items-center"
+                    className="border-2 border-slate-100 dark:border-white/10 hover:border-slate-300 dark:hover:border-violet-500/40 hover:bg-slate-50 dark:hover:bg-white/[0.04] rounded-xl p-4 text-left transition flex gap-3 items-center"
                   >
                     <div className="bg-violet-100 dark:bg-violet-500/15 p-2 rounded-lg text-violet-600 dark:text-violet-300"><Terminal className="w-5 h-5" /></div>
                     <div>
-                      <div className="font-bold text-slate-800 text-sm">MT5 Sync Account</div>
-                      <div className="text-[11px] text-slate-500">Connect directly using MT5 Login, Server, and Trading or Investor Password.</div>
+                      <div className="font-bold text-slate-800 dark:text-white text-sm">MT5 Sync Account</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">Connect directly using MT5 Login, Server, and Trading or Investor Password.</div>
                     </div>
                   </button>
                 </div>
@@ -8960,44 +8960,44 @@ export default function App() {
             {accountCreationMethod === 'manual' && (
               <form onSubmit={handleCreateAccount} className="space-y-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <button type="button" onClick={() => setAccountCreationMethod('select')} className="text-slate-400 hover:text-slate-700 text-xs font-semibold">← Back</button>
+                  <button type="button" onClick={() => setAccountCreationMethod('select')} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs font-semibold">← Back</button>
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">Register Manual Portfolio</h3>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Register Manual Portfolio</h3>
                   <p className="text-[11px] text-slate-400">Configure parameters to manually log your trades.</p>
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Account Alias / Name</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Account Alias / Name</label>
                   <input
                     type="text"
                     id="mt5_account_name_field"
                     value={newAccName}
                     onChange={(e) => setNewAccName(e.target.value)}
                     placeholder="Primary Live Scalper"
-                    className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full focus:ring-blue-500 focus:border-blue-500"
+                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full focus:ring-violet-500 focus:border-violet-500"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Broker Name</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Broker Name</label>
                   <input
                     type="text"
                     required
                     value={newAccBroker}
                     onChange={(e) => setNewAccBroker(e.target.value)}
                     placeholder="IC Markets"
-                    className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full focus:ring-blue-500 focus:border-blue-500"
+                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full focus:ring-violet-500 focus:border-violet-500"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Trading Platform</label>
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Trading Platform</label>
                     <select
                       value={newAccPlatform}
                       onChange={(e: any) => setNewAccPlatform(e.target.value)}
-                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full focus:ring-violet-500 focus:border-violet-500"
                     >
                       <option value="MT5">MetaTrader 5 (MT5)</option>
                       <option value="MT4">MetaTrader 4 (MT4)</option>
@@ -9006,11 +9006,11 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Account Type</label>
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Account Type</label>
                     <select
                       value={newAccType}
                       onChange={(e: any) => setNewAccType(e.target.value)}
-                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full focus:ring-violet-500 focus:border-violet-500"
                     >
                       <option value="Live">Live Portfolio</option>
                       <option value="Demo">Demo Practice</option>
@@ -9020,11 +9020,11 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Base Currency</label>
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Base Currency</label>
                     <select
                       value={newAccCurrency}
                       onChange={(e) => setNewAccCurrency(e.target.value)}
-                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full focus:ring-violet-500 focus:border-violet-500"
                     >
                       <option value="USD">USD ($)</option>
                       <option value="EUR">EUR (€)</option>
@@ -9036,13 +9036,13 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Starting Balance</label>
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Starting Balance</label>
                     <input
                       type="number"
                       required
                       value={newAccBalance}
                       onChange={(e) => setNewAccBalance(e.target.value)}
-                      className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full"
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full focus:ring-violet-500 focus:border-violet-500"
                     />
                   </div>
                 </div>
@@ -9050,7 +9050,7 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg py-2.5 px-4 transition disabled:opacity-50"
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs rounded-lg py-2.5 px-4 transition disabled:opacity-50 shadow-md shadow-violet-600/20"
                 >
                   {actionLoading ? 'Provisioning Account...' : 'Create Portfolio Account'}
                 </button>
@@ -9383,14 +9383,14 @@ export default function App() {
                   the date was visibly cut off mid-digit on a phone. */}
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1.5">Entry Time</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Entry Time</label>
                   <div className="relative">
                     <input
                       id="tradeDateInput"
                       type="datetime-local"
                       value={tradeDate}
                       onChange={(e) => setTradeDate(e.target.value)}
-                      className="bg-white border border-slate-200 text-sm rounded-xl p-3 pr-10 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all [&::-webkit-calendar-picker-indicator]:hidden"
+                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm rounded-xl p-3 pr-10 w-full focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 shadow-sm transition-all [&::-webkit-calendar-picker-indicator]:hidden"
                     />
                     <button
                       type="button"
@@ -9401,7 +9401,7 @@ export default function App() {
                           try { if ('showPicker' in input) (input as any).showPicker(); } catch (_) { }
                         }
                       }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-500 transition-colors z-10"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-violet-500 transition-colors z-10"
                     >
                       <Calendar className="h-4 w-4" />
                     </button>
@@ -9409,14 +9409,14 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1.5">Exit Time (Optional)</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Exit Time (Optional)</label>
                   <div className="relative">
                     <input
                       id="tradeExitTimeInput"
                       type="datetime-local"
                       value={tradeExitTime}
                       onChange={(e) => setTradeExitTime(e.target.value)}
-                      className="bg-white border border-slate-200 text-sm rounded-xl p-3 pr-10 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all [&::-webkit-calendar-picker-indicator]:hidden"
+                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm rounded-xl p-3 pr-10 w-full focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 shadow-sm transition-all [&::-webkit-calendar-picker-indicator]:hidden"
                     />
                     <button
                       type="button"
@@ -9427,7 +9427,7 @@ export default function App() {
                           try { if ('showPicker' in input) (input as any).showPicker(); } catch (_) { }
                         }
                       }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-500 transition-colors z-10"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-violet-500 transition-colors z-10"
                     >
                       <Calendar className="h-4 w-4" />
                     </button>
@@ -9436,10 +9436,10 @@ export default function App() {
               </div>
 
               {/* Core Details (Asset, Direction, Lots) */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-3 sm:gap-4">
                 {/* Symbol with autocomplete */}
                 <div className="relative">
-                  <label className="text-xs font-bold text-slate-700 block mb-1.5">Symbol</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Symbol</label>
                   <input
                     ref={symbolInputRef}
                     type="text"
@@ -9469,13 +9469,13 @@ export default function App() {
                     }}
                     placeholder="XAUUSD"
                     autoComplete="off"
-                    className="bg-white border border-slate-200 text-sm rounded-xl p-3 w-full uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm rounded-xl p-3 w-full uppercase focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 shadow-sm transition-all"
                   />
                   {/* Autocomplete Dropdown */}
                   {showSymbolDropdown && symbolSuggestions.length > 0 && (
                     <div
                       ref={symbolDropdownRef}
-                      className="absolute top-full left-0 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden"
+                      className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl z-50 overflow-hidden"
                     >
                       {symbolSuggestions.map((sym) => {
                         const spec = SYMBOL_SPECS[sym];
@@ -9493,11 +9493,11 @@ export default function App() {
                               setShowSymbolDropdown(false);
                               setSymbolSuggestions([]);
                             }}
-                            className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center justify-between font-medium border-b border-slate-50 last:border-0"
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:text-violet-700 dark:hover:text-violet-300 transition-colors flex items-center justify-between font-medium border-b border-slate-50 dark:border-white/5 last:border-0"
                           >
-                            <span className="font-bold text-slate-800">{sym}</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-100">{sym}</span>
                             {previewProfit !== null && (
-                              <span className={`text-[10px] font-semibold ${previewProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                              <span className={`text-[10px] font-semibold ${previewProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
                                 {previewProfit >= 0 ? '+' : ''}{previewProfit.toFixed(2)}
                               </span>
                             )}
@@ -9508,18 +9508,18 @@ export default function App() {
                   )}
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1.5">Direction</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Direction</label>
                   <select
                     value={tradeType}
                     onChange={(e: any) => setTradeType(e.target.value)}
-                    className="bg-white border border-slate-200 text-sm rounded-xl p-3 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all cursor-pointer"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm rounded-xl p-3 w-full focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 shadow-sm transition-all cursor-pointer"
                   >
                     <option value="Buy">BUY</option>
                     <option value="Sell">SELL</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1.5">Lot Size</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Lot Size</label>
                   <input
                     type="number"
                     step="0.01"
@@ -9527,59 +9527,59 @@ export default function App() {
                     required
                     value={tradeLotSize}
                     onChange={(e) => setTradeLotSize(e.target.value)}
-                    className="bg-white border border-slate-200 text-sm rounded-xl p-3 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm rounded-xl p-3 w-full focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 shadow-sm transition-all"
                   />
                 </div>
               </div>
 
               {/* Price Details */}
-              <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-50/50 dark:bg-white/[0.02] rounded-xl p-4 border border-slate-100 dark:border-white/10 space-y-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1.5">Entry Price</label>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Entry Price</label>
                     <input
                       type="number"
                       step="0.00001"
                       required
                       value={tradeEntryPrice}
                       onChange={(e) => setTradeEntryPrice(e.target.value)}
-                      className="bg-white border border-slate-200 text-sm rounded-xl p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
+                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm rounded-xl p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 shadow-sm transition-all"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1.5">Exit Price</label>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Exit Price</label>
                     <input
                       type="number"
                       step="0.00001"
                       required
                       value={tradeExitPrice}
                       onChange={(e) => setTradeExitPrice(e.target.value)}
-                      className="bg-white border border-slate-200 text-sm rounded-xl p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
+                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm rounded-xl p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 shadow-sm transition-all"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1.5">Stop Loss <span className="text-slate-400 font-normal">(SL)</span></label>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Stop Loss <span className="text-slate-400 font-normal">(SL)</span></label>
                     <input
                       type="number"
                       step="0.00001"
                       value={tradeSL}
                       onChange={(e) => setTradeSL(e.target.value)}
                       placeholder="Optional"
-                      className="bg-white border border-slate-200 text-sm rounded-xl p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
+                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm rounded-xl p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 shadow-sm transition-all"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1.5">Take Profit <span className="text-slate-400 font-normal">(TP)</span></label>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Take Profit <span className="text-slate-400 font-normal">(TP)</span></label>
                     <input
                       type="number"
                       step="0.00001"
                       value={tradeTP}
                       onChange={(e) => setTradeTP(e.target.value)}
                       placeholder="Optional"
-                      className="bg-white border border-slate-200 text-sm rounded-xl p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
+                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm rounded-xl p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 shadow-sm transition-all"
                     />
                   </div>
                 </div>
@@ -9652,14 +9652,11 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setShowNoteField(prev => !prev)}
-                    className={`inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border transition-all duration-200 ${showNoteField
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400 hover:text-indigo-600'
+                    className={`inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border transition-all duration-200 cursor-pointer ${showNoteField
+                      ? 'bg-violet-600 border-violet-600 text-white'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-violet-400 hover:text-violet-400'
                       }`}
                   >
-                    {/* A type icon beside the Plus, so the three chips are
-                        distinguishable at a glance instead of reading as three
-                        identical "+ word" pills. */}
                     <Plus className={`h-3 w-3 transition-transform duration-200 ${showNoteField ? 'rotate-45' : ''}`} />
                     <FileText className="h-3.5 w-3.5" />
                     Note
@@ -9669,9 +9666,9 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setShowEmotionField(prev => !prev)}
-                    className={`inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border transition-all duration-200 ${showEmotionField
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400 hover:text-indigo-600'
+                    className={`inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border transition-all duration-200 cursor-pointer ${showEmotionField
+                      ? 'bg-violet-600 border-violet-600 text-white'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-violet-400 hover:text-violet-400'
                       }`}
                   >
                     <Plus className={`h-3 w-3 transition-transform duration-200 ${showEmotionField ? 'rotate-45' : ''}`} />
@@ -9684,9 +9681,9 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setShowChartField(prev => !prev)}
-                    className={`inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border transition-all duration-200 ${showChartField
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400 hover:text-indigo-600'
+                    className={`inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border transition-all duration-200 cursor-pointer ${showChartField
+                      ? 'bg-violet-600 border-violet-600 text-white'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-violet-400 hover:text-violet-400'
                       }`}
                   >
                     <Plus className={`h-3 w-3 transition-transform duration-200 ${showChartField ? 'rotate-45' : ''}`} />
@@ -9705,7 +9702,7 @@ export default function App() {
                       value={tradeNotes}
                       onChange={(e) => setTradeNotes(e.target.value)}
                       placeholder="Any thoughts, observations, or lessons from this trade…"
-                      className="bg-slate-50/80 border border-slate-200 text-sm text-slate-700 rounded-xl p-3 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none placeholder:text-slate-400"
+                      className="bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-sm text-slate-800 dark:text-slate-100 rounded-xl p-3 w-full focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all resize-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                   </div>
                 )}
@@ -9719,9 +9716,9 @@ export default function App() {
                           key={e}
                           type="button"
                           onClick={() => setTradeEmotion(e)}
-                          className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all duration-150 ${tradeEmotion === e
-                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                            : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-600'
+                          className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all duration-150 cursor-pointer ${tradeEmotion === e
+                            ? 'bg-violet-600 border-violet-600 text-white shadow-sm'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-violet-400 hover:text-violet-400'
                             }`}
                         >
                           {e}
@@ -9747,30 +9744,30 @@ export default function App() {
                     />
 
                     {tradeScreenshot ? (
-                      <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                      <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900">
                         <img
                           src={tradeScreenshot}
                           alt="Trade image screenshot"
-                          className="w-full max-h-52 object-contain bg-slate-100 cursor-zoom-in"
+                          className="w-full max-h-52 object-contain bg-slate-100 dark:bg-slate-900 cursor-zoom-in"
                           onClick={() => setViewingScreenshot(tradeScreenshot)}
                         />
-                        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white border-t border-slate-200">
-                          <span className="text-[11px] font-semibold text-slate-500 inline-flex items-center gap-1.5">
-                            <ImageIcon className="h-3.5 w-3.5 text-indigo-500" />
+                        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10">
+                          <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
+                            <ImageIcon className="h-3.5 w-3.5 text-violet-500" />
                             Image attached
                           </span>
                           <div className="flex items-center gap-3">
                             <button
                               type="button"
                               onClick={() => screenshotInputRef.current?.click()}
-                              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+                              className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:text-violet-500 transition-colors cursor-pointer"
                             >
                               Replace
                             </button>
                             <button
                               type="button"
                               onClick={() => { setTradeScreenshot(''); setScreenshotError(''); }}
-                              className="text-[11px] font-bold text-rose-500 hover:text-rose-600 transition-colors inline-flex items-center gap-1"
+                              className="text-[11px] font-bold text-rose-500 hover:text-rose-600 transition-colors inline-flex items-center gap-1 cursor-pointer"
                             >
                               <X className="h-3 w-3" />
                               Remove
@@ -9795,13 +9792,13 @@ export default function App() {
                           if (item) handleScreenshotFile(item.getAsFile());
                         }}
                         disabled={screenshotBusy}
-                        className={`w-full rounded-xl border-2 border-dashed px-4 py-7 flex flex-col items-center justify-center gap-1.5 transition-all duration-200 disabled:opacity-60 ${screenshotDragging
-                          ? 'border-indigo-500 bg-indigo-50'
-                          : 'border-slate-200 bg-slate-50/80 hover:border-indigo-400 hover:bg-indigo-50/40'
+                        className={`w-full rounded-xl border-2 border-dashed px-4 py-7 flex flex-col items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer disabled:opacity-60 ${screenshotDragging
+                          ? 'border-violet-500 bg-violet-500/10'
+                          : 'border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-white/[0.02] hover:border-violet-400 hover:bg-violet-50/40 dark:hover:bg-violet-950/20'
                           }`}
                       >
-                        <Upload className={`h-5 w-5 ${screenshotDragging ? 'text-indigo-600' : 'text-slate-400'}`} />
-                        <span className="text-xs font-semibold text-slate-600">
+                        <Upload className={`h-5 w-5 ${screenshotDragging ? 'text-violet-500' : 'text-slate-400'}`} />
+                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                           {screenshotBusy ? 'Processing image…' : 'Upload trade image'}
                         </span>
                         <span className="text-[10px] text-slate-400">
@@ -9832,7 +9829,7 @@ export default function App() {
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl py-3.5 px-4 transition-all duration-300 shadow-md shadow-indigo-500/30 hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm rounded-xl py-3.5 px-4 transition-all duration-300 shadow-md shadow-violet-500/30 hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {actionLoading ? 'Saving...' : editingTradeId ? 'Update Trade Record' : 'Save Trade'}
                   </button>

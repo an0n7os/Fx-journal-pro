@@ -269,14 +269,14 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
   const isHeroMode = messages.length <= 1;
 
   return (
-    <div className="w-full flex justify-center py-2 sm:py-6 px-1.5 sm:px-4">
+    <div className="w-full h-full flex justify-center py-1 sm:py-6 px-1 sm:px-4">
       {/* ── Main Chat Window (Balanced Landscape on PC, Portrait on Mobile) ── */}
       <div
         id="ai-assistant-card"
-        className="relative w-full max-w-[440px] md:max-w-4xl lg:max-w-5xl rounded-[24px] md:rounded-[28px] overflow-hidden border border-[#242428] flex flex-col justify-between transition-all duration-300"
+        className="relative w-full max-w-full sm:max-w-[440px] md:max-w-4xl lg:max-w-5xl rounded-[20px] md:rounded-[28px] overflow-hidden border border-[#242428] flex flex-col justify-between transition-all duration-300 shadow-2xl"
         style={{
-          minHeight: '480px',
-          height: 'min(640px, calc(100dvh - 120px))',
+          minHeight: '440px',
+          height: 'min(640px, calc(100dvh - 148px))',
           background: '#131315',
           boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.95), 0 0 35px -10px rgba(168, 85, 247, 0.12)',
         }}
