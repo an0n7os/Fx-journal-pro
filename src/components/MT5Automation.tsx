@@ -121,6 +121,14 @@ interface MT5Status {
   cloudSyncAvailable?: boolean;
   /** True only where the self-hosted VPS worker pool is configured. */
   vpsSyncAvailable?: boolean;
+  /**
+   * When a worker last claimed a job, anywhere — null means no worker has ever
+   * turned up. Configured (`vpsSyncAvailable`) is not the same as running, and
+   * the difference is whether "In Queue" means "soon" or "never".
+   */
+  workerLastSeenAt?: string | null;
+  /** When this account's oldest waiting job was queued. */
+  queuedSince?: string | null;
   queueDepth?: number;
   connectJobs: MT5ConnectJob[];
   lastSyncTime: string | null;
@@ -252,6 +260,24 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   // method that may not work.
   const cloudAvailable = status?.cloudSyncAvailable === true;
   const vpsAvailable = status?.vpsSyncAvailable === true;
+
+  /**
+   * Has a worker actually been seen recently, rather than merely allowed?
+   *
+   * Ten minutes, because a worker polls every few seconds but may be busy on a
+   * long history pull for another account, and the claim that stamps this is
+   * the start of the job, not its end.
+   */
+  const WORKER_PRESENCE_MS = 10 * 60 * 1000;
+  const workerOnline = !!status?.workerLastSeenAt
+    && Date.now() - new Date(status.workerLastSeenAt).getTime() < WORKER_PRESENCE_MS;
+
+  /** A job that has waited this long with no worker in sight is not queued, it is stuck. */
+  const queuedTooLong = !!status?.queuedSince
+    && Date.now() - new Date(status.queuedSince).getTime() > 2 * 60 * 1000;
+
+  /** Nothing is going to drain this queue. Say so instead of spinning. */
+  const queueStalled = queuedTooLong && !workerOnline;
 
   useEffect(() => {
     if (status?.syncMethod === 'VPS' && status.cloudConnected) {
@@ -698,12 +724,27 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
       </div>
 
       {/* Connection state banner */}
-      {phase === 'Queued' && status?.syncMethod === 'VPS' && (
+      {/* Queued with a worker running is a promise. Queued with no worker is a
+          dead end, and a spinner over "will connect automatically" is a lie
+          that costs the customer a support ticket to discover. */}
+      {phase === 'Queued' && status?.syncMethod === 'VPS' && !queueStalled && (
         <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-xl px-4 py-3">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
           <div className="flex-1">
             Your sync is queued — our VPS worker will connect to MT5, fetch your trades, and update the journal automatically.
             {status.queueDepth && status.queueDepth > 1 ? ` (${status.queueDepth} jobs ahead)` : ''} This page refreshes automatically.
+          </div>
+        </div>
+      )}
+      {phase === 'Queued' && status?.syncMethod === 'VPS' && queueStalled && (
+        <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-200 text-xs font-semibold rounded-xl px-4 py-3">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-px" />
+          <div className="flex-1 space-y-1">
+            <p>Your sync is waiting, but no sync worker has picked it up.</p>
+            <p className="font-medium opacity-90">
+              Your details are saved and the job stays in the queue — it will run as soon as a worker is online.
+              Nothing needs re-entering. To sync now, use the MT5 EA method instead: it runs in your own terminal and needs no worker.
+            </p>
           </div>
         </div>
       )}
@@ -1042,10 +1083,23 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
               <RefreshCw className="h-5 w-5 text-emerald-500" />
               <h3 className="dx-section-title">Auto Sync via VPS Worker</h3>
             </div>
+            {/* The badge used to read "VPS Connected" whenever credentials were
+                stored, which is a statement about this account, not about the
+                worker. It said connected on a deployment where no worker had
+                ever run. */}
             {status?.syncMethod === 'VPS' && status.cloudConnected && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-1">
-                <Wifi className="h-3 w-3" /> VPS Connected
-              </span>
+              workerOnline ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-1">
+                  <Wifi className="h-3 w-3" /> Worker online
+                </span>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-[10px] font-bold px-2.5 py-1"
+                  title="Your MT5 details are saved. No sync worker has checked in yet, so queued jobs are waiting."
+                >
+                  <WifiOff className="h-3 w-3" /> No worker online
+                </span>
+              )
             )}
           </div>
 

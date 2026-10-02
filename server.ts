@@ -5360,9 +5360,35 @@ app.get('/api/mt5/:accountId/status', async (req, res) => {
   const snapshots = Array.isArray(db.mt5Snapshots)
     ? db.mt5Snapshots.filter((s: any) => s.accountId === account.id).slice(-500)
     : [];
-  const connectJobs = Array.isArray(db.mt5ConnectJobs)
-    ? db.mt5ConnectJobs.filter((j: any) => j.accountId === account.id).slice(-5)
-    : [];
+  const allConnectJobs: any[] = Array.isArray(db.mt5ConnectJobs) ? db.mt5ConnectJobs : [];
+  const connectJobs = allConnectJobs.filter((j: any) => j.accountId === account.id).slice(-5);
+
+  /**
+   * Whether a sync worker is actually running, as opposed to merely allowed.
+   *
+   * vpsSyncAvailable() only says this deployment is CONFIGURED to accept a
+   * worker — the token is set. It said "VPS Connected" on a deployment where
+   * no worker had ever existed, under a banner promising the sync was about to
+   * happen, while the job sat PENDING forever. Nothing in the UI distinguished
+   * "queued, worker is working through the queue" from "queued, nothing is
+   * going to pick this up".
+   *
+   * A worker announces itself by claiming: a claim stamps startedAt on the
+   * job. So the most recent startedAt across the queue is the last time any
+   * worker was alive, which is derived from data already stored rather than a
+   * new presence channel that a serverless invocation would not share.
+   */
+  const workerLastSeenAt = allConnectJobs
+    .map((j: any) => j.startedAt)
+    .filter((t: any) => typeof t === 'string')
+    .sort()
+    .pop() || null;
+
+  const oldestPending = allConnectJobs
+    .filter((j: any) => j.accountId === account.id && j.status === 'PENDING')
+    .map((j: any) => j.createdAt)
+    .filter((t: any) => typeof t === 'string')
+    .sort()[0] || null;
 
   // Reconcile accounts stuck in Validating from a cloud connect on a
   // deployment that cannot run the sync worker. The token alone was not enough
@@ -5400,6 +5426,11 @@ app.get('/api/mt5/:accountId/status', async (req, res) => {
     // pool. The UI gates each on its own flag rather than one shared "cloud".
     cloudSyncAvailable: workerConfigured,
     vpsSyncAvailable: vpsSyncAvailable(),
+    // Configured to accept a worker (above) versus one having actually turned
+    // up (below). The UI needs both: the first decides whether to offer the
+    // method, the second decides whether "queued" is a promise or a dead end.
+    workerLastSeenAt,
+    queuedSince: oldestPending,
     queueDepth: queueDepth(db),
     connectJobs,
     lastSyncTime: account.eaLastSyncTime || null,
