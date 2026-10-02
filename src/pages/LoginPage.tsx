@@ -1073,7 +1073,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                   setMobileMenuOpen(false);
                   openAuthModal('register');
                 }}
-                className="lp-btn-primary w-full py-3.5 rounded-2xl text-center text-base font-semibold shadow-lg shadow-violet-600/25 min-h-[48px] flex items-center justify-center gap-2 active:scale-95 transition"
+                className="lp-btn-primary w-full py-3.5 rounded-full text-center text-base font-semibold shadow-lg shadow-violet-600/25 min-h-[48px] flex items-center justify-center gap-2 active:scale-95 transition"
               >
                 Get Started Free <ArrowUpRight className="h-4 w-4" />
               </button>
@@ -1082,7 +1082,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                   setMobileMenuOpen(false);
                   openAuthModal('login');
                 }}
-                className="w-full py-3.5 rounded-2xl text-center text-base font-semibold text-slate-200 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] min-h-[48px] active:scale-95 transition"
+                className="w-full py-3.5 rounded-full text-center text-base font-semibold text-slate-200 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] min-h-[48px] active:scale-95 transition"
               >
                 Sign In
               </button>
@@ -1145,14 +1145,14 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               <div className="flex flex-col min-[352px]:flex-row items-stretch min-[352px]:items-center gap-4 min-[352px]:gap-3 mt-8 sm:mt-9">
                 <button
                   onClick={() => openAuthModal('register')}
-                  className="lp-btn-primary group inline-flex items-center justify-center gap-2 font-semibold rounded-2xl sm:rounded-full px-7 py-3.5 text-base sm:text-sm min-h-[48px] active:scale-[0.98] transition"
+                  className="lp-btn-primary group inline-flex items-center justify-center gap-2 font-semibold rounded-full px-7 py-3.5 text-base sm:text-sm min-h-[48px] active:scale-[0.98] transition"
                 >
                   Get Started Free
                   <ArrowUpRight className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </button>
                 <button
                   onClick={() => openAuthModal('login')}
-                  className="lp-btn-ghost inline-flex items-center justify-center gap-2 font-semibold rounded-2xl sm:rounded-full px-7 py-3.5 text-base sm:text-sm min-h-[48px] active:scale-[0.98] transition"
+                  className="lp-btn-ghost inline-flex items-center justify-center gap-2 font-semibold rounded-full px-7 py-3.5 text-base sm:text-sm min-h-[48px] active:scale-[0.98] transition"
                 >
                   Sign In
                 </button>
