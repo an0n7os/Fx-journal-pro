@@ -1015,8 +1015,19 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
         {/* Dedicated Mobile Menu Overlay */}
         {mobileMenuOpen && (
-          <div className="lg:hidden fixed inset-x-0 top-[58px] sm:top-[68px] bottom-0 z-50 bg-[#070913]/98 backdrop-blur-2xl px-5 py-6 flex flex-col justify-between overflow-y-auto animate-in fade-in slide-in-from-top-3 duration-200 border-b border-white/[0.08]">
-            <div className="space-y-1.5">
+          <>
+            {/* Full-screen dimming backdrop */}
+            <div
+              className="lg:hidden fixed inset-0 top-[58px] sm:top-[68px] z-[54] bg-black/60 backdrop-blur-sm"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            {/* Drawer panel */}
+            <div className="lg:hidden fixed inset-x-0 top-[58px] sm:top-[68px] bottom-0 z-[55] bg-[#070913] px-5 py-6 flex flex-col justify-between overflow-y-auto animate-in fade-in slide-in-from-top-3 duration-200 border-t border-white/[0.08]">
+              {/* iOS-style drag handle */}
+              <div className="flex justify-center -mt-3 mb-4">
+                <span className="h-1 w-10 rounded-full bg-white/20" />
+              </div>
+              <div className="space-y-1.5">
               <p className="text-[11px] font-mono uppercase tracking-wider text-slate-400 px-3 pb-2 font-bold">
                 Platform Navigation
               </p>
@@ -1069,7 +1080,9 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               </div>
             </div>
           </div>
+          </>
         )}
+
       </header>
 
       {/* ── Hero ── */}
