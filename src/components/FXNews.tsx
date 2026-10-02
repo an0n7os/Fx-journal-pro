@@ -622,39 +622,39 @@ export default function FXNews({ initialTab = 'news', isPro = false }: { initial
     fetchCalendar();
   };
 
-  const selectCls = 'bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.1] rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500/30';
+  const selectCls = 'h-8 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 px-2.5 focus:outline-none focus:ring-1 focus:ring-violet-500/30';
 
   return (
-    <div className="space-y-6" data-testid="fx-news-page">
-      {/* Tabs & Upcoming High-Impact Event */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-white/[0.08] pb-1 sm:pb-0">
-        <div className="flex items-center gap-1">
+    <div className="space-y-4 sm:space-y-6" data-testid="fx-news-page">
+      {/* Apple-style Segmented Control & Upcoming High-Impact Event */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="flex items-center p-1 rounded-2xl bg-white/[0.03] border border-white/[0.08] w-full sm:w-auto">
           <button
             onClick={() => setTab('news')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl text-xs font-semibold transition ${
               tab === 'news'
-                ? 'border-violet-500 text-violet-600 dark:text-violet-400 font-bold'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'bg-violet-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Newspaper className="h-4 w-4" /> Latest FX News
+            <Newspaper className="h-3.5 w-3.5" /> Latest FX News
           </button>
           <button
             onClick={() => setTab('calendar')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl text-xs font-semibold transition ${
               tab === 'calendar'
-                ? 'border-violet-500 text-violet-600 dark:text-violet-400 font-bold'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'bg-violet-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
-            <CalendarRange className="h-4 w-4" /> Economic Calendar
+            <CalendarRange className="h-3.5 w-3.5" /> Economic Calendar
           </button>
         </div>
 
         {nextHigh && (
-          <div className="inline-flex items-center gap-2 bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-300 text-xs font-bold px-3 py-1.5 rounded-xl self-start sm:self-auto mb-1.5 sm:mb-0">
-            <Radio className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400 animate-pulse" />
-            Next: {nextHigh.currency} {nextHigh.event} · Starts in {nextHighCountdown}
+          <div className="inline-flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[10.5px] font-medium px-2.5 py-1 rounded-xl self-start sm:self-auto">
+            <Radio className="h-3 w-3 text-rose-400 animate-pulse shrink-0" />
+            <span className="truncate">Next: <strong className="font-bold">{nextHigh.currency} {nextHigh.event}</strong> · {nextHighCountdown}</span>
           </div>
         )}
       </div>
@@ -728,23 +728,23 @@ export default function FXNews({ initialTab = 'news', isPro = false }: { initial
               <p className="text-xs text-slate-400 mt-1">Try a different currency or category, or refresh.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
               {filteredNews.map(a => (
-                <article key={a.id} className="dx-panel hover:border-violet-500/40 p-5 shadow-sm flex flex-col transition-colors duration-200">
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-violet-700 dark:text-violet-400 bg-violet-500/10 border border-violet-600/25 dark:border-violet-500/20 px-2 py-0.5 rounded-full">
+                <article key={a.id} className="dx-panel hover:border-violet-500/40 p-3.5 sm:p-5 rounded-2xl shadow-xs flex flex-col transition-colors duration-200">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-[9.5px] font-mono font-bold uppercase tracking-wider text-violet-700 dark:text-violet-400 bg-violet-500/10 border border-violet-600/25 dark:border-violet-500/20 px-2 py-0.5 rounded-full">
                       {a.category}
                     </span>
-                    <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 flex items-center gap-1 shrink-0">
+                    <span className="text-[9.5px] font-mono text-slate-400 dark:text-slate-500 flex items-center gap-1 shrink-0">
                       <Clock className="h-3 w-3" />
                       {timeAgo(a.publishedAt)}
                     </span>
                   </div>
-                  <h3 className="font-bold text-slate-900 dark:text-white text-sm leading-snug line-clamp-2">
+                  <h3 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm leading-snug line-clamp-2">
                     {a.title}
                   </h3>
                   {a.summary && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-2 line-clamp-3">
+                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-1.5 line-clamp-2">
                       {a.summary}
                     </p>
                   )}
@@ -793,11 +793,11 @@ export default function FXNews({ initialTab = 'news', isPro = false }: { initial
       {tab === 'calendar' && (
         <div className="space-y-5">
           {/* Upcoming High Impact Events */}
-          <section className="dx-panel text-slate-900 dark:text-white p-6 shadow-lg relative overflow-hidden">
+          <section className="dx-panel text-slate-900 dark:text-white p-3.5 sm:p-5 rounded-2xl shadow-lg relative overflow-hidden">
             <div className="absolute top-0 right-0 w-72 h-72 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
             <div className="relative">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-red-600 dark:text-red-300 bg-red-100 dark:bg-red-500/15 border border-red-200 dark:border-red-500/30 px-2 py-1 rounded-full">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-red-600 dark:text-red-300 bg-red-100 dark:bg-red-500/15 border border-red-200 dark:border-red-500/30 px-2 py-0.5 rounded-full">
                   <Radio className="h-3 w-3 animate-pulse" /> Upcoming High Impact Events
                 </span>
                 {calProvider && (
@@ -806,7 +806,7 @@ export default function FXNews({ initialTab = 'news', isPro = false }: { initial
               </div>
 
               {upcomingHigh.length === 0 ? (
-                <p className="text-sm text-slate-600 dark:text-slate-300">
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
                   {calLoading
                     ? 'Loading upcoming events…'
                     : calError
@@ -816,37 +816,37 @@ export default function FXNews({ initialTab = 'news', isPro = false }: { initial
               ) : (
                 <>
                   {nextHigh && (
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-5 mb-4 shadow-sm dark:shadow-none">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[10px] font-extrabold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-500/40 px-1.5 py-0.5 rounded">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3 sm:p-4 mb-3 shadow-xs">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[9.5px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-500/40 px-1.5 py-0.5 rounded">
                             🔴 HIGH IMPACT
                           </span>
-                          <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-transparent px-1.5 py-0.5 rounded">{nextHigh.currency}</span>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400">{nextHigh.country}</span>
+                          <span className="text-[9.5px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-transparent px-1.5 py-0.5 rounded">{nextHigh.currency}</span>
+                          <span className="text-[9.5px] text-slate-500 dark:text-slate-400">{nextHigh.country}</span>
                         </div>
-                        <h3 className="font-black text-lg mt-2 text-slate-900 dark:text-white">{nextHigh.event}</h3>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5" />
-                          {fmtTime(nextHigh.date)} · {fmtDate(nextHigh.date)} · your timezone ({tzName})
+                        <h3 className="font-extrabold text-sm sm:text-base mt-1.5 text-slate-900 dark:text-white truncate">{nextHigh.event}</h3>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {fmtTime(nextHigh.date)} · {fmtDate(nextHigh.date)} · ({tzName})
                         </p>
                       </div>
-                      <div className="shrink-0">
-                        <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Starts in</div>
-                        <div className="font-mono font-black text-2xl tabular-nums text-slate-900 dark:text-white">{nextHighCountdown}</div>
+                      <div className="shrink-0 flex items-baseline sm:flex-col gap-2 sm:gap-0">
+                        <div className="text-[9.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">Starts in</div>
+                        <div className="font-mono font-black text-lg sm:text-2xl tabular-nums text-slate-900 dark:text-white">{nextHighCountdown}</div>
                       </div>
                     </div>
                   )}
 
                   <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
                     {upcomingHigh.slice(0, 6).map(ev => (
-                      <div key={ev.id} className="shrink-0 min-w-[190px] bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-none rounded-xl p-3">
+                      <div key={ev.id} className="shrink-0 min-w-[150px] sm:min-w-[180px] bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-xs rounded-xl p-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">{fmtTime(ev.date)}</span>
-                          <span className="text-[10px] font-extrabold text-red-600 dark:text-red-300 bg-red-100 dark:bg-red-500/15 px-1.5 py-0.5 rounded-full">High</span>
+                          <span className="text-[9.5px] font-bold text-slate-700 dark:text-slate-300">{fmtTime(ev.date)}</span>
+                          <span className="text-[9.5px] font-extrabold text-red-600 dark:text-red-300 bg-red-100 dark:bg-red-500/15 px-1.5 py-0.5 rounded-full">High</span>
                         </div>
-                        <p className="text-xs font-bold text-slate-900 dark:text-white mt-1.5 line-clamp-2">{ev.currency} {ev.event}</p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">{fmtDate(ev.date)}</p>
+                        <p className="text-[11px] font-bold text-slate-900 dark:text-white mt-1 line-clamp-2">{ev.currency} {ev.event}</p>
+                        <p className="text-[9.5px] text-slate-500 dark:text-slate-400 mt-0.5">{fmtDate(ev.date)}</p>
                       </div>
                     ))}
                   </div>

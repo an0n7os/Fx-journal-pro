@@ -314,28 +314,26 @@ export const TraderRankCard: React.FC<TraderRankCardProps> = ({
     // Inherits the hero's glass, so colours are set against a violet ground:
     // white at fixed opacities rather than the slate scale the full card uses.
     return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-[13px] font-extrabold leading-tight text-white">
-              <IconComponent className="h-3.5 w-3.5 shrink-0 text-white/80" />
-              <span className="truncate">{rankData.title}</span>
-            </p>
-            <p className="mt-0.5 text-[10px] font-medium text-white/55 truncate">{rankData.tierLabel}</p>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <IconComponent className="h-3 w-3 shrink-0 text-white/80" />
+            <span className="text-xs font-bold text-white truncate">{rankData.title}</span>
+            <span className="text-[10px] text-white/50 truncate">· {rankData.tierLabel}</span>
           </div>
-          <span className="shrink-0 rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-extrabold tabular-nums text-white">
+          <span className="shrink-0 rounded-md border border-white/15 bg-white/10 px-1.5 py-0.5 text-[9.5px] font-bold tabular-nums text-white">
             {rankData.progressPct.toFixed(0)}%
           </span>
         </div>
 
-        <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-white/12">
+        <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/15">
           <div
-            className="h-full rounded-full bg-white/85"
+            className="h-full rounded-full bg-white/90"
             style={{ width: `${Math.max(4, rankData.progressPct)}%` }}
           />
         </div>
 
-        <p className="text-[10px] leading-snug text-white/55">{rankData.nextMilestone}</p>
+        <p className="text-[9.5px] text-white/50 truncate leading-tight">{rankData.nextMilestone}</p>
       </div>
     );
   }

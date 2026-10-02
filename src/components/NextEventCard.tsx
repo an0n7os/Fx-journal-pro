@@ -75,12 +75,12 @@ export default function NextEventCard({ onOpenCalendar }: { onOpenCalendar: () =
 
   if (loading) {
     return (
-      <div className="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-3 sm:p-4 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-500 animate-pulse"><Radio className="h-4 w-4" /></div>
-          <div className="flex-1 space-y-2">
-            <div className="h-3 w-1/3 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
-            <div className="h-3 w-2/3 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+      <div className="w-full bg-white/[0.025] border border-white/[0.06] rounded-2xl p-2.5 sm:p-3 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 rounded-lg bg-red-500/10 text-red-400 animate-pulse"><Radio className="h-3.5 w-3.5" /></div>
+          <div className="flex-1 space-y-1.5">
+            <div className="h-2.5 w-1/3 bg-white/10 rounded animate-pulse" />
+            <div className="h-2 w-2/3 bg-white/10 rounded animate-pulse" />
           </div>
         </div>
       </div>
@@ -92,16 +92,16 @@ export default function NextEventCard({ onOpenCalendar }: { onOpenCalendar: () =
       <button
         type="button"
         onClick={onOpenCalendar}
-        className="w-full text-left bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-3 sm:p-4 shadow-xs hover:shadow transition flex items-center gap-2.5 sm:gap-3"
+        className="w-full text-left bg-white/[0.025] hover:bg-white/[0.05] border border-white/[0.06] rounded-2xl p-2.5 sm:p-3 shadow-xs transition flex items-center gap-2.5"
       >
-        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-          <CalendarRange className="h-4 w-4" />
+        <div className="p-1.5 rounded-lg bg-white/[0.05] text-slate-400">
+          <CalendarRange className="h-3.5 w-3.5" />
         </div>
-        <div className="flex-1">
-          <p className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Economic Calendar</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">No upcoming high-impact events scheduled right now.</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-bold text-white uppercase tracking-wider">Economic Calendar</p>
+          <p className="text-[10px] text-slate-400 truncate">No high-impact events scheduled right now.</p>
         </div>
-        <ArrowRight className="h-4 w-4 text-slate-400" />
+        <ArrowRight className="h-3.5 w-3.5 text-slate-500" />
       </button>
     );
   }
@@ -110,24 +110,22 @@ export default function NextEventCard({ onOpenCalendar }: { onOpenCalendar: () =
     <button
       type="button"
       onClick={onOpenCalendar}
-      className="w-full text-left group bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-3 sm:p-4 shadow-xs hover:shadow-md transition flex items-center gap-2.5 sm:gap-3 cursor-pointer"
+      className="w-full text-left group bg-white/[0.025] hover:bg-white/[0.045] border border-white/[0.06] rounded-2xl p-2.5 sm:p-3 shadow-xs transition flex items-center gap-2.5 cursor-pointer active:scale-[0.99]"
     >
-      <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-500 shrink-0">
-        <Radio className="h-4 w-4 animate-pulse" />
+      <div className="h-7 w-7 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center shrink-0">
+        <Radio className="h-3.5 w-3.5 animate-pulse" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider truncate">
-            Next: {nextEvent.currency} {nextEvent.event}
-          </p>
-        </div>
-        <p className="text-xs font-semibold text-red-600 dark:text-red-400 mt-0.5 sm:mt-1 tabular-nums">
+        <p className="text-[11.5px] font-bold text-white uppercase tracking-wide truncate">
+          Next: {nextEvent.currency} {nextEvent.event}
+        </p>
+        <p className="text-[10.5px] font-semibold text-rose-400 tabular-nums">
           Starts in {countdown}
         </p>
       </div>
-      <div className="flex items-center gap-1.5 text-xs font-bold text-violet-600 dark:text-violet-400 shrink-0">
-        <span className="hidden sm:inline">Open Economic Calendar</span>
-        <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+      <div className="flex items-center gap-1 text-[11px] font-semibold text-violet-400 shrink-0">
+        <span className="hidden sm:inline">Calendar</span>
+        <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5 text-slate-400 group-hover:text-white" />
       </div>
     </button>
   );
