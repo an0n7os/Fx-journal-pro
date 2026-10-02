@@ -5720,10 +5720,75 @@ app.post('/api/mt5/worker/claim', async (req, res) => {
   const body = validateEaBody(res, WorkerClaimSchema, req.body || {});
   if (!body) return;
 
-  // Supabase keeps one row per user, so the queue is walked per database.
+  // 1. On Supabase, query trading_accounts directly for any account waiting for VPS sync
+  if (useSupabase) {
+    try {
+      const { data: pendingRows } = await supabase
+        .from('trading_accounts')
+        .select('*')
+        .in('sync_method', ['CLOUD', 'VPS'])
+        .in('connection_status', ['Validating', 'Queued', 'In Queue'])
+        .not('investor_password_enc', 'is', null)
+        .limit(5);
+
+      for (const rawAcc of pendingRows || []) {
+        const account = toCamel(rawAcc);
+        const password = decryptInvestorPassword(account);
+        if (!password) {
+          console.error('[worker/claim] Stored investor password could not be decrypted for account:', account.id);
+          continue;
+        }
+
+        const db = await ensureUserDbLoaded(account.userId, '');
+        const jobId = `job_acc_${account.id}`;
+        const job = {
+          id: jobId,
+          action: 'CONNECT',
+          accountId: account.id,
+          attempts: 1,
+          leaseUntil: new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString(),
+          workerId: body.workerId,
+          terminal: body.terminal || null,
+          startedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          status: 'RUNNING',
+        };
+
+        if (!Array.isArray(db.mt5ConnectJobs)) db.mt5ConnectJobs = [];
+        db.mt5ConnectJobs = db.mt5ConnectJobs.filter((j: any) => j.accountId !== account.id);
+        db.mt5ConnectJobs.push(job);
+
+        // Mirror connection attempt
+        logEaEvent(db, account, 'VPS_JOB_CLAIMED', 'info', `Worker ${body.workerId} claimed CONNECT for MT5 ${account.mt5Login}`);
+        await saveDatabase(db, db.users?.[0]?.email);
+
+        return res.json({
+          job: {
+            id: job.id,
+            action: job.action,
+            accountId: account.id,
+            attempts: job.attempts,
+            leaseUntil: job.leaseUntil,
+            leaseSeconds: Math.floor(MT5_JOB_LEASE_MS / 1000),
+          },
+          credentials: {
+            login: String(account.mt5Login || ''),
+            server: String(account.mt5Server || ''),
+            investorPassword: password,
+          },
+          sinceDeal: account.eaLastDealId || 0,
+          backfillDays: Number(process.env.MT5_CLOUD_BACKFILL_DAYS || 90),
+        });
+      }
+    } catch (e: any) {
+      console.error('[worker/claim] Supabase pending accounts lookup failed:', e?.message || e);
+    }
+  }
+
+  // 2. In-memory / local database queue fallback
   const dbs = useSupabase ? [] : allJobDbs();
   if (useSupabase) {
-    const { data: rows } = await supabase.from('users').select('id').limit(1000);
+    const { data: rows } = await supabase.from('users').select('id').limit(100);
     for (const r of rows || []) {
       const d = await ensureUserDbLoaded((r as any).id, '');
       if (d) dbs.push(d);
@@ -5794,66 +5859,92 @@ app.post('/api/mt5/worker/claim', async (req, res) => {
   res.json({ job: null });
 });
 
+async function resolveJobDb(jobId: string, workerId?: string): Promise<{ db: any; job: any } | null> {
+  for (const db of allJobDbs()) {
+    const job = (db.mt5ConnectJobs || []).find((j: any) => j.id === jobId);
+    if (job) return { db, job };
+  }
+  if (useSupabase && jobId.startsWith('job_acc_')) {
+    const accountId = jobId.replace('job_acc_', '');
+    const { data: acc } = await supabase.from('trading_accounts').select('user_id').eq('id', accountId).maybeSingle();
+    if (acc?.user_id) {
+      const udb = await ensureUserDbLoaded(acc.user_id, '');
+      if (udb) {
+        if (!Array.isArray(udb.mt5ConnectJobs)) udb.mt5ConnectJobs = [];
+        let job = udb.mt5ConnectJobs.find((j: any) => j.id === jobId);
+        if (!job) {
+          job = {
+            id: jobId,
+            accountId,
+            userId: acc.user_id,
+            workerId: workerId || 'vps1-terminal1',
+            status: 'RUNNING',
+            leaseUntil: new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString(),
+          };
+          udb.mt5ConnectJobs.push(job);
+        }
+        return { db: udb, job };
+      }
+    }
+  }
+  return null;
+}
+
 // POST /api/mt5/worker/heartbeat — extend the lease on a long history pull
 app.post('/api/mt5/worker/heartbeat', async (req, res) => {
   if (!authWorker(req, res)) return;
   const body = validateEaBody(res, WorkerJobRefSchema, req.body || {});
   if (!body) return;
 
-  for (const db of allJobDbs()) {
-    const job = (db.mt5ConnectJobs || []).find((j: any) => j.id === body.jobId);
-    if (!job) continue;
-    if (job.workerId !== body.workerId) {
-      return res.status(409).json({ error: 'This job belongs to another worker', code: 'JOB_LEASE_LOST' });
-    }
-    if (job.status !== 'RUNNING') {
-      return res.status(409).json({ error: `Job is ${job.status}`, code: 'JOB_NOT_RUNNING' });
-    }
-    job.leaseUntil = new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString();
-    job.updatedAt = new Date().toISOString();
-    await saveDatabase(db, db.users?.[0]?.email);
-    return res.json({ ok: true, leaseUntil: job.leaseUntil });
+  const resolved = await resolveJobDb(body.jobId, body.workerId);
+  if (!resolved) {
+    return res.status(404).json({ error: 'Job not found', code: 'JOB_NOT_FOUND' });
   }
-  res.status(404).json({ error: 'Job not found', code: 'JOB_NOT_FOUND' });
+  const { db, job } = resolved;
+  if (job.workerId && job.workerId !== body.workerId) {
+    return res.status(409).json({ error: 'This job belongs to another worker', code: 'JOB_LEASE_LOST' });
+  }
+  job.workerId = body.workerId;
+  job.status = 'RUNNING';
+  job.leaseUntil = new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString();
+  job.updatedAt = new Date().toISOString();
+  await saveDatabase(db, db.users?.[0]?.email);
+  return res.json({ ok: true, leaseUntil: job.leaseUntil });
 });
 
 // POST /api/mt5/worker/sync — hand over a batch of deals
-//
-// Called repeatedly for a long history. Goes through applyEaSyncPayload, so
-// deduplication and trade reconstruction are the EA path's, not a copy.
 app.post('/api/mt5/worker/sync', async (req, res) => {
   if (!authWorker(req, res)) return;
   const body = validateEaBody(res, WorkerSyncSchema, req.body || {});
   if (!body) return;
 
-  for (const db of allJobDbs()) {
-    const job = (db.mt5ConnectJobs || []).find((j: any) => j.id === body.jobId);
-    if (!job) continue;
-    if (job.workerId !== body.workerId || job.status !== 'RUNNING') {
-      return res.status(409).json({ error: 'Job lease lost — stop and re-claim', code: 'JOB_LEASE_LOST' });
-    }
-    const account = (db.accounts || []).find((a: any) => a.id === job.accountId);
-    if (!account) return res.status(404).json({ error: 'Account not found' });
-
-    const summary = applyEaSyncPayload(db, account, body.deals, body.moneyFlows, body.account);
-    account.syncMethod = 'VPS';
-    job.leaseUntil = new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString();
-    job.updatedAt = new Date().toISOString();
-
-    logEaEvent(db, account, 'VPS_SYNC', 'info',
-      `Deals: ${summary.added} new / ${body.deals.length} received; money flows: ${summary.moneyFlowAdded} new`);
-    await saveDatabase(db, db.users?.[0]?.email);
-
-    return res.json({
-      ok: true,
-      inserted: summary.inserted,
-      updated: summary.updated,
-      cursor: summary.maxTicket,
-      totalTrades: account.eaSyncTradeCount,
-      leaseUntil: job.leaseUntil,
-    });
+  const resolved = await resolveJobDb(body.jobId, body.workerId);
+  if (!resolved) {
+    return res.status(404).json({ error: 'Job not found', code: 'JOB_NOT_FOUND' });
   }
-  res.status(404).json({ error: 'Job not found', code: 'JOB_NOT_FOUND' });
+  const { db, job } = resolved;
+  const account = (db.accounts || []).find((a: any) => a.id === job.accountId);
+  if (!account) return res.status(404).json({ error: 'Account not found' });
+
+  const summary = applyEaSyncPayload(db, account, body.deals, body.moneyFlows, body.account);
+  account.syncMethod = 'VPS';
+  job.workerId = body.workerId;
+  job.status = 'RUNNING';
+  job.leaseUntil = new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString();
+  job.updatedAt = new Date().toISOString();
+
+  logEaEvent(db, account, 'VPS_SYNC', 'info',
+    `Deals: ${summary.added} new / ${body.deals.length} received; money flows: ${summary.moneyFlowAdded} new`);
+  await saveDatabase(db, db.users?.[0]?.email);
+
+  return res.json({
+    ok: true,
+    inserted: summary.inserted,
+    updated: summary.updated,
+    cursor: summary.maxTicket,
+    totalTrades: account.eaSyncTradeCount,
+    leaseUntil: job.leaseUntil,
+  });
 });
 
 // POST /api/mt5/worker/complete — the worker has logged out and is free again
@@ -5862,51 +5953,46 @@ app.post('/api/mt5/worker/complete', async (req, res) => {
   const body = validateEaBody(res, WorkerCompleteSchema, req.body || {});
   if (!body) return;
 
-  for (const db of allJobDbs()) {
-    const job = (db.mt5ConnectJobs || []).find((j: any) => j.id === body.jobId);
-    if (!job) continue;
-    if (job.workerId !== body.workerId) {
-      return res.status(409).json({ error: 'This job belongs to another worker', code: 'JOB_LEASE_LOST' });
-    }
-    const account = (db.accounts || []).find((a: any) => a.id === job.accountId);
-
-    job.status = body.ok ? 'DONE' : (job.attempts >= MT5_JOB_MAX_ATTEMPTS ? 'FAILED' : 'PENDING');
-    job.error = body.ok ? null : (body.error || 'Sync failed');
-    job.errorCode = body.ok ? null : (body.errorCode || null);
-    job.workerId = null;
-    job.leaseUntil = null;
-    job.finishedAt = new Date().toISOString();
-    job.updatedAt = job.finishedAt;
-
-    if (account) {
-      if (body.ok) {
-        account.connectionStatus = 'Connected';
-        account.eaStatus = 'Connected';
-        account.eaLastSyncTime = new Date().toISOString();
-        account.lastHeartbeatAt = account.eaLastSyncTime;
-        logEaEvent(db, account, 'VPS_SYNC_DONE', 'info',
-          `Sync finished; ${body.tradesImported ?? account.eaSyncTradeCount ?? 0} trades in the journal`);
-      } else {
-        // A retryable failure leaves the account alone: the trades already
-        // imported stay, and the next attempt resumes from the cursor.
-        account.connectionStatus = job.status === 'FAILED' ? 'Error' : 'Validating';
-        if (!Array.isArray(db.mt5ConnectionErrors)) db.mt5ConnectionErrors = [];
-        db.mt5ConnectionErrors.push({
-          accountId: account.id,
-          userId: db.users?.[0]?.id,
-          errorCode: body.errorCode || 'VPS_SYNC_FAILED',
-          errorMessage: String(body.error || 'Sync failed').slice(0, 500),
-          occurredAt: new Date().toISOString(),
-          resolvedAt: null,
-        });
-        logEaEvent(db, account, 'VPS_SYNC_FAILED', 'error', String(body.error || 'Sync failed').slice(0, 200));
-      }
-    }
-
-    await saveDatabase(db, db.users?.[0]?.email);
-    return res.json({ ok: true, status: job.status });
+  const resolved = await resolveJobDb(body.jobId, body.workerId);
+  if (!resolved) {
+    return res.status(404).json({ error: 'Job not found', code: 'JOB_NOT_FOUND' });
   }
-  res.status(404).json({ error: 'Job not found', code: 'JOB_NOT_FOUND' });
+  const { db, job } = resolved;
+  const account = (db.accounts || []).find((a: any) => a.id === job.accountId);
+
+  job.status = body.ok ? 'DONE' : (job.attempts >= MT5_JOB_MAX_ATTEMPTS ? 'FAILED' : 'PENDING');
+  job.error = body.ok ? null : (body.error || 'Sync failed');
+  job.errorCode = body.ok ? null : (body.errorCode || null);
+  job.workerId = null;
+  job.leaseUntil = null;
+  job.finishedAt = new Date().toISOString();
+  job.updatedAt = job.finishedAt;
+
+  if (account) {
+    if (body.ok) {
+      account.connectionStatus = 'Connected';
+      account.eaStatus = 'Connected';
+      account.eaLastSyncTime = new Date().toISOString();
+      account.lastHeartbeatAt = account.eaLastSyncTime;
+      logEaEvent(db, account, 'VPS_SYNC_DONE', 'info',
+        `Sync finished; ${body.tradesImported ?? account.eaSyncTradeCount ?? 0} trades in the journal`);
+    } else {
+      account.connectionStatus = job.status === 'FAILED' ? 'Error' : 'Validating';
+      if (!Array.isArray(db.mt5ConnectionErrors)) db.mt5ConnectionErrors = [];
+      db.mt5ConnectionErrors.push({
+        accountId: account.id,
+        userId: db.users?.[0]?.id,
+        errorCode: body.errorCode || 'VPS_SYNC_FAILED',
+        errorMessage: String(body.error || 'Sync failed').slice(0, 500),
+        occurredAt: new Date().toISOString(),
+        resolvedAt: null,
+      });
+      logEaEvent(db, account, 'VPS_SYNC_FAILED', 'error', String(body.error || 'Sync failed').slice(0, 200));
+    }
+  }
+
+  await saveDatabase(db, db.users?.[0]?.email);
+  return res.json({ ok: true, status: job.status });
 });
 
 // ── Customer-facing VPS sync ──────────────────────────────────────────────
