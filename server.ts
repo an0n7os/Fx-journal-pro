@@ -5923,6 +5923,18 @@ app.post('/api/mt5/worker/sync', async (req, res) => {
     return res.status(404).json({ error: 'Job not found', code: 'JOB_NOT_FOUND' });
   }
   const { db, job } = resolved;
+
+  // The lease, enforced. Without this the handler simply reassigned the job to
+  // whoever posted — so any worker holding the shared token could push into a
+  // job another worker was already running, and that worker's next heartbeat
+  // came back 409 with its work half done. Two terminals on one job is exactly
+  // the duplicate import the queue exists to prevent. Same rule as heartbeat:
+  // a job with no owner yet may be adopted, one with an owner may not be
+  // taken.
+  if (job.workerId && job.workerId !== body.workerId) {
+    return res.status(409).json({ error: 'Job lease lost — stop and re-claim', code: 'JOB_LEASE_LOST' });
+  }
+
   const account = (db.accounts || []).find((a: any) => a.id === job.accountId);
   if (!account) return res.status(404).json({ error: 'Account not found' });
 
@@ -5958,6 +5970,14 @@ app.post('/api/mt5/worker/complete', async (req, res) => {
     return res.status(404).json({ error: 'Job not found', code: 'JOB_NOT_FOUND' });
   }
   const { db, job } = resolved;
+
+  // Finishing someone else's job is the same hijack as pushing to it, and
+  // worse: it clears the owner's lease and marks the work done while that
+  // worker is still mid-sync.
+  if (job.workerId && job.workerId !== body.workerId) {
+    return res.status(409).json({ error: 'This job belongs to another worker', code: 'JOB_LEASE_LOST' });
+  }
+
   const account = (db.accounts || []).find((a: any) => a.id === job.accountId);
 
   job.status = body.ok ? 'DONE' : (job.attempts >= MT5_JOB_MAX_ATTEMPTS ? 'FAILED' : 'PENDING');

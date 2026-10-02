@@ -5,6 +5,8 @@
 // Needs a server started with ALLOW_TEST_BILLING=true (dev only) so the plan
 // can be flipped without a real payment. Without it the suite reports the
 // skip rather than passing silently.
+import { signInOrRegister } from './auth-helper.mjs';
+
 const BASE = process.env.TEST_BASE || 'http://localhost:3000';
 const out = [];
 const ok = (n, p, d = '') => out.push({ n, p, d });
@@ -31,10 +33,14 @@ if (!config.json?.testBilling) {
 const setPlan = async (cookie, tier) =>
   api('/api/payments/toggle-test-tier', { method: 'POST', cookie, body: { tier } });
 
+// Registers, then signs in. Posting to /api/auth/login with an address that
+// does not exist used to create the account as a side effect; that back door
+// is gone, so this suite was signing in as nobody and reporting 401 on all
+// nineteen checks below it — a stale test, not a broken product.
 const email = `pro_${Date.now()}@example.com`;
-const login = await api('/api/auth/login', { method: 'POST', body: { email, password: 'ProUnlock12345' } });
-const cookie = login.cookie;
-ok('setup: signed in', login.status === 200 && !!cookie, `status ${login.status}`);
+const signIn = await signInOrRegister(BASE, email, 'ProUnlock12345');
+const cookie = signIn.cookie;
+ok('setup: signed in', !!cookie, `status ${signIn.status}`);
 
 const accounts = await api('/api/accounts', { cookie });
 const accountId = accounts.json?.accounts?.[0]?.id;
