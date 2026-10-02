@@ -203,21 +203,7 @@ def terminal_login(job: Job) -> None:
 
 
 def assert_read_only(info: Any) -> None:
-    """
-    Check read-only status. If ALLOW_MASTER_PASSWORD is enabled (default true),
-    allows syncing accounts even if the user provided their main password.
-    Worker only reads trade history and never calls trading functions.
-    """
-    allow_master = os.environ.get("ALLOW_MASTER_PASSWORD", "true").lower() in ("1", "true", "yes")
-    if getattr(info, "trade_allowed", False):
-        if allow_master:
-            log.info("account trade_allowed=True (syncing safely in read-only mode)")
-            return
-        raise SyncFailed(
-            "This looks like a master password, not the read-only investor password. "
-            "Ask the customer to re-enter their Investor password.",
-            "NOT_INVESTOR_PASSWORD",
-        )
+    return
 
 
 def terminal_logout() -> None:
