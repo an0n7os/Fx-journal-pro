@@ -2038,10 +2038,10 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
         {/* Subtle background ambient light */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-violet-600/[0.07] blur-[100px] pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8 sm:pt-16 sm:pb-12">
           
           {/* Trust Guarantee Strip */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-12 mb-12 border-b border-white/[0.06]">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 pb-7 mb-7 sm:pb-12 sm:mb-12 border-b border-white/[0.06]">
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center shrink-0">
                 <Cpu className="h-4 w-4 text-violet-400" />
@@ -2084,10 +2084,17 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           </div>
 
           {/* Main Footer Links Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8 mb-14">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-7 sm:gap-10 lg:gap-8 mb-8 sm:mb-14">
             
-            {/* Column 1: Brand & Community Socials (4 Cols on LG) */}
-            <div className="lg:col-span-4 space-y-5">
+            {/*
+              Column 1 on a desktop. On a phone the whole footer stacks, which
+              measured 1803px — more than two full screens of it. The three
+              link lists below go two-up at phone width, so six links take
+              three rows instead of six, and the gaps between blocks tighten.
+              Each change is a breakpoint pair, so the desktop footer is
+              exactly what it was.
+            */}
+            <div className="lg:col-span-4 space-y-4 sm:space-y-5">
               <div className="flex items-center gap-2.5">
                 <Logo size={28} />
               </div>
@@ -2124,8 +2131,8 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
             {/* Column 2: Platform Links (2 Cols on LG) */}
             <div className="lg:col-span-2">
-              <h3 className="text-xs font-mono uppercase tracking-wider font-bold text-white mb-4">Platform</h3>
-              <ul className="space-y-2.5 text-xs">
+              <h3 className="text-xs font-mono uppercase tracking-wider font-bold text-white mb-3 sm:mb-4">Platform</h3>
+              <ul className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-1 text-xs">
                 <li><a href="/#features" onClick={(e) => handleNavClick(e, '/features', 'features')} className="text-slate-400 hover:text-white transition">Features</a></li>
                 <li><a href="/#mt5-sync" onClick={(e) => handleNavClick(e, '/mt5-sync', 'mt5-sync')} className="text-slate-400 hover:text-white transition">MT5 Auto-Sync</a></li>
                 <li><a href="/#fx-news" onClick={(e) => handleNavClick(e, '/fx-news', 'fx-news')} className="text-slate-400 hover:text-white transition">FX News &amp; Calendar</a></li>
@@ -2137,8 +2144,8 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
             {/* Column 3: Resources Links (2 Cols on LG) */}
             <div className="lg:col-span-2">
-              <h3 className="text-xs font-mono uppercase tracking-wider font-bold text-white mb-4">Resources</h3>
-              <ul className="space-y-2.5 text-xs">
+              <h3 className="text-xs font-mono uppercase tracking-wider font-bold text-white mb-3 sm:mb-4">Resources</h3>
+              <ul className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-1 text-xs">
                 <li><a href="/#how-it-works" onClick={(e) => handleNavClick(e, '/how-it-works', 'how-it-works')} className="text-slate-400 hover:text-white transition">How It Works</a></li>
                 <li><a href="/#pricing" onClick={(e) => handleNavClick(e, '/pricing', 'pricing')} className="text-slate-400 hover:text-white transition">Pricing &amp; Plans</a></li>
                 <li><a href="/#why" onClick={(e) => handleNavClick(e, '/why', 'why')} className="text-slate-400 hover:text-white transition">Prop Firm Consistency</a></li>
@@ -2150,8 +2157,8 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
             {/* Column 4: Legal & Policies (2 Cols on LG) */}
             <div className="lg:col-span-2">
-              <h3 className="text-xs font-mono uppercase tracking-wider font-bold text-white mb-4">Legal &amp; Trust</h3>
-              <ul className="space-y-2.5 text-xs">
+              <h3 className="text-xs font-mono uppercase tracking-wider font-bold text-white mb-3 sm:mb-4">Legal &amp; Trust</h3>
+              <ul className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-1 text-xs">
                 {(['terms', 'privacy', 'refunds', 'shipping', 'contact', 'risk'] as const).map((key) => (
                   <li key={key}>
                     <button
@@ -2163,7 +2170,9 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                     </button>
                   </li>
                 ))}
-                <li>
+                {/* Spans the pair, so it does not leave a half-row gap beside
+                    the last link in the two-column phone layout. */}
+                <li className="col-span-2 sm:col-span-1">
                   <span className="text-[11px] font-mono text-slate-400 block pt-1">
                     Payments secured by Cashfree
                   </span>
