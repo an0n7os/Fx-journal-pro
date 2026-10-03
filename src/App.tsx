@@ -4545,111 +4545,97 @@ export default function App() {
               <div
                 role="dialog"
                 aria-label="Notifications"
-                className="absolute right-0 mt-3 w-[340px] sm:w-[420px] bg-white/95 dark:bg-[#0c0e18]/95 backdrop-blur-2xl rounded-2xl shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65)] border border-slate-200/90 dark:border-white/10 z-50 overflow-hidden ring-1 ring-black/5 dark:ring-white/5 animate-in fade-in zoom-in-95 duration-150"
+                className="absolute right-0 mt-2.5 w-[330px] sm:w-[380px] bg-[#0c0f1a]/95 backdrop-blur-2xl rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.65)] border border-white/[0.08] z-50 overflow-hidden ring-1 ring-white/[0.05] animate-in fade-in zoom-in-95 duration-150"
               >
-                {/* Header */}
-                <div className="p-3.5 px-4 border-b border-slate-100 dark:border-white/[0.07]">
+                {/* Minimal Header */}
+                <div className="p-3.5 px-4 border-b border-white/[0.06]">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
-                        <Bell className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-sm text-slate-900 dark:text-white">Notifications</h3>
-                          {unreadNotificationCount > 0 && (
-                            <span className="px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-600 dark:text-violet-300 text-[10px] font-bold">
-                              {unreadNotificationCount} new
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-violet-400" />
+                      <h3 className="font-bold text-sm text-white tracking-tight">Notifications</h3>
+                      {unreadNotificationCount > 0 && (
+                        <span className="px-1.5 py-0.2 rounded-full bg-violet-500/15 text-violet-300 text-[10px] font-semibold border border-violet-500/25">
+                          {unreadNotificationCount} new
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                       {unreadNotificationCount > 0 && (
                         <button
                           onClick={() => markAllNotificationsAsRead(systemNotifications.map(n => n.id))}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-white/5 transition"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-slate-400 hover:text-violet-300 hover:bg-white/[0.04] transition cursor-pointer"
                           title="Mark all notifications as read"
                         >
-                          <CheckCheck className="h-3.5 w-3.5 text-violet-500" />
+                          <CheckCheck className="h-3.5 w-3.5 text-violet-400" />
                           <span>Mark all read</span>
                         </button>
                       )}
                       <button
                         onClick={() => setShowMobileNavNotifications(false)}
-                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
+                        className="text-slate-400 hover:text-white transition-all duration-150 p-1.5 rounded-lg hover:bg-red-600 active:bg-red-700 active:scale-90 cursor-pointer"
                         aria-label="Close"
                       >
-                        <X className="h-4 w-4" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>
 
-                  {/* Filter Tabs */}
-                  <div className="grid grid-cols-2 gap-1 mt-3 p-1 bg-slate-100/90 dark:bg-white/[0.04] rounded-xl border border-slate-200/60 dark:border-white/[0.06]">
+                  {/* Minimal Filter Tabs */}
+                  <div className="flex items-center gap-1 mt-2.5 p-0.5 bg-white/[0.03] rounded-xl border border-white/[0.05]">
                     <button
                       onClick={() => setNotificationFilter('all')}
-                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
+                      className={`flex-1 py-1 px-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                         notificationFilter === 'all'
-                          ? 'bg-white dark:bg-[#161a29] text-slate-900 dark:text-white shadow-sm font-bold'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                          ? 'bg-white/[0.08] text-white shadow-xs font-semibold'
+                          : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      <span>All Updates</span>
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                        notificationFilter === 'all'
-                          ? 'bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 font-bold'
-                          : 'bg-transparent text-slate-400'
-                      }`}>
-                        {systemNotifications.length}
-                      </span>
+                      <span>All</span>
+                      <span className="text-[10px] opacity-60">({systemNotifications.length})</span>
                     </button>
                     <button
                       onClick={() => setNotificationFilter('unread')}
-                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
+                      className={`flex-1 py-1 px-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                         notificationFilter === 'unread'
-                          ? 'bg-white dark:bg-[#161a29] text-slate-900 dark:text-white shadow-sm font-bold'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                          ? 'bg-white/[0.08] text-white shadow-xs font-semibold'
+                          : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
                       <span>Unread</span>
                       {unreadNotificationCount > 0 ? (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-violet-600 text-white font-bold animate-pulse">
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-violet-500 text-white font-bold">
                           {unreadNotificationCount}
                         </span>
                       ) : (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/50 dark:bg-white/10 text-slate-400">
-                          0
-                        </span>
+                        <span className="text-[10px] opacity-60">(0)</span>
                       )}
                     </button>
                   </div>
                 </div>
 
                 {/* Notifications List */}
-                <div className="max-h-[390px] overflow-y-auto p-2.5 space-y-2">
+                <div className="max-h-[360px] overflow-y-auto p-2 space-y-1 divide-y divide-white/[0.03]">
                   {displayedNotifications.length === 0 ? (
                     notificationFilter === 'unread' ? (
-                      <div className="py-12 px-6 text-center">
-                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-emerald-500/10">
-                          <ShieldCheck className="h-6 w-6" />
+                      <div className="py-10 px-4 text-center">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-2.5">
+                          <ShieldCheck className="h-5 w-5" />
                         </div>
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">All Caught Up!</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-[240px] mx-auto">
-                          You have no unread notifications. All live trading alerts are up to date.
+                        <h4 className="text-xs font-bold text-white">All Caught Up</h4>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          No unread notifications at this time.
                         </p>
                         <button
                           onClick={() => setNotificationFilter('all')}
-                          className="mt-3.5 inline-flex items-center gap-1 text-[11.5px] font-semibold text-violet-600 dark:text-violet-400 hover:underline"
+                          className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-violet-400 hover:text-violet-300"
                         >
                           <span>View all updates</span>
                           <ChevronRight className="h-3 w-3" />
                         </button>
                       </div>
                     ) : (
-                      <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
-                        <Bell className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                      <div className="p-8 text-center text-slate-500 text-xs">
+                        <Bell className="h-6 w-6 mx-auto mb-2 opacity-20" />
                         <p>No notifications yet</p>
                       </div>
                     )
@@ -4658,28 +4644,28 @@ export default function App() {
                       const isUnread = !readNotificationIds.includes(item.id);
                       const typeConfig = {
                         success: {
-                          bg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-emerald-500/10',
-                          chip: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/25',
+                          bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                          chip: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
                           dot: 'bg-emerald-400',
                         },
                         info: {
-                          bg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 shadow-blue-500/10',
-                          chip: 'bg-blue-500/10 text-blue-600 dark:text-blue-300 border-blue-500/25',
+                          bg: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+                          chip: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
                           dot: 'bg-blue-400',
                         },
                         warning: {
-                          bg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 shadow-amber-500/10',
-                          chip: 'bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/25',
+                          bg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                          chip: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
                           dot: 'bg-amber-400',
                         },
                         ai: {
-                          bg: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20 shadow-violet-500/10',
-                          chip: 'bg-violet-500/10 text-violet-600 dark:text-violet-300 border-violet-500/25',
+                          bg: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+                          chip: 'bg-violet-500/10 text-violet-300 border-violet-500/20',
                           dot: 'bg-violet-400',
                         },
                         news: {
-                          bg: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20 shadow-cyan-500/10',
-                          chip: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 border-cyan-500/25',
+                          bg: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+                          chip: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
                           dot: 'bg-cyan-400',
                         },
                       }[item.type];
@@ -4697,37 +4683,43 @@ export default function App() {
                               setShowMobileNavNotifications(false);
                             }
                           }}
-                          className={`p-3.5 rounded-xl transition-all cursor-pointer flex items-start gap-3 relative group border ${
+                          className={`pt-2 pb-2 px-2.5 rounded-xl transition-all cursor-pointer flex items-start gap-2.5 relative group ${
                             isUnread
-                              ? 'bg-violet-500/[0.04] dark:bg-white/[0.04] border-violet-500/30 dark:border-violet-500/25 shadow-sm hover:border-violet-500/50 hover:bg-violet-500/[0.07] dark:hover:bg-white/[0.06]'
-                              : 'bg-slate-50/60 dark:bg-white/[0.015] border-slate-200/60 dark:border-white/[0.05] hover:bg-slate-100/70 dark:hover:bg-white/[0.04] opacity-80 hover:opacity-100'
+                              ? 'bg-white/[0.03] hover:bg-white/[0.05]'
+                              : 'hover:bg-white/[0.02] opacity-75 hover:opacity-100'
                           }`}
                         >
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border shadow-sm ${typeConfig.bg}`}>
-                            <item.icon className="h-4 w-4" />
+                          {/* Clean minimal squircle icon */}
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${typeConfig.bg}`}>
+                            <item.icon className="h-3.5 w-3.5" />
                           </div>
 
                           <div className="flex-1 min-w-0 pr-1">
-                            <div className="flex items-center justify-between gap-1.5 mb-1">
-                              <p className={`text-xs font-semibold truncate ${isUnread ? 'text-slate-900 dark:text-white font-bold' : 'text-slate-700 dark:text-slate-300'}`}>
+                            <div className="flex items-center justify-between gap-1.5">
+                              <p className={`text-xs truncate ${isUnread ? 'text-white font-semibold' : 'text-slate-300 font-medium'}`}>
                                 {item.title}
                               </p>
-                              <span className={`inline-flex items-center gap-1 text-[9.5px] font-semibold px-2 py-0.5 rounded-full shrink-0 border ${typeConfig.chip}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${typeConfig.dot} animate-pulse`} />
-                                {item.badgeText || item.time}
-                              </span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className={`inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.2 rounded-md border ${typeConfig.chip}`}>
+                                  <span className={`w-1 h-1 rounded-full ${typeConfig.dot}`} />
+                                  {item.badgeText || item.time}
+                                </span>
+                                {isUnread && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0 shadow-[0_0_6px_rgba(168,85,247,0.8)]" />
+                                )}
+                              </div>
                             </div>
 
-                            <p className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">
+                            <p className="text-[11px] text-slate-400 leading-relaxed line-clamp-2 mt-0.5">
                               {item.message}
                             </p>
 
-                            <div className="mt-2.5 flex items-center justify-between">
+                            <div className="mt-2 flex items-center justify-between">
                               {item.actionLabel ? (
-                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-200/60 dark:bg-white/[0.06] group-hover:bg-violet-600 group-hover:text-white dark:group-hover:bg-violet-500 text-slate-700 dark:text-slate-300 text-[10.5px] font-semibold transition-all">
+                                <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-violet-400 hover:text-violet-300 group-hover:translate-x-0.5 transition-transform">
                                   <span>{item.actionLabel}</span>
-                                  <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
-                                </div>
+                                  <ChevronRight className="h-3 w-3" />
+                                </span>
                               ) : <span />}
 
                               {isUnread && (
@@ -4737,39 +4729,27 @@ export default function App() {
                                     markNotificationAsRead(item.id);
                                   }}
                                   title="Mark as read"
-                                  className="opacity-0 group-hover:opacity-100 p-1 px-1.5 rounded-md text-slate-400 hover:text-emerald-500 hover:bg-slate-200 dark:hover:bg-white/10 transition-all text-[10.5px] flex items-center gap-1"
+                                  className="opacity-0 group-hover:opacity-100 px-1.5 py-0.5 rounded text-slate-400 hover:text-emerald-400 hover:bg-white/[0.06] transition text-[10px] flex items-center gap-1 cursor-pointer"
                                 >
-                                  <Check className="h-3 w-3" />
-                                  <span className="hidden sm:inline">Mark read</span>
+                                  <Check className="h-2.5 w-2.5" />
+                                  <span>Read</span>
                                 </button>
                               )}
                             </div>
                           </div>
-
-                          {isUnread && (
-                            <span className="relative flex h-2 w-2 shrink-0 self-center">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500" />
-                            </span>
-                          )}
                         </div>
                       );
                     })
                   )}
                 </div>
 
-                {/* Footer */}
-                <div className="p-2.5 px-4 bg-slate-50/90 dark:bg-white/[0.02] border-t border-slate-100 dark:border-white/[0.06] flex items-center justify-between text-[10.5px]">
-                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 font-medium">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                    </span>
-                    <span>Live System Monitor</span>
-                    <span className="text-slate-300 dark:text-slate-600">•</span>
-                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[10px]">ALL SYSTEMS ONLINE</span>
+                {/* Minimal Footer */}
+                <div className="py-2 px-4 bg-white/[0.015] border-t border-white/[0.05] flex items-center justify-between text-[10px]">
+                  <div className="flex items-center gap-1.5 text-slate-400 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>System Online</span>
                   </div>
-                  <span className="font-mono text-[9.5px] font-semibold text-slate-400 dark:text-slate-500">FX JOURNAL PRO</span>
+                  <span className="font-mono text-[9px] text-slate-500">FX JOURNAL PRO</span>
                 </div>
               </div>
             )}
@@ -5223,7 +5203,7 @@ export default function App() {
                                         activeTab === 'insights' ? 'Heyza AI' :
                                           activeTab === 'partner' ? 'Partner Portal' : (adminRole === 'SUB_ADMIN' ? 'PARTNER PORTAL' : 'Admin Panel')}
                   </h1>
-                  <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 sm:line-clamp-1">
+                  <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 line-clamp-1">
                     {activeTab === 'dashboard' ? 'Welcome back! Here\'s an overview of your trading performance.' :
                       activeTab === 'journal' ? 'Inline workspace database to log, filter, and audit trading setups.' :
                         activeTab === 'notebook' ? 'Note down your feelings, plans, and daily reviews with our integrated rich-text templates.' :
@@ -6256,7 +6236,7 @@ export default function App() {
                 )}
 
                 {/* The chart fills the remaining viewport height */}
-                <div style={{ height: selectedChartTradeId ? 'calc(100vh - 225px)' : 'calc(100vh - 195px)', minHeight: '520px' }}>
+                <div className="w-full pb-20 md:pb-0" style={{ height: selectedChartTradeId ? 'calc(100dvh - 215px)' : 'calc(100dvh - 175px)', minHeight: '440px' }}>
                   <TradingViewChart
                     trades={trades}
                     theme={theme}
@@ -7605,87 +7585,46 @@ export default function App() {
 
             {/* 6. CONSOLIDATED SETTINGS VIEW */}
             {activeTab === 'settings' && (
-              <div className="flex flex-col space-y-8">
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+              <div className="flex flex-col space-y-6 pb-28 lg:pb-12">
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
 
                   {/* Settings Inner Tabs Navigation */}
-                  {/* Settings Inner Tabs Navigation */}
-                  {/* settings-aside: `.dark aside` in index.css puts a
-                      backdrop-filter on every <aside>, for the dashboard's glassy
-                      nav rail. A backdrop-filter establishes a stacking context
-                      and a containing block, which trapped this column's section
-                      dropdown inside it — the menu could not paint over the panel
-                      beside it, so the two rendered through each other and both
-                      were unreadable. The class exists only to switch that blur
-                      off here. */}
                   <aside className="settings-aside lg:col-span-1">
-                    {/* Mobile Dropdown Navigation */}
-                    <div className="lg:hidden relative mb-4">
-                      <button
-                        type="button"
-                        onClick={() => setIsSettingsDropdownOpen(!isSettingsDropdownOpen)}
-                        className="w-full bg-white dark:bg-[#0b101d] border border-slate-200/90 dark:border-white/10 rounded-xl p-3 text-sm font-bold text-slate-800 dark:text-white flex justify-between items-center shadow-xs"
+                    {/* Mobile Horizontal Tabs Segmented Bar */}
+                    <div className="lg:hidden mb-4">
+                      <div
+                        className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 px-0.5 w-full"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                       >
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-violet-500/10 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
-                            {settingsTab === 'achievements' && <Trophy className="h-4 w-4" />}
-                            {settingsTab === 'general' && <User className="h-4 w-4" />}
-                            {settingsTab === 'risk' && <Shield className="h-4 w-4" />}
-                            {settingsTab === 'notifications' && <Bell className="h-4 w-4" />}
-                            {settingsTab === 'subscription' && <CreditCard className="h-4 w-4" />}
-                            {settingsTab === 'about' && <Info className="h-4 w-4" />}
-                            {settingsTab === 'help' && <HelpCircle className="h-4 w-4" />}
-                            {settingsTab === 'theme' && (theme === 'dark' ? <Moon className="h-4 w-4 text-indigo-400" /> : <Sun className="h-4 w-4 text-amber-500" />)}
-                          </div>
-                          <span className="capitalize text-xs font-bold text-slate-900 dark:text-white">
-                            {settingsTab === 'achievements' && 'Achievements & Badges'}
-                            {settingsTab === 'general' && 'General Profile'}
-                            {settingsTab === 'risk' && 'Risk Guard Limits'}
-                            {settingsTab === 'notifications' && 'Notifications'}
-                            {settingsTab === 'subscription' && 'Plan & Billing'}
-                            {settingsTab === 'about' && 'About Platform'}
-                            {settingsTab === 'help' && 'Help & Support'}
-                            {settingsTab === 'theme' && `Appearance (${theme === 'dark' ? 'Dark' : 'Light'})`}
-                          </span>
-                        </div>
-                        <ChevronRight className={`h-4 w-4 text-slate-400 transform transition-transform duration-200 ${isSettingsDropdownOpen ? 'rotate-90' : ''}`} />
-                      </button>
-
-                      {isSettingsDropdownOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#0b101d] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col p-1.5 animate-slide-down">
-                          {[
-                            { id: 'general', label: 'General Profile', icon: User },
-                            { id: 'risk', label: 'Risk Guard Limits', icon: Shield },
-                            { id: 'achievements', label: 'Achievements & Badges', icon: Trophy },
-                            { id: 'subscription', label: 'Plan & Billing', icon: CreditCard },
-                            { id: 'notifications', label: 'Notifications', icon: Bell },
-                            { id: 'theme', label: 'Appearance & Theme', icon: theme === 'dark' ? Moon : Sun },
-                            { id: 'help', label: 'Help & Support', icon: HelpCircle },
-                            { id: 'about', label: 'About Platform', icon: Info },
-                          ].map(tab => {
-                            const isActive = settingsTab === tab.id;
-                            const TabIcon = tab.icon;
-                            return (
-                              <button
-                                key={tab.id}
-                                type="button"
-                                onClick={() => {
-                                  setSettingsTab(tab.id as any);
-                                  setIsSettingsDropdownOpen(false);
-                                }}
-                                className={`w-full text-left py-2.5 px-3 rounded-lg text-xs font-semibold transition flex items-center gap-2.5 ${isActive
-                                    ? 'settings-nav-active font-bold'
-                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.06] dark:hover:text-white'
-                                  }`}
-                              >
-                                <TabIcon className="h-4 w-4 shrink-0" />
-                                <span className="flex-1 truncate">{tab.label}</span>
-                                {isActive && <Check className="h-3.5 w-3.5 shrink-0" />}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
+                        {[
+                          { id: 'general', label: 'Profile', icon: User },
+                          { id: 'risk', label: 'Risk Guard', icon: Shield },
+                          { id: 'subscription', label: 'Plan & Billing', icon: CreditCard },
+                          { id: 'theme', label: 'Appearance', icon: theme === 'dark' ? Moon : Sun },
+                          { id: 'notifications', label: 'Notifications', icon: Bell },
+                          { id: 'achievements', label: 'Badges', icon: Trophy },
+                          { id: 'help', label: 'Help', icon: HelpCircle },
+                          { id: 'about', label: 'About', icon: Info },
+                        ].map(tab => {
+                          const isActive = settingsTab === tab.id;
+                          const TabIcon = tab.icon;
+                          return (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              onClick={() => setSettingsTab(tab.id as any)}
+                              className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                isActive
+                                  ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30 ring-1 ring-violet-400/40'
+                                  : 'bg-slate-900/60 dark:bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-slate-200'
+                              }`}
+                            >
+                              <TabIcon className="h-3.5 w-3.5 shrink-0" />
+                              <span>{tab.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {/* Desktop Settings Navigation Card */}
@@ -7786,13 +7725,151 @@ export default function App() {
 
                     {/* General sub-tab */}
                     {settingsTab === 'general' && user && (
-                      <div className="space-y-6">
-                        {/*
-                        {/* ── Your Mentor Panel ─────────────────────────────────── */}
-                        <div className="dx-panel p-6 space-y-4">
+                      <div className="space-y-5 sm:space-y-6">
+
+                        {/* 1. Profile Details Form */}
+                        <form onSubmit={handleSaveProfile} className="dx-panel p-4 sm:p-6 space-y-4 rounded-2xl">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 shrink-0">
+                              <User className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <h3 className="dx-section-title">Profile Details</h3>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Manage your personal account name and credentials.</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4 border-t border-slate-100 dark:border-white/5 pt-4 text-xs">
+                            <div>
+                              <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1.5">User Name</label>
+                              <input
+                                type="text"
+                                required
+                                value={settingsName}
+                                onChange={(e) => setSettingsName(e.target.value)}
+                                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-900 dark:text-white rounded-xl p-2.5 sm:p-3 w-full font-semibold focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none transition"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Email Address</label>
+                              <input
+                                type="email"
+                                value={settingsEmail}
+                                readOnly
+                                disabled
+                                title="Your email address identifies your account and cannot be changed here."
+                                className="bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm rounded-xl p-2.5 sm:p-3 w-full font-semibold text-slate-400 cursor-not-allowed"
+                              />
+                              <p className="text-[10px] text-slate-500 mt-1">Your email identifies your account. Contact support to change it.</p>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end pt-1">
+                            <button
+                              type="submit"
+                              disabled={actionLoading}
+                              className="w-full sm:w-auto bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs py-2.5 px-5 rounded-xl transition shadow-md shadow-violet-600/20 cursor-pointer min-h-[40px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              <span>{actionLoading ? 'Saving...' : 'Save Profile Changes'}</span>
+                            </button>
+                          </div>
+                        </form>
+
+                        {/* 2. Password Form */}
+                        <div className="dx-panel p-4 sm:p-6 space-y-4 rounded-2xl">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 shrink-0">
+                                <Lock className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <h3 className="dx-section-title">Change Password</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Ensure your account is secured with a strong password.</p>
+                              </div>
+                            </div>
+                            {!showPasswordChange && (
+                              <button
+                                type="button"
+                                onClick={() => setShowPasswordChange(true)}
+                                className="bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs py-2 px-3 sm:px-4 rounded-xl transition border border-slate-700/60 cursor-pointer shrink-0"
+                              >
+                                Change Password
+                              </button>
+                            )}
+                          </div>
+
+                          {showPasswordChange && (
+                            <form onSubmit={handleChangePassword} className="space-y-4 pt-4 border-t border-slate-100 dark:border-white/5 animate-fade-in">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-xs">
+                                <div>
+                                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Current Password</label>
+                                  <input
+                                    type="password"
+                                    required
+                                    placeholder="Enter current password"
+                                    value={settingsCurrPassword}
+                                    onChange={(e) => setSettingsCurrPassword(e.target.value)}
+                                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-900 dark:text-white rounded-xl p-2.5 sm:p-3 w-full font-mono focus:border-violet-500 outline-none"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">New Password</label>
+                                  <input
+                                    type="password"
+                                    required
+                                    placeholder="Enter new password"
+                                    value={settingsNewPassword}
+                                    onChange={(e) => setSettingsNewPassword(e.target.value)}
+                                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-900 dark:text-white rounded-xl p-2.5 sm:p-3 w-full font-mono focus:border-violet-500 outline-none"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Confirm New Password</label>
+                                  <input
+                                    type="password"
+                                    required
+                                    placeholder="Confirm new password"
+                                    value={settingsConfirmPassword}
+                                    onChange={(e) => setSettingsConfirmPassword(e.target.value)}
+                                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-900 dark:text-white rounded-xl p-2.5 sm:p-3 w-full font-mono focus:border-violet-500 outline-none"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowPasswordChange(false);
+                                    setSettingsCurrPassword('');
+                                    setSettingsNewPassword('');
+                                    setSettingsConfirmPassword('');
+                                  }}
+                                  className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs py-2 px-4 rounded-xl transition cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="submit"
+                                  disabled={actionLoading}
+                                  className="bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs py-2 px-4 rounded-xl transition shadow-md shadow-violet-600/20 disabled:opacity-50 cursor-pointer"
+                                >
+                                  {actionLoading ? 'Updating...' : 'Update Password'}
+                                </button>
+                              </div>
+                            </form>
+                          )}
+                        </div>
+
+                        {/* 3. Your Mentor Panel */}
+                        <div className="dx-panel p-4 sm:p-6 space-y-4 rounded-2xl">
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                              <div className="h-10 w-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 shrink-0">
                                 <GraduationCap className="h-5 w-5" />
                               </div>
                               <div>
@@ -7806,7 +7883,7 @@ export default function App() {
                             </div>
 
                             {partnerLink?.hasPartner && (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                 Active Mentor
                               </span>
@@ -7866,12 +7943,12 @@ export default function App() {
                                   value={mentorCodeInput}
                                   onChange={(e) => setMentorCodeInput(e.target.value.toUpperCase())}
                                   placeholder="e.g. FXPARTNER"
-                                  className="cyber-input flex-1 uppercase font-mono tracking-wider text-sm px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-950/80 text-white placeholder-slate-600 focus:outline-none focus:border-violet-500"
+                                  className="cyber-input flex-1 uppercase font-mono tracking-wider text-xs sm:text-sm px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-950/80 text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
                                 />
                                 <button
                                   type="submit"
                                   disabled={linkingMentor || !mentorCodeInput.trim()}
-                                  className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs transition shadow-md shadow-violet-600/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
+                                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs transition shadow-md shadow-violet-600/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0 min-h-[40px] flex items-center justify-center"
                                 >
                                   {linkingMentor ? 'Linking...' : 'Link Mentor'}
                                 </button>
@@ -7883,22 +7960,9 @@ export default function App() {
                           )}
                         </div>
 
-                        {/*
-                        {/*
-                          Privacy & Mentor Access. Sharing used to be one
-                          switch, so a student who wanted help reading their
-                          analysis had to hand over their journal too. Each row
-                          is enforced on the server: a section that is off is
-                          left out of the response, rather than sent and hidden
-                          in the console.
-
-                          The controls are the app's own switch — the same
-                          h-5 w-9 track and translating knob as the theme and
-                          Portfolio Guard toggles — rather than the browser's
-                          square checkbox, and the whole row is the hit target.
-                        */}
+                        {/* 4. Privacy & Mentor Access */}
                         {mentorAccess && (
-                          <div className="dx-panel p-6 space-y-5">
+                          <div className="dx-panel p-4 sm:p-6 space-y-4 sm:space-y-5 rounded-2xl">
                             <div className="flex items-start justify-between gap-4">
                               <div>
                                 <h3 className="dx-section-title">Privacy &amp; Mentor Access</h3>
@@ -7908,11 +7972,6 @@ export default function App() {
                                     : 'Set now what a mentor would be able to open. Nobody has access until you join through one.'}
                                 </p>
                               </div>
-                              {/* Answers "how exposed am I?" without reading
-                                  seven rows. Not the .dx-badge count pill —
-                                  that is for numbers, and a solid inverted
-                                  slab around a sentence reads far heavier than
-                                  a summary should. */}
                               <span className="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1">
                                 <span className={`h-1.5 w-1.5 rounded-full ${MENTOR_ACCESS_ROWS.some((r) => mentorAccess[r.key] === true) ? 'bg-violet-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
                                 {MENTOR_ACCESS_ROWS.filter((r) => mentorAccess[r.key] === true).length}
@@ -7953,10 +8012,7 @@ export default function App() {
                                 );
                               })}
 
-                              {/* Accounts is a selection, not a switch: the
-                                  student picks which portfolios are visible.
-                                  null means every account, including any they
-                                  add later. */}
+                              {/* Accounts row */}
                               <div className={`dx-perm-row dx-perm-row-static ${mentorAccess.accounts === null || (mentorAccess.accounts || []).length > 0 ? 'dx-perm-row-on' : ''}`}>
                                 <span className={`dx-perm-icon ${mentorAccess.accounts === null || (mentorAccess.accounts || []).length > 0 ? 'dx-perm-icon-on' : ''}`}>
                                   <Layers className="h-4 w-4" />
@@ -8025,8 +8081,6 @@ export default function App() {
                               </div>
                             </div>
 
-                            {/* The notebook is saved to the account now, so this
-                                switch is the thing that actually governs it. */}
                             <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 border-t border-slate-200/70 dark:border-white/[0.07] pt-3.5">
                               Your notebook is saved to your account so it follows you between devices. It stays
                               private unless you switch Notebook on above. Live charts show market data; only the
@@ -8034,133 +8088,6 @@ export default function App() {
                             </p>
                           </div>
                         )}
-
-                        {/* Profile Form */}
-                        <form onSubmit={handleSaveProfile} className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs space-y-4">
-                          <div>
-                            <h3 className="font-extrabold text-slate-900 text-base">Profile details</h3>
-                            <p className="text-xs text-slate-400">Update your account name and email address.</p>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-50 pt-4 text-xs">
-                            <div>
-                              <label className="font-bold text-slate-700 block mb-1">User Name</label>
-                              <input
-                                type="text"
-                                required
-                                value={settingsName}
-                                onChange={(e) => setSettingsName(e.target.value)}
-                                className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full font-semibold focus:ring-slate-500 focus:border-slate-500"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="font-bold text-slate-700 block mb-1">Email Address</label>
-                              <input
-                                type="email"
-                                value={settingsEmail}
-                                readOnly
-                                disabled
-                                title="Your email address identifies your account and cannot be changed here."
-                                className="bg-slate-100 border border-slate-200 text-xs rounded-lg p-2.5 w-full font-semibold text-slate-500 cursor-not-allowed"
-                              />
-                              <p className="text-[10px] text-slate-500 mt-1">Your email identifies your account. Contact support to change it.</p>
-                            </div>
-                          </div>
-
-                          <div className="flex justify-end pt-2">
-                            <button
-                              type="submit"
-                              disabled={actionLoading}
-                              className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2.5 px-4 rounded-lg transition"
-                            >
-                              {actionLoading ? 'Saving...' : 'Save Profile Changes'}
-                            </button>
-                          </div>
-                        </form>
-
-                        {/* Password Form */}
-                        <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-xs space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="font-extrabold text-slate-900 text-base">Change Password</h3>
-                              <p className="text-xs text-slate-400">Ensure your trading dashboard is secured with a strong password.</p>
-                            </div>
-                            {!showPasswordChange && (
-                              <button
-                                type="button"
-                                onClick={() => setShowPasswordChange(true)}
-                                className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2.5 px-4 rounded-lg transition"
-                              >
-                                Change Password
-                              </button>
-                            )}
-                          </div>
-
-                          {showPasswordChange && (
-                            <form onSubmit={handleChangePassword} className="space-y-4 pt-4 border-t border-slate-50 animate-fade-in">
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                                <div>
-                                  <label className="font-bold text-slate-700 block mb-1">Current Password</label>
-                                  <input
-                                    type="password"
-                                    required
-                                    placeholder="Enter password"
-                                    value={settingsCurrPassword}
-                                    onChange={(e) => setSettingsCurrPassword(e.target.value)}
-                                    className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full font-mono"
-                                  />
-                                </div>
-
-                                <div>
-                                  <label className="font-bold text-slate-700 block mb-1">New Password</label>
-                                  <input
-                                    type="password"
-                                    required
-                                    placeholder="Enter password"
-                                    value={settingsNewPassword}
-                                    onChange={(e) => setSettingsNewPassword(e.target.value)}
-                                    className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full font-mono"
-                                  />
-                                </div>
-
-                                <div>
-                                  <label className="font-bold text-slate-700 block mb-1">Confirm New Password</label>
-                                  <input
-                                    type="password"
-                                    required
-                                    placeholder="Enter password"
-                                    value={settingsConfirmPassword}
-                                    onChange={(e) => setSettingsConfirmPassword(e.target.value)}
-                                    className="bg-slate-50 border border-slate-200 text-xs rounded-lg p-2.5 w-full font-mono"
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="flex justify-end gap-2 pt-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setShowPasswordChange(false);
-                                    setSettingsCurrPassword('');
-                                    setSettingsNewPassword('');
-                                    setSettingsConfirmPassword('');
-                                  }}
-                                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2 px-4 rounded-lg transition"
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  type="submit"
-                                  disabled={actionLoading}
-                                  className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2 px-4 rounded-lg transition disabled:opacity-50"
-                                >
-                                  {actionLoading ? 'Updating...' : 'Update Password'}
-                                </button>
-                              </div>
-                            </form>
-                          )}
-                        </div>
                       </div>
                     )}
 
@@ -9031,19 +8958,17 @@ export default function App() {
           { id: 'dashboard', icon: BarChart3, label: 'Home' },
           { id: 'journal', icon: BookOpen, label: 'Journal', badge: filteredTrades.length > 0 ? filteredTrades.length : undefined },
           { id: 'analytics', icon: Activity, label: 'Analytics' },
-          { id: 'fxnews', icon: Globe, label: 'News' },
+          { id: 'accounts', icon: Layers, label: 'Accounts', badge: accounts.length > 0 ? accounts.length : undefined },
           { id: 'more', icon: MoreHorizontal, label: 'More' },
         ];
-        // The role consoles are appended rather than listed inline: the desktop
-        // sidebar is `hidden md:flex`, so without an entry here a partner or an
-        // admin on a phone could not open their own console from anywhere.
+        // The role consoles and secondary features live in More drawer.
         const moreTabs: { id: string; icon: any; label: string; badge?: any; pro?: boolean }[] = [
-          { id: 'notebook', icon: Edit3, label: 'Notebook', pro: true },
-          { id: 'accounts', icon: Layers, label: 'Accounts', badge: accounts.length > 0 ? accounts.length : undefined },
-          { id: 'calendar', icon: Calendar, label: 'Calendar' },
-          { id: 'chart', icon: LineChart, label: 'Live Chart', pro: true },
-          { id: 'tools', icon: Wrench, label: 'Tools' },
-          { id: 'insights', icon: Sparkles, label: 'Heyza AI', pro: true },
+          { id: 'fxnews', icon: Globe, label: 'Forex News' },
+          { id: 'calendar', icon: Calendar, label: 'Economic Calendar' },
+          { id: 'insights', icon: Sparkles, label: 'Heyza AI Copilot', pro: true },
+          { id: 'chart', icon: LineChart, label: 'Live Charts', pro: true },
+          { id: 'notebook', icon: Edit3, label: 'Trader Notebook', pro: true },
+          { id: 'tools', icon: Wrench, label: 'Trading Calculators' },
           { id: 'settings', icon: Settings, label: 'Settings' },
           ...(isPartner ? [{ id: 'partner', icon: Users, label: 'Partner Portal' }] : []),
           ...(isAdmin && adminRole !== 'PARTNER' ? [{ id: 'admin', icon: Shield, label: 'Admin Panel' }] : []),
@@ -9056,20 +8981,14 @@ export default function App() {
               <>
                 {/* Backdrop */}
                 <div
-                  className="md:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-[58] animate-in fade-in duration-200"
+                  className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[68] animate-in fade-in duration-200"
                   onClick={() => setShowMobileMore(false)}
                 />
                 {/* Sheet.
-                    A real bottom sheet now: anchored to the screen edge with a
-                    drag handle, rather than a floating rounded box hovering
-                    above the tab bar.
-
-                    Rows, not a four-column grid. Seven items in four columns
-                    left a hole in the second row that the floating action
-                    button sat in, and the labels had to shrink to 10px to fit
-                    a quarter of a phone. A row gives each item its full name,
-                    room for an icon chip, and somewhere to put the badge. */}
-                <div className="md:hidden fixed inset-x-0 bottom-0 z-[59] bg-white dark:bg-[#0b0b13] rounded-t-3xl shadow-[0_-20px_60px_-20px_rgba(0,0,0,0.85)] border-t border-x border-slate-200/60 dark:border-white/10 animate-in slide-in-from-bottom duration-300">
+                    Anchored to the screen edge with a drag handle, sitting above
+                    the bottom bar (z-[70]) with ample bottom safe-area padding so
+                    all items like Admin Panel are fully visible without being cut off. */}
+                <div className="md:hidden fixed inset-x-0 bottom-0 z-[70] bg-white dark:bg-[#0c0d16] rounded-t-3xl shadow-[0_-20px_60px_-20px_rgba(0,0,0,0.9)] border-t border-x border-slate-200/60 dark:border-white/10 animate-in slide-in-from-bottom duration-300">
 
                   <div className="flex justify-center pt-2.5 pb-1">
                     <span className="h-1 w-9 rounded-full bg-slate-300 dark:bg-white/15" aria-hidden="true" />
@@ -9080,13 +8999,13 @@ export default function App() {
                     <button
                       onClick={() => setShowMobileMore(false)}
                       aria-label="Close"
-                      className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/[0.07] text-slate-500 dark:text-slate-400 active:scale-90 transition"
+                      className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/[0.08] border border-slate-200/60 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:bg-red-600 hover:border-red-600 hover:text-white dark:hover:bg-red-600 dark:hover:border-red-600 dark:hover:text-white active:bg-red-700 active:text-white active:scale-90 transition-all duration-150 shadow-xs cursor-pointer"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
 
-                  <div className="px-3 max-h-[58vh] overflow-y-auto [padding-bottom:calc(58px+env(safe-area-inset-bottom,0px))]">
+                  <div className="px-3 max-h-[68vh] overflow-y-auto pb-10 [padding-bottom:calc(64px+env(safe-area-inset-bottom,0px))] space-y-1">
                     {moreTabs.map(item => {
                       const isActive = activeTab === item.id;
                       return (
@@ -9131,6 +9050,7 @@ export default function App() {
                         </button>
                       );
                     })}
+                    <div className="h-6" aria-hidden="true" />
                   </div>
                 </div>
               </>
@@ -9232,17 +9152,14 @@ export default function App() {
 
       {/* Edit Account Modal */}
       {showEditAccountModal && editingAccount && (
-        <div className="fixed inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 z-[70] animate-fade-in">
-          <div className="bg-white dark:bg-[#0c0d16] rounded-t-[28px] sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200/80 dark:border-white/10 max-w-md w-full p-6 sm:p-7 pb-8 sm:pb-7 relative">
-            <div className="sm:hidden flex justify-center pt-1 pb-3">
-              <span className="h-1.5 w-10 rounded-full bg-slate-300 dark:bg-white/20" aria-hidden="true" />
-            </div>
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-md flex items-center justify-center p-4 z-[70] animate-fade-in">
+          <div className="bg-white dark:bg-[#0c0d16] rounded-2xl shadow-2xl border border-slate-200/80 dark:border-white/10 max-w-md w-full p-5 sm:p-7 relative max-h-[90vh] overflow-y-auto my-auto animate-in zoom-in-95 duration-200">
             <button
               onClick={() => {
                 setShowEditAccountModal(false);
                 setEditingAccount(null);
               }}
-              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition"
+              className="absolute right-4 top-4 text-slate-500 dark:text-slate-400 hover:text-white dark:hover:text-white w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 dark:bg-white/[0.08] border border-slate-200/60 dark:border-white/[0.08] hover:bg-red-600 hover:border-red-600 dark:hover:bg-red-600 dark:hover:border-red-600 active:bg-red-700 active:text-white active:scale-90 transition-all duration-150 shadow-xs cursor-pointer"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -9332,40 +9249,46 @@ export default function App() {
 
       {/* A. Account Creation Modal */}
       {showAccountModal && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ zIndex: 9999 }}>
-          <div className="bg-white dark:bg-[#0c0d16] rounded-t-[28px] sm:rounded-2xl shadow-2xl border-t sm:border border-slate-100 dark:border-white/10 max-w-md w-full p-5 sm:p-6 relative max-h-[92vh] overflow-y-auto pb-safe">
-            <div className="sm:hidden flex justify-center pt-1 pb-3">
-              <span className="h-1 w-9 rounded-full bg-slate-300 dark:bg-white/20" aria-hidden="true" />
-            </div>
-            <button
-              onClick={() => {
-                setShowAccountModal(false);
-                setNewAccMt5Login('');
-                setNewAccMt5Server('');
-                setNewAccMt5InvestorPassword('');
-                setShowInvestorPassword(false);
-                setShowMt5PasswordInfo(false);
-              }}
-              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 z-10 w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 dark:bg-white/[0.06] active:scale-95 transition"
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
-
+        <div className="fixed inset-0 bg-slate-900/70 dark:bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-fade-in">
+          <div className="bg-white dark:bg-[#0c0d16] rounded-2xl shadow-2xl border border-slate-200/80 dark:border-white/10 max-w-md w-full p-5 sm:p-6 relative max-h-[90vh] overflow-y-auto my-auto animate-in zoom-in-95 duration-200">
             {accountCreationMethod === 'select' && (
               <div className="space-y-4">
-                <div>
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Connect New Portfolio Account</h3>
-                  <p className="text-[11px] text-slate-400">Choose how you want to connect and log trades.</p>
-                </div>
-                <div className="grid gap-3">
-                  <button onClick={() => setAccountCreationMethod('manual')} className="border-2 border-slate-100 dark:border-white/10 hover:border-slate-300 dark:hover:border-violet-500/40 hover:bg-slate-50 dark:hover:bg-white/[0.04] rounded-xl p-4 text-left transition flex gap-3 items-center">
-                    <div className="bg-slate-100 dark:bg-white/10 p-2 rounded-lg text-slate-600 dark:text-slate-300"><Edit3 className="w-5 h-5" /></div>
-                    <div>
-                      <div className="font-bold text-slate-800 dark:text-white text-sm">Manual Account Opening</div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">Create an empty portfolio to manually log your trades one-by-one.</div>
-                    </div>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base">Connect New Portfolio Account</h3>
+                    <p className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5">Choose how you want to connect and log trades.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowAccountModal(false);
+                      setNewAccMt5Login('');
+                      setNewAccMt5Server('');
+                      setNewAccMt5InvestorPassword('');
+                      setShowInvestorPassword(false);
+                      setShowMt5PasswordInfo(false);
+                    }}
+                    className="shrink-0 text-slate-500 dark:text-slate-400 hover:text-white dark:hover:text-white w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 dark:bg-white/[0.08] border border-slate-200/60 dark:border-white/[0.08] hover:bg-red-600 hover:border-red-600 dark:hover:bg-red-600 dark:hover:border-red-600 active:bg-red-700 active:text-white active:scale-90 transition-all duration-150 shadow-xs cursor-pointer"
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4" />
                   </button>
+                </div>
+
+                <div className="grid gap-3 pt-1">
+                  <button
+                    onClick={() => setAccountCreationMethod('manual')}
+                    className="border border-slate-200 dark:border-white/10 hover:border-violet-500/50 hover:bg-slate-50 dark:hover:bg-white/[0.04] rounded-xl p-3.5 sm:p-4 text-left transition flex gap-3.5 items-center group cursor-pointer shadow-xs"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Edit3 className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-800 dark:text-white text-sm group-hover:text-violet-400 transition-colors">Manual Account Opening</div>
+                      <div className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">Create an empty portfolio to manually log your trades one-by-one.</div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </button>
+
                   <button
                     onClick={() => {
                       setAccountCreationMethod('mt5');
@@ -9377,13 +9300,16 @@ export default function App() {
                       setShowInvestorPassword(false);
                       setNewAccInstitutionType('Broker');
                     }}
-                    className="border-2 border-slate-100 dark:border-white/10 hover:border-slate-300 dark:hover:border-violet-500/40 hover:bg-slate-50 dark:hover:bg-white/[0.04] rounded-xl p-4 text-left transition flex gap-3 items-center"
+                    className="border border-slate-200 dark:border-white/10 hover:border-violet-500/50 hover:bg-slate-50 dark:hover:bg-white/[0.04] rounded-xl p-3.5 sm:p-4 text-left transition flex gap-3.5 items-center group cursor-pointer shadow-xs"
                   >
-                    <div className="bg-violet-100 dark:bg-violet-500/15 p-2 rounded-lg text-violet-600 dark:text-violet-300"><Terminal className="w-5 h-5" /></div>
-                    <div>
-                      <div className="font-bold text-slate-800 dark:text-white text-sm">MT5 Sync Account</div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">Connect directly using MT5 Login, Server, and Trading or Investor Password.</div>
+                    <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Terminal className="w-5 h-5" />
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-800 dark:text-white text-sm group-hover:text-violet-400 transition-colors">MT5 Sync Account</div>
+                      <div className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">Connect directly using MT5 Login, Server, and Trading or Investor Password.</div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
                   </button>
                 </div>
               </div>
@@ -9588,7 +9514,9 @@ export default function App() {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-1.5">
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Investor Password</label>
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                        {newAccInstitutionType === 'Broker' ? 'Trading Password' : 'Investor Password'}
+                      </label>
                       <button
                         type="button"
                         onClick={() => setShowMt5PasswordInfo(prev => !prev)}
@@ -9598,16 +9526,30 @@ export default function App() {
                         <Info className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 font-semibold flex items-center gap-1">
-                      <Shield className="w-2.5 h-2.5" /> Read-Only &amp; Safe
-                    </span>
+                    {newAccInstitutionType === 'Broker' ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 font-semibold flex items-center gap-1">
+                        <Shield className="w-2.5 h-2.5" /> Encrypted &amp; Secure
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 font-semibold flex items-center gap-1">
+                        <Shield className="w-2.5 h-2.5" /> Read-Only &amp; Safe
+                      </span>
+                    )}
                   </div>
 
                   {showMt5PasswordInfo && (
                     <div className="mb-2 p-2.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-[11px] leading-relaxed text-violet-300 flex items-start gap-2">
                       <Info className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />
                       <div>
-                        Enter your <strong>investor password</strong> (read-only). We can only read your trade history and cannot place or modify any trades.
+                        {newAccInstitutionType === 'Broker' ? (
+                          <>
+                            Enter your <strong>trading password</strong>. Your credentials are securely encrypted to sync your trade history directly from your broker.
+                          </>
+                        ) : (
+                          <>
+                            Enter your <strong>investor password</strong> (read-only). We can only read your trade history and cannot place or modify any trades.
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
@@ -9629,7 +9571,7 @@ export default function App() {
                       style={{ WebkitTextSecurity: showInvestorPassword ? 'none' : 'disc' } as any}
                       value={newAccMt5InvestorPassword}
                       onChange={(e) => setNewAccMt5InvestorPassword(e.target.value)}
-                      placeholder="Enter your MT5 investor password"
+                      placeholder={newAccInstitutionType === 'Broker' ? "Enter your MT5 trading password" : "Enter your MT5 investor password"}
                       className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 pr-10 w-full focus:ring-violet-500 focus:border-violet-500 font-mono tracking-wider placeholder:font-sans placeholder:tracking-normal"
                     />
                     <button
@@ -9646,7 +9588,15 @@ export default function App() {
                       <Shield className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      Always enter your <strong className="text-emerald-200 font-semibold">investor password</strong> (read-only). We cannot place or modify any trades, keeping your funds 100% safe.
+                      {newAccInstitutionType === 'Broker' ? (
+                        <>
+                          Enter your <strong className="text-emerald-200 font-semibold">trading password</strong>. Your credentials are fully encrypted and only used to sync your trade history.
+                        </>
+                      ) : (
+                        <>
+                          Always enter your <strong className="text-emerald-200 font-semibold">investor password</strong> (read-only). We cannot place or modify any trades, keeping your funds 100% safe.
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -9774,21 +9724,18 @@ export default function App() {
       {/* B. Add / Edit Trade Modal */}
       {showTradeModal && (
         <div
-          className="fixed inset-0 bg-slate-900/70 dark:bg-slate-950/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-[70] overflow-y-auto"
+          className="fixed inset-0 bg-slate-900/70 dark:bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[70] overflow-y-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowTradeModal(false);
           }}
         >
           <div
-            className="bg-white dark:bg-[#0c0d16] rounded-t-[28px] sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200/80 dark:border-white/10 max-w-md w-full relative flex flex-col max-h-[92vh] sm:max-h-[min(92vh,780px)] overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-none sm:zoom-in-95 duration-300"
+            className="bg-white dark:bg-[#0c0d16] rounded-2xl shadow-2xl border border-slate-200/80 dark:border-white/10 max-w-md w-full relative flex flex-col max-h-[90vh] sm:max-h-[min(92vh,780px)] overflow-hidden my-auto animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
 
             {/* Modal Header - Sticky at top so Close button is always visible */}
             <div className="shrink-0 bg-slate-50/95 dark:bg-[#0c0d16]/95 backdrop-blur-md border-b border-slate-100 dark:border-white/[0.08] p-4 sm:p-5 pr-14 sticky top-0 z-20">
-              <div className="sm:hidden flex justify-center pb-2">
-                <span className="h-1 w-9 rounded-full bg-slate-300 dark:bg-white/20" aria-hidden="true" />
-              </div>
               <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base sm:text-lg">
                 {isMentorReadOnlyMode ? 'Inspect Trade Execution (Read-Only)' : editingTradeId ? 'Modify Trade Record' : 'Record Executed Trade'}
               </h3>
@@ -10664,7 +10611,7 @@ export default function App() {
             <button
               onClick={() => setShowSignOutModal(false)}
               disabled={isLoggingOut}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white w-8 h-8 rounded-xl flex items-center justify-center bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] transition-all active:scale-95 disabled:opacity-50"
+              className="absolute top-4 right-4 text-slate-400 hover:text-white w-8 h-8 rounded-xl flex items-center justify-center bg-white/[0.04] hover:bg-red-600 hover:border-red-600 dark:hover:bg-red-600 dark:hover:border-red-600 transition-all duration-150 active:scale-95 disabled:opacity-50 shadow-xs cursor-pointer"
               aria-label="Close"
             >
               <X className="w-4 h-4" />

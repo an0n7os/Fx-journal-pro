@@ -1,14 +1,30 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Link2, Pencil, Ticket, Users, X, Wallet, Sparkles } from 'lucide-react';
+import { Check, Copy, Link2, Pencil, Plus, Ticket, Users, X, Wallet, Sparkles } from 'lucide-react';
 import PartnerUserRegistry from './PartnerUserRegistry';
 import ReferralIncomeHub from './ReferralIncomeHub';
 import PartnerPayoutHub from './PartnerPayoutHub';
+
+interface PartnerReferralLink {
+  id: string;
+  code: string;
+  label?: string;
+  offerPrice: number;
+  isActive: boolean;
+  referralUrl?: string;
+  mentorEarns: number;
+  studentSaves: number;
+  createdAt?: string;
+}
 
 interface PartnerMe {
   partnerId: string;
   name: string | null;
   referralCode: string;
   referralUrl: string;
+  offerPrice?: number;
+  standardPrice?: number;
+  mentorEarns?: number;
+  links?: PartnerReferralLink[];
 }
 
 interface PartnerPortalProps {
@@ -24,6 +40,7 @@ export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}
   const [draftCode, setDraftCode] = useState('');
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'payouts' | 'network'>('overview');
+  const [selectedCampaignCode, setSelectedCampaignCode] = useState<string>('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -33,20 +50,38 @@ export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}
       if (!res.ok) throw new Error(body.error || 'Could not load your partner profile.');
       setMe(body);
       setDraftCode(body.referralCode || '');
+      if (!selectedCampaignCode) {
+        setSelectedCampaignCode(body.referralCode || '');
+      }
     } catch (e: any) {
       setError(e.message || 'Could not load your partner profile.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedCampaignCode]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Clipboard is unavailable on http origins and in some in-app browsers, so a
-  // failure falls back to selecting the text rather than silently doing nothing.
+  // Keep selected campaign valid when me changes
+  useEffect(() => {
+    if (me?.referralCode && !selectedCampaignCode) {
+      setSelectedCampaignCode(me.referralCode);
+    }
+  }, [me, selectedCampaignCode]);
+
+  // Clipboard helper with fallback
   const copy = async (value: string, which: 'link' | 'code') => {
     try {
-      await navigator.clipboard.writeText(value);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = value;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
       setCopied(which);
       setTimeout(() => setCopied(null), 1800);
     } catch {
@@ -69,6 +104,9 @@ export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'Could not save that code.');
       setMe((prev) => (prev ? { ...prev, referralCode: body.referralCode, referralUrl: body.referralUrl } : prev));
+      if (selectedCampaignCode === me?.referralCode) {
+        setSelectedCampaignCode(body.referralCode);
+      }
       setEditing(false);
     } catch (e: any) {
       setError(e.message);
@@ -77,10 +115,35 @@ export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}
     }
   };
 
+  // Determine active campaign to display in the hero cards
+  const customMatch = (me?.links || []).find((l) => l.code === selectedCampaignCode);
+  const activeCampaign = customMatch
+    ? {
+        id: customMatch.id,
+        code: customMatch.code,
+        label: customMatch.label || 'Custom Offer',
+        offerPrice: customMatch.offerPrice,
+        isActive: customMatch.isActive,
+        referralUrl: customMatch.referralUrl || `${typeof window !== 'undefined' ? window.location.origin : ''}/?ref=${encodeURIComponent(customMatch.code)}`,
+        mentorEarns: customMatch.mentorEarns,
+        studentSaves: customMatch.studentSaves,
+        isPrimary: false,
+      }
+    : {
+        id: 'primary',
+        code: me?.referralCode || 'MENTOR60',
+        label: 'Primary Default',
+        offerPrice: me?.offerPrice || 499,
+        isActive: true,
+        referralUrl: me?.referralUrl || `${typeof window !== 'undefined' ? window.location.origin : ''}/?ref=${encodeURIComponent(me?.referralCode || 'MENTOR60')}`,
+        mentorEarns: me?.mentorEarns !== undefined ? me.mentorEarns : Math.max(0, (me?.offerPrice || 499) - 199),
+        studentSaves: Math.max(0, 499 - (me?.offerPrice || 499)),
+        isPrimary: true,
+      };
+
   return (
     <div className="dx-dark-surface space-y-6">
-      {/* No heading here — the page header above the tab already says
-          "Partner Portal", and repeating it stacked two titles on the screen. */}
+      {/* Page notifications */}
       {error && (
         <div className="flex items-start justify-between gap-3 bg-red-500/10 border border-red-500/25 text-red-300 rounded-2xl px-4 py-3 text-xs">
           <span>{error}</span>
@@ -129,34 +192,138 @@ export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}
 
       {/* ── TAB 1: OVERVIEW & LINKS ──────────────────────────────────────── */}
       {activeTab === 'overview' && (
-        <div className="space-y-6">
-          {/* Referral identity */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <Link2 className="h-4 w-4 text-violet-400" />
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Referral link</p>
+        <div className="space-y-5">
+          {/* Active Campaign Switcher Header */}
+          <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-violet-950/40 via-purple-950/30 to-slate-900/80 border border-violet-500/25 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="p-2 rounded-xl bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-violet-300">
+                    Active Campaign Preview
+                  </span>
+                  <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border ${
+                    activeCampaign.isActive
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                  }`}>
+                    {activeCampaign.isActive ? 'Active' : 'Revoked'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300">
+                  Switch between campaigns below to copy their unique link and code.
+                </p>
               </div>
-              <p className="font-mono text-[13px] text-slate-200 break-all leading-relaxed mb-4">
-                {loading ? 'Loading…' : me?.referralUrl}
-              </p>
-              <button
-                onClick={() => me && copy(me.referralUrl, 'link')}
-                disabled={!me}
-                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 px-4 py-2.5 text-xs font-bold text-white transition-colors cursor-pointer"
-              >
-                {copied === 'link' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                {copied === 'link' ? 'Copied' : 'Copy link'}
-              </button>
             </div>
 
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <Ticket className="h-4 w-4 text-violet-400" />
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Referral code</p>
+            {/* Campaign Selection Pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Primary default */}
+              <button
+                type="button"
+                onClick={() => setSelectedCampaignCode(me?.referralCode || '')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  selectedCampaignCode === me?.referralCode || !selectedCampaignCode
+                    ? 'bg-violet-600 text-white shadow-md ring-2 ring-violet-400/50'
+                    : 'bg-slate-950/80 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <span>{me?.referralCode || 'Default'}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/30 font-medium">Primary (₹{me?.offerPrice || 499})</span>
+              </button>
+
+              {/* Custom campaigns */}
+              {(me?.links || []).map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  onClick={() => setSelectedCampaignCode(l.code)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    selectedCampaignCode === l.code
+                      ? 'bg-violet-600 text-white shadow-md ring-2 ring-violet-400/50'
+                      : 'bg-slate-950/80 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <span>{l.code}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/30 font-medium">₹{l.offerPrice}</span>
+                  {!l.isActive && <span className="text-[9px] text-rose-400 font-bold">(Off)</span>}
+                </button>
+              ))}
+
+              {/* Trigger create modal */}
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('open-create-partner-link'))}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/25 transition cursor-pointer flex items-center gap-1"
+                title="Create new referral link"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>+ New</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Referral identity cards (Dynamically shows active campaign) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Card 1: Referral Link */}
+            <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <Link2 className="h-4 w-4 text-violet-400" />
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Referral Link</p>
+                </div>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-300 border border-violet-500/20">
+                  {activeCampaign.isPrimary ? 'Default Link' : (activeCampaign.label || 'Custom Campaign')}
+                </span>
               </div>
 
-              {editing ? (
+              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 mb-4 select-all">
+                <p className="font-mono text-xs sm:text-[13px] text-slate-200 break-all leading-relaxed">
+                  {loading ? 'Loading…' : activeCampaign.referralUrl}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => copy(activeCampaign.referralUrl, 'link')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 px-4 py-2.5 text-xs font-bold text-white transition-colors cursor-pointer shadow-md"
+                >
+                  {copied === 'link' ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied === 'link' ? 'Copied Link!' : 'Copy link'}
+                </button>
+
+                <a
+                  href={activeCampaign.referralUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 hover:border-slate-500 hover:bg-slate-800/80 px-3.5 py-2.5 text-xs font-semibold text-slate-300 transition cursor-pointer"
+                  title="Test student landing page"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+                  <span>Test Link</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Card 2: Referral Code */}
+            <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <Ticket className="h-4 w-4 text-violet-400" />
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Referral Code / Coupon</p>
+                </div>
+                <div className="flex items-center gap-1.5 text-[10.5px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  <span>Student: ₹{activeCampaign.offerPrice}</span>
+                  <span className="text-slate-500">•</span>
+                  <span>Earn: ₹{activeCampaign.mentorEarns}</span>
+                </div>
+              </div>
+
+              {editing && activeCampaign.isPrimary ? (
                 <>
                   <input
                     value={draftCode}
@@ -165,7 +332,7 @@ export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}
                     autoFocus
                     placeholder="YOURCODE"
                     aria-label="Referral code"
-                    className="w-full bg-slate-950/60 border border-slate-700 focus:border-violet-500/60 rounded-xl px-3.5 py-2.5 font-mono text-lg tracking-[0.18em] text-white focus:outline-none mb-2"
+                    className="w-full bg-slate-950/80 border border-slate-700 focus:border-violet-500 rounded-xl px-3.5 py-2.5 font-mono text-lg tracking-[0.18em] text-white focus:outline-none mb-2"
                   />
                   <p className="text-[11px] text-slate-500 mb-4">4–16 letters and numbers. No spaces or symbols.</p>
                   <div className="flex items-center gap-2">
@@ -186,32 +353,61 @@ export default function PartnerPortal({ onInspectUser }: PartnerPortalProps = {}
                 </>
               ) : (
                 <>
-                  <p className="font-mono text-2xl font-black tracking-[0.18em] text-white mb-4">
-                    {loading ? '…' : me?.referralCode}
-                  </p>
+                  <div className="flex items-baseline gap-3 mb-4">
+                    <p className="font-mono text-2xl font-black tracking-[0.18em] text-white">
+                      {loading ? '…' : activeCampaign.code}
+                    </p>
+                    {activeCampaign.studentSaves > 0 && (
+                      <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                        ₹{activeCampaign.studentSaves} OFF
+                      </span>
+                    )}
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => me && copy(me.referralCode, 'code')}
-                      disabled={!me}
-                      className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 px-4 py-2.5 text-xs font-bold text-white transition-colors cursor-pointer"
+                      type="button"
+                      onClick={() => copy(activeCampaign.code, 'code')}
+                      disabled={loading}
+                      className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 px-4 py-2.5 text-xs font-bold text-white transition-colors cursor-pointer shadow-md"
                     >
-                      {copied === 'code' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                      {copied === 'code' ? 'Copied' : 'Copy code'}
+                      {copied === 'code' ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copied === 'code' ? 'Copied Code!' : 'Copy code'}
                     </button>
-                    <button
-                      onClick={() => setEditing(true)}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
-                    >
-                      <Pencil className="h-3.5 w-3.5" /> Customise
-                    </button>
+
+                    {activeCampaign.isPrimary ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditing(true)}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Customise
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent('open-edit-partner-link', { detail: { link: activeCampaign } }));
+                        }}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit Campaign
+                      </button>
+                    )}
                   </div>
                 </>
               )}
             </div>
           </div>
 
-          {/* Pricing, coupon and campaign links */}
-          <ReferralIncomeHub />
+          {/* Pricing, coupon and campaign links manager */}
+          <ReferralIncomeHub
+            selectedCampaignCode={selectedCampaignCode}
+            onSelectCampaign={(code) => setSelectedCampaignCode(code)}
+            onPartnerProfileUpdate={(updated) => {
+              setMe((prev) => ({ ...(prev || {}), ...updated }));
+            }}
+          />
         </div>
       )}
 

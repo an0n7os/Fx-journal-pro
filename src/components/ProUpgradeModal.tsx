@@ -323,19 +323,15 @@ export default function ProUpgradeModal({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-xl animate-fade-in overflow-y-auto"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xl animate-fade-in overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pro-upgrade-title"
     >
       <div
-        className="relative w-full max-w-md lg:max-w-4xl bg-[#0c0e15]/95 border-t sm:border border-white/[0.08] rounded-t-[32px] sm:rounded-3xl shadow-[0_32px_80px_-20px_rgba(0,0,0,0.95)] max-h-[94vh] sm:max-h-none overflow-y-auto my-0 sm:my-6 pb-safe text-slate-200 animate-in slide-in-from-bottom sm:slide-in-from-none sm:zoom-in-95 duration-250"
+        className="relative w-full max-w-md lg:max-w-4xl bg-[#0c0e15]/95 border border-white/[0.08] rounded-2xl sm:rounded-3xl shadow-[0_32px_80px_-20px_rgba(0,0,0,0.95)] max-h-[92vh] sm:max-h-none overflow-y-auto my-auto text-slate-200 animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Apple iOS sheet drag handle */}
-        <div className="sm:hidden flex justify-center pt-2.5 pb-1">
-          <span className="h-1 w-9 rounded-full bg-white/25" aria-hidden="true" />
-        </div>
 
         {/* Top subtle hairline glow */}
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent" />
@@ -344,7 +340,7 @@ export default function ProUpgradeModal({
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-3.5 top-3.5 z-20 h-7 w-7 rounded-full text-slate-400 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] active:scale-90 flex items-center justify-center transition-all"
+          className="absolute right-3.5 top-3.5 z-20 h-7 w-7 rounded-full text-slate-400 hover:text-white bg-white/[0.06] hover:bg-red-600 hover:border-red-600 dark:hover:bg-red-600 dark:hover:border-red-600 active:bg-red-700 active:scale-90 flex items-center justify-center transition-all duration-150 shadow-xs cursor-pointer"
         >
           <X className="h-3.5 w-3.5" />
         </button>

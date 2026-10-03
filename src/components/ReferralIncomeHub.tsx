@@ -16,20 +16,29 @@ import {
  * Self-contained: it owns its state, loads /api/partner/me itself, and can be
  * dropped anywhere a partner is signed in.
  */
-export default function ReferralIncomeHub() {
+export interface PartnerReferralLink {
+  id: string;
+  code: string;
+  label?: string;
+  offerPrice: number;
+  isActive: boolean;
+  referralUrl?: string;
+  mentorEarns: number;
+  studentSaves: number;
+  createdAt?: string;
+}
 
-  // Partner / Mentor Referral Pricing, Coupon & Link states
-  interface PartnerReferralLink {
-    id: string;
-    code: string;
-    label?: string;
-    offerPrice: number;
-    isActive: boolean;
-    referralUrl?: string;
-    mentorEarns: number;
-    studentSaves: number;
-    createdAt?: string;
-  }
+export interface ReferralIncomeHubProps {
+  selectedCampaignCode?: string;
+  onSelectCampaign?: (code: string) => void;
+  onPartnerProfileUpdate?: (updated: any) => void;
+}
+
+export default function ReferralIncomeHub({
+  selectedCampaignCode,
+  onSelectCampaign,
+  onPartnerProfileUpdate,
+}: ReferralIncomeHubProps = {}) {
 
   const [partnerProfile, setPartnerProfile] = useState<{
     referralCode: string;
@@ -41,8 +50,7 @@ export default function ReferralIncomeHub() {
     links?: PartnerReferralLink[];
   } | null>(null);
 
-  const [copiedCoupon, setCopiedCoupon] = useState<string | null>(null);
-  const [copiedRefLink, setCopiedRefLink] = useState<string | null>(null);
+  const [copiedItem, setCopiedItem] = useState<{ id: string; type: 'link' | 'code' } | null>(null);
   const [editingCoupon, setEditingCoupon] = useState(false);
   const [draftCouponCode, setDraftCouponCode] = useState('');
   const [savingCoupon, setSavingCoupon] = useState(false);
@@ -66,6 +74,7 @@ export default function ReferralIncomeHub() {
   const [editLinkLabel, setEditLinkLabel] = useState('');
   const [editLinkPrice, setEditLinkPrice] = useState<number>(399);
   const [savingEditLink, setSavingEditLink] = useState(false);
+
   // Sent alongside the cookie, matching the rest of the app's fetches.
   const getAuthHeaders = (): Record<string, string> => {
     const userId = sessionStorage.getItem('auth_user_id') || localStorage.getItem('auth_user_id') || '';
@@ -76,8 +85,30 @@ export default function ReferralIncomeHub() {
     return headers;
   };
 
-  // AdminPanel loaded this as a side effect of its own dashboard fetch. Owning
-  // it here means the hub works wherever it is mounted.
+  // Listen to open-create-partner-link and open-edit-partner-link events from hero cards
+  useEffect(() => {
+    const handleOpenCreate = () => {
+      setLinkError(null);
+      setShowCreateLinkModal(true);
+    };
+    const handleOpenEdit = (e: any) => {
+      if (e.detail?.link) {
+        setLinkError(null);
+        setEditingLink(e.detail.link);
+        setEditLinkCode(e.detail.link.code);
+        setEditLinkLabel(e.detail.link.label || '');
+        setEditLinkPrice(e.detail.link.offerPrice);
+      }
+    };
+    window.addEventListener('open-create-partner-link', handleOpenCreate);
+    window.addEventListener('open-edit-partner-link', handleOpenEdit);
+    return () => {
+      window.removeEventListener('open-create-partner-link', handleOpenCreate);
+      window.removeEventListener('open-edit-partner-link', handleOpenEdit);
+    };
+  }, []);
+
+  // Fetch partner profile on mount
   useEffect(() => {
     let alive = true;
     fetch('/api/partner/me', { headers: getAuthHeaders(), credentials: 'include' })
@@ -87,21 +118,44 @@ export default function ReferralIncomeHub() {
         setPartnerProfile(data);
         setDraftCouponCode(data.referralCode);
         if (typeof data.offerPrice === 'number') setCurrentOfferPrice(data.offerPrice);
+        onPartnerProfileUpdate?.(data);
       })
       .catch(() => {});
     return () => { alive = false; };
   }, []);
 
-  const handleCopyCoupon = (val: string) => {
-    navigator.clipboard.writeText(val);
-    setCopiedCoupon(val);
-    setTimeout(() => setCopiedCoupon(null), 2000);
+  const handleCopyRefLink = async (val: string, id: string) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(val);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = val;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      setCopiedItem({ id, type: 'link' });
+      setTimeout(() => setCopiedItem(null), 2000);
+    } catch {}
   };
 
-  const handleCopyRefLink = (val: string) => {
-    navigator.clipboard.writeText(val);
-    setCopiedRefLink(val);
-    setTimeout(() => setCopiedRefLink(null), 2000);
+  const handleCopyCoupon = async (val: string, id: string) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(val);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = val;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      setCopiedItem({ id, type: 'code' });
+      setTimeout(() => setCopiedItem(null), 2000);
+    } catch {}
   };
 
   const handleSaveCouponCode = async () => {
@@ -118,7 +172,12 @@ export default function ReferralIncomeHub() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'Could not save that code.');
-      setPartnerProfile((prev: any) => ({ ...(prev || {}), referralCode: body.referralCode, referralUrl: body.referralUrl }));
+      const updated = { ...(partnerProfile || {}), referralCode: body.referralCode, referralUrl: body.referralUrl };
+      setPartnerProfile(updated as any);
+      onPartnerProfileUpdate?.(updated);
+      if (selectedCampaignCode === partnerProfile?.referralCode) {
+        onSelectCampaign?.(body.referralCode);
+      }
       setEditingCoupon(false);
       setCouponSaveMsg('Coupon code updated successfully!');
       setTimeout(() => setCouponSaveMsg(null), 3000);
@@ -143,11 +202,13 @@ export default function ReferralIncomeHub() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'Could not save offer price.');
       setCurrentOfferPrice(body.offerPrice);
-      setPartnerProfile((prev: any) => ({
-        ...(prev || {}),
+      const updated = {
+        ...(partnerProfile || {}),
         offerPrice: body.offerPrice,
-        mentorEarns: body.mentorEarns
-      }));
+        mentorEarns: body.mentorEarns,
+      };
+      setPartnerProfile(updated as any);
+      onPartnerProfileUpdate?.(updated);
       setOfferPriceMsg(`Offer price updated to ₹${body.offerPrice}! You earn ₹${body.mentorEarns} per student upgrade.`);
       setTimeout(() => setOfferPriceMsg(null), 3500);
     } catch (e: any) {
@@ -169,19 +230,29 @@ export default function ReferralIncomeHub() {
         body: JSON.stringify({
           code: newLinkCode.trim().toUpperCase() || undefined,
           label: newLinkLabel.trim() || undefined,
-          offerPrice: newLinkPrice
+          offerPrice: newLinkPrice,
         }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'Could not create referral link.');
-      setPartnerProfile((prev: any) => ({
-        ...(prev || {}),
-        links: [body.link, ...((prev && prev.links) || [])]
-      }));
+      
+      const updatedLinks = [body.link, ...((partnerProfile && partnerProfile.links) || [])];
+      const updatedProfile = {
+        ...(partnerProfile || {}),
+        links: updatedLinks,
+      };
+      setPartnerProfile(updatedProfile as any);
+      onPartnerProfileUpdate?.(updatedProfile);
+      
+      // Auto-select this newly created link into top cards!
+      onSelectCampaign?.(body.link.code);
+      
       setShowCreateLinkModal(false);
       setNewLinkCode('');
       setNewLinkLabel('');
       setNewLinkPrice(399);
+      setCouponSaveMsg(`Referral link ${body.link.code} created and selected at the top!`);
+      setTimeout(() => setCouponSaveMsg(null), 4000);
     } catch (e: any) {
       setLinkError(e.message || 'Error creating link');
     } finally {
@@ -202,15 +273,23 @@ export default function ReferralIncomeHub() {
         body: JSON.stringify({
           code: editLinkCode.trim().toUpperCase(),
           label: editLinkLabel.trim(),
-          offerPrice: editLinkPrice
+          offerPrice: editLinkPrice,
         }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'Could not update link.');
-      setPartnerProfile((prev: any) => ({
-        ...(prev || {}),
-        links: (prev?.links || []).map((l: any) => l.id === editingLink.id ? body.link : l)
-      }));
+      
+      const updatedLinks = (partnerProfile?.links || []).map((l: any) => l.id === editingLink.id ? body.link : l);
+      const updatedProfile = {
+        ...(partnerProfile || {}),
+        links: updatedLinks,
+      };
+      setPartnerProfile(updatedProfile as any);
+      onPartnerProfileUpdate?.(updatedProfile);
+      
+      if (selectedCampaignCode === editingLink.code && body.link.code !== editingLink.code) {
+        onSelectCampaign?.(body.link.code);
+      }
       setEditingLink(null);
     } catch (e: any) {
       setLinkError(e.message || 'Error updating link');
@@ -229,10 +308,14 @@ export default function ReferralIncomeHub() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'Could not toggle link status.');
-      setPartnerProfile((prev: any) => ({
-        ...(prev || {}),
-        links: (prev?.links || []).map((l: any) => l.id === link.id ? body.link : l)
-      }));
+      
+      const updatedLinks = (partnerProfile?.links || []).map((l: any) => l.id === link.id ? body.link : l);
+      const updatedProfile = {
+        ...(partnerProfile || {}),
+        links: updatedLinks,
+      };
+      setPartnerProfile(updatedProfile as any);
+      onPartnerProfileUpdate?.(updatedProfile);
     } catch (e: any) {
       alert(e.message || 'Error toggling link status');
     }
@@ -247,10 +330,18 @@ export default function ReferralIncomeHub() {
         credentials: 'include',
       });
       if (!res.ok) throw new Error('Could not delete link.');
-      setPartnerProfile((prev: any) => ({
-        ...(prev || {}),
-        links: (prev?.links || []).filter((l: any) => l.id !== link.id)
-      }));
+      
+      const updatedLinks = (partnerProfile?.links || []).filter((l: any) => l.id !== link.id);
+      const updatedProfile = {
+        ...(partnerProfile || {}),
+        links: updatedLinks,
+      };
+      setPartnerProfile(updatedProfile as any);
+      onPartnerProfileUpdate?.(updatedProfile);
+      
+      if (selectedCampaignCode === link.code) {
+        onSelectCampaign?.(partnerProfile?.referralCode || '');
+      }
     } catch (e: any) {
       alert(e.message || 'Error deleting link');
     }
@@ -259,52 +350,52 @@ export default function ReferralIncomeHub() {
   return (
     <>
       {/* Mentor Partner Referral Pricing & Console */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-purple-950/40 via-violet-950/30 to-slate-900/90 border border-purple-500/30 shadow-xl relative overflow-hidden">
+      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-violet-950/30 to-slate-900/90 border border-purple-500/30 shadow-lg relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
 
         {/* Header */}
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-purple-500/20">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pb-2.5 border-b border-purple-500/20">
           <div>
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="p-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                <Ticket className="h-4 w-4" />
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="p-1 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                <Ticket className="h-3.5 w-3.5" />
               </span>
-              <h3 className="text-base font-extrabold text-white tracking-tight">Mentor Referral Pricing & Income Hub</h3>
-              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider">
+              <h3 className="text-sm sm:text-base font-extrabold text-white tracking-tight">Mentor Referral Pricing & Income Hub</h3>
+              <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider">
                 Standard Price: ₹499/mo
               </span>
             </div>
-            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+            <p className="text-[11px] text-slate-300 max-w-3xl leading-snug">
               Set student offer prices between <strong className="text-white">₹199 and ₹499</strong>. Students see <span className="line-through text-slate-400">₹499</span> crossed out and pay your offer price. Your referral income is automatically calculated as: <strong className="text-emerald-400">Student Pays - ₹199</strong>.
             </p>
             {couponSaveMsg && (
-              <p className="text-xs text-emerald-400 font-semibold mt-1.5 animate-fade-in flex items-center gap-1.5">
-                <CheckCircle className="h-3.5 w-3.5" /> {couponSaveMsg}
+              <p className="text-[11px] text-emerald-400 font-semibold mt-1 animate-fade-in flex items-center gap-1.5">
+                <CheckCircle className="h-3 w-3" /> {couponSaveMsg}
               </p>
             )}
             {offerPriceMsg && (
-              <p className="text-xs text-emerald-400 font-semibold mt-1.5 animate-fade-in flex items-center gap-1.5">
-                <CheckCircle className="h-3.5 w-3.5" /> {offerPriceMsg}
+              <p className="text-[11px] text-emerald-400 font-semibold mt-1 animate-fade-in flex items-center gap-1.5">
+                <CheckCircle className="h-3 w-3" /> {offerPriceMsg}
               </p>
             )}
           </div>
         </div>
 
         {/* Dynamic Offer Price Slider & Live Income Calculator */}
-        <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
-          <div className="lg:col-span-7 space-y-3">
+        <div className="mt-3.5 grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-center">
+          <div className="lg:col-span-7 space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                <Sliders className="h-3.5 w-3.5 text-purple-400" />
+              <label className="text-[11px] font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <Sliders className="h-3 w-3 text-purple-400" />
                 Student Offer Price Slider:
               </label>
-              <span className="text-xs text-slate-400">
+              <span className="text-[11px] text-slate-400">
                 Range: <strong className="text-slate-200">₹199 – ₹499</strong>
               </span>
             </div>
 
             {/* Range Slider */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               <input
                 type="range"
                 min={199}
@@ -312,9 +403,9 @@ export default function ReferralIncomeHub() {
                 step={10}
                 value={currentOfferPrice}
                 onChange={(e) => setCurrentOfferPrice(Number(e.target.value))}
-                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
+                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
               />
-              <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+              <div className="flex justify-between text-[10px] text-slate-400 font-mono">
                 <span>₹199 (Max Discount)</span>
                 <span>₹299</span>
                 <span>₹399</span>
@@ -323,7 +414,7 @@ export default function ReferralIncomeHub() {
             </div>
 
             {/* Preset Buttons */}
-            <div className="flex flex-wrap gap-2 pt-1">
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
               {[
                 { price: 499, label: '₹499 (Standard)', earns: 300 },
                 { price: 399, label: '₹399 (20% Off)', earns: 200 },
@@ -337,14 +428,14 @@ export default function ReferralIncomeHub() {
                     setCurrentOfferPrice(p.price);
                     handleSaveOfferPrice(p.price);
                   }}
-                  className={`px-2.5 py-1 text-[11px] rounded-lg border font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-2 py-0.5 text-[10.5px] rounded-md border font-semibold transition cursor-pointer flex items-center gap-1 ${
                     currentOfferPrice === p.price
-                      ? 'bg-purple-600/30 border-purple-500 text-purple-200 shadow-sm'
+                      ? 'bg-purple-600/30 border-purple-500 text-purple-200 shadow-xs'
                       : 'bg-slate-900/60 border-slate-700/60 text-slate-300 hover:border-slate-500'
                   }`}
                 >
                   <span>{p.label}</span>
-                  <span className="text-[10px] text-emerald-400 font-bold">Earn ₹{p.earns}</span>
+                  <span className="text-[9.5px] text-emerald-400 font-bold">Earn ₹{p.earns}</span>
                 </button>
               ))}
               {currentOfferPrice !== (partnerProfile?.offerPrice || 499) && (
@@ -352,7 +443,7 @@ export default function ReferralIncomeHub() {
                   type="button"
                   onClick={() => handleSaveOfferPrice(currentOfferPrice)}
                   disabled={savingOfferPrice}
-                  className="px-3 py-1 text-[11px] rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition cursor-pointer shadow-sm ml-auto"
+                  className="px-2.5 py-0.5 text-[10.5px] rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition cursor-pointer shadow-xs ml-auto"
                 >
                   {savingOfferPrice ? 'Saving...' : 'Apply Price'}
                 </button>
@@ -361,27 +452,27 @@ export default function ReferralIncomeHub() {
           </div>
 
           {/* Live Preview Display Box */}
-          <div className="lg:col-span-5 p-4 rounded-xl bg-slate-950/80 border border-purple-500/25 space-y-3">
-            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+          <div className="lg:col-span-5 p-2.5 sm:p-3 rounded-xl bg-slate-950/80 border border-purple-500/25 space-y-1.5">
+            <div className="text-[9.5px] uppercase font-bold tracking-wider text-slate-400">
               Live Conversion Preview
             </div>
-            <div className="grid grid-cols-2 gap-3 pt-1 border-t border-white/[0.06]">
+            <div className="grid grid-cols-2 gap-2.5 pt-1 border-t border-white/[0.06]">
               <div>
-                <span className="text-[11px] text-slate-400 block">Student Sees & Pays:</span>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span className="line-through text-slate-500 text-sm">₹499</span>
-                  <span className="text-2xl font-black text-emerald-400 font-display">₹{currentOfferPrice}</span>
+                <span className="text-[10px] text-slate-400 block">Student Sees & Pays:</span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="line-through text-slate-500 text-xs">₹499</span>
+                  <span className="text-xl font-black text-emerald-400 font-display">₹{currentOfferPrice}</span>
                 </div>
-                <span className="text-[10px] text-emerald-300 font-medium">
+                <span className="text-[9.5px] text-emerald-300 font-medium">
                   Student saves ₹{499 - currentOfferPrice}
                 </span>
               </div>
               <div>
-                <span className="text-[11px] text-slate-400 block">Your Referral Income:</span>
-                <div className="text-2xl font-black text-purple-300 font-display mt-0.5">
+                <span className="text-[10px] text-slate-400 block">Your Referral Income:</span>
+                <div className="text-xl font-black text-purple-300 font-display mt-0.5">
                   ₹{Math.max(0, currentOfferPrice - 199)}
                 </div>
-                <span className="text-[10px] text-slate-400 font-medium">
+                <span className="text-[9.5px] text-slate-400 font-medium">
                   Platform floor: ₹199
                 </span>
               </div>
@@ -390,23 +481,23 @@ export default function ReferralIncomeHub() {
         </div>
 
         {/* Custom Referral Links & Campaign Manager */}
-        <div className="mt-5 pt-4 border-t border-purple-500/20">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+        <div className="mt-3.5 pt-3 border-t border-purple-500/20">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
             <div>
               <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Link2 className="h-3.5 w-3.5 text-violet-400" />
+                <Link2 className="h-3 w-3 text-violet-400" />
                 Referral Links & Campaigns
               </h4>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[10.5px] text-slate-400">
                 Create, edit, manage, or revoke custom referral links with unique offer prices.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setShowCreateLinkModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm self-start sm:self-auto"
+              className="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-bold text-[11px] flex items-center gap-1 transition cursor-pointer shadow-xs self-start sm:self-auto"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-3 w-3" />
               Create New Referral Link
             </button>
           </div>
@@ -414,129 +505,251 @@ export default function ReferralIncomeHub() {
           {/* Links Table */}
           <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
             <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-900/90 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-900/90 text-[9px] uppercase font-bold text-slate-400 border-b border-slate-800">
                 <tr>
-                  <th className="py-2.5 px-3">Campaign / Code</th>
-                  <th className="py-2.5 px-3">Student Pays</th>
-                  <th className="py-2.5 px-3">Your Income</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3 text-right">Actions</th>
+                  <th className="py-1.5 px-3">Campaign / Code</th>
+                  <th className="py-1.5 px-3">Student Pays</th>
+                  <th className="py-1.5 px-3">Your Income</th>
+                  <th className="py-1.5 px-3">Status</th>
+                  <th className="py-1.5 px-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {/* Primary Link Row */}
-                <tr className="hover:bg-white/[0.02] transition">
+                <tr className={`hover:bg-white/[0.02] transition ${selectedCampaignCode === (partnerProfile?.referralCode || 'MENTOR60') || !selectedCampaignCode ? 'bg-violet-950/20' : ''}`}>
                   <td className="py-2.5 px-3">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/20">
+                      <span className="font-mono font-bold text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded-lg border border-violet-500/20 text-xs">
                         {partnerProfile?.referralCode || 'MENTOR60'}
                       </span>
                       <span className="text-[10px] text-slate-400 font-semibold">(Primary Default)</span>
+                      {(selectedCampaignCode === (partnerProfile?.referralCode || 'MENTOR60') || !selectedCampaignCode) && (
+                        <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                          Active at Top
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="py-2.5 px-3">
-                    <span className="line-through text-slate-500 mr-1.5 text-[11px]">₹499</span>
-                    <strong className="text-emerald-400 font-bold">₹{currentOfferPrice}</strong>
+                    <span className="line-through text-slate-500 mr-1.5 text-xs">₹499</span>
+                    <strong className="text-emerald-400 font-bold text-xs">₹{currentOfferPrice}</strong>
                   </td>
                   <td className="py-2.5 px-3">
-                    <strong className="text-purple-300 font-bold">₹{Math.max(0, currentOfferPrice - 199)}</strong>
+                    <strong className="text-purple-300 font-bold text-xs">₹{Math.max(0, currentOfferPrice - 199)}</strong>
                     <span className="text-[10px] text-slate-500 ml-1">/ upgrade</span>
                   </td>
                   <td className="py-2.5 px-3">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                       Active
                     </span>
                   </td>
                   <td className="py-2.5 px-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleCopyRefLink(partnerProfile?.referralUrl || `${window.location.origin}/?ref=${partnerProfile?.referralCode || 'MENTOR60'}`)}
-                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold inline-flex items-center gap-1 transition cursor-pointer"
-                    >
-                      {copiedRefLink === (partnerProfile?.referralUrl || `${window.location.origin}/?ref=${partnerProfile?.referralCode || 'MENTOR60'}`) ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                      Copy Link
-                    </button>
+                    <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                      {/* Copy Link */}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyRefLink(partnerProfile?.referralUrl || `${window.location.origin}/?ref=${partnerProfile?.referralCode || 'MENTOR60'}`, 'primary')}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10.5px] font-semibold inline-flex items-center gap-1.5 transition cursor-pointer border border-slate-700"
+                        title="Copy full referral link"
+                      >
+                        {copiedItem?.id === 'primary' && copiedItem?.type === 'link' ? (
+                          <>
+                            <Check className="h-3 w-3 text-emerald-400" />
+                            <span className="text-emerald-300 font-bold">Copied Link!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3 text-slate-400" />
+                            <span>Copy Link</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Copy Code */}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCoupon(partnerProfile?.referralCode || 'MENTOR60', 'primary')}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10.5px] font-semibold inline-flex items-center gap-1.5 transition cursor-pointer border border-slate-700"
+                        title="Copy coupon code only"
+                      >
+                        {copiedItem?.id === 'primary' && copiedItem?.type === 'code' ? (
+                          <>
+                            <Check className="h-3 w-3 text-emerald-400" />
+                            <span className="text-emerald-300 font-bold">Copied Code!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Ticket className="h-3 w-3 text-violet-400" />
+                            <span>Copy Code</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Select for top hero */}
+                      <button
+                        type="button"
+                        onClick={() => onSelectCampaign?.(partnerProfile?.referralCode || '')}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                          selectedCampaignCode === partnerProfile?.referralCode || !selectedCampaignCode
+                            ? 'bg-violet-600/30 text-violet-300 border border-violet-500/40 shadow-xs'
+                            : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                        }`}
+                        title="View and copy in top cards"
+                      >
+                        {selectedCampaignCode === partnerProfile?.referralCode || !selectedCampaignCode ? (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
+                            Active at Top
+                          </>
+                        ) : (
+                          'Use at Top'
+                        )}
+                      </button>
+                    </div>
                   </td>
                 </tr>
 
                 {/* Custom Links Rows */}
-                {(partnerProfile?.links || []).map((link) => (
-                  <tr key={link.id} className="hover:bg-white/[0.02] transition">
-                    <td className="py-2.5 px-3">
-                      <div className="flex flex-col">
+                {(partnerProfile?.links || []).map((link) => {
+                  const isSelected = selectedCampaignCode === link.code;
+                  return (
+                    <tr key={link.id} className={`hover:bg-white/[0.02] transition ${isSelected ? 'bg-violet-950/20' : ''}`}>
+                      <td className="py-2.5 px-3">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/20">
+                          <span className="font-mono font-bold text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded-lg border border-violet-500/20 text-xs">
                             {link.code}
                           </span>
-                          <span className="text-[11px] text-slate-300 font-medium">{link.label || 'Custom Offer'}</span>
+                          <span className="text-xs text-slate-300 font-medium">{link.label || 'Custom Offer'}</span>
+                          {isSelected && (
+                            <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                              Active at Top
+                            </span>
+                          )}
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <span className="line-through text-slate-500 mr-1.5 text-[11px]">₹499</span>
-                      <strong className="text-emerald-400 font-bold">₹{link.offerPrice}</strong>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <strong className="text-purple-300 font-bold">₹{Math.max(0, link.offerPrice - 199)}</strong>
-                      <span className="text-[10px] text-slate-500 ml-1">/ upgrade</span>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                        link.isActive
-                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                          : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                      }`}>
-                        {link.isActive ? 'Active' : 'Revoked'}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-right">
-                      <div className="inline-flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleCopyRefLink(link.referralUrl || `${window.location.origin}/?ref=${link.code}`)}
-                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold inline-flex items-center gap-1 transition cursor-pointer"
-                          title="Copy Link"
-                        >
-                          {copiedRefLink === (link.referralUrl || `${window.location.origin}/?ref=${link.code}`) ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                          Copy
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingLink(link);
-                            setEditLinkCode(link.code);
-                            setEditLinkLabel(link.label || '');
-                            setEditLinkPrice(link.offerPrice);
-                          }}
-                          className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-                          title="Edit link"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleLinkActive(link)}
-                          className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center gap-1 ${
-                            link.isActive
-                              ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25'
-                              : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/25'
-                          }`}
-                          title={link.isActive ? 'Revoke link' : 'Reactivate link'}
-                        >
-                          {link.isActive ? 'Revoke' : 'Activate'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteReferralLink(link)}
-                          className="p-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition cursor-pointer"
-                          title="Delete link"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className="line-through text-slate-500 mr-1.5 text-xs">₹499</span>
+                        <strong className="text-emerald-400 font-bold text-xs">₹{link.offerPrice}</strong>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <strong className="text-purple-300 font-bold text-xs">₹{Math.max(0, link.offerPrice - 199)}</strong>
+                        <span className="text-[10px] text-slate-500 ml-1">/ upgrade</span>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-semibold border ${
+                          link.isActive
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                            : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                        }`}>
+                          {link.isActive ? 'Active' : 'Revoked'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                          {/* Copy Link */}
+                          <button
+                            type="button"
+                            onClick={() => handleCopyRefLink(link.referralUrl || `${window.location.origin}/?ref=${encodeURIComponent(link.code)}`, link.id)}
+                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10.5px] font-semibold inline-flex items-center gap-1.5 transition cursor-pointer border border-slate-700"
+                            title="Copy full referral link"
+                          >
+                            {copiedItem?.id === link.id && copiedItem?.type === 'link' ? (
+                              <>
+                                <Check className="h-3 w-3 text-emerald-400" />
+                                <span className="text-emerald-300 font-bold">Copied Link!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3 text-slate-400" />
+                                <span>Copy Link</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Copy Code */}
+                          <button
+                            type="button"
+                            onClick={() => handleCopyCoupon(link.code, link.id)}
+                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10.5px] font-semibold inline-flex items-center gap-1.5 transition cursor-pointer border border-slate-700"
+                            title="Copy coupon code only"
+                          >
+                            {copiedItem?.id === link.id && copiedItem?.type === 'code' ? (
+                              <>
+                                <Check className="h-3 w-3 text-emerald-400" />
+                                <span className="text-emerald-300 font-bold">Copied Code!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Ticket className="h-3 w-3 text-violet-400" />
+                                <span>Copy Code</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Select for top hero */}
+                          <button
+                            type="button"
+                            onClick={() => onSelectCampaign?.(link.code)}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                              isSelected
+                                ? 'bg-violet-600/30 text-violet-300 border border-violet-500/40 shadow-xs'
+                                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                            title="View and copy in top cards"
+                          >
+                            {isSelected ? (
+                              <>
+                                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
+                                Active at Top
+                              </>
+                            ) : (
+                              'Use at Top'
+                            )}
+                          </button>
+
+                          {/* Edit */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingLink(link);
+                              setEditLinkCode(link.code);
+                              setEditLinkLabel(link.label || '');
+                              setEditLinkPrice(link.offerPrice);
+                            }}
+                            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer border border-slate-700"
+                            title="Edit campaign"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+
+                          {/* Toggle Active / Revoke */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLinkActive(link)}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition cursor-pointer ${
+                              link.isActive
+                                ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25'
+                                : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/25'
+                            }`}
+                            title={link.isActive ? 'Revoke link' : 'Reactivate link'}
+                          >
+                            {link.isActive ? 'Revoke' : 'Activate'}
+                          </button>
+
+                          {/* Delete */}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteReferralLink(link)}
+                            className="p-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+                            title="Delete link"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

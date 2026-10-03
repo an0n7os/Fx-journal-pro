@@ -541,7 +541,7 @@ Their referral link stops working and ` +
               {isSubAdmin ? 'FX Journal Pro Partner Portal' : 'FX Journal Pro Operations Console'}
             </h2>
             <span className={`text-[11px] ${isSubAdmin ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'} font-bold px-2.5 py-1 rounded-full border tracking-wide uppercase`}>
-              {isSubAdmin ? 'Partner Portal' : 'Admin & Mentor Access'}
+              {isSubAdmin ? 'Partner Portal' : 'Admin'}
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
@@ -835,62 +835,67 @@ Their referral link stops working and ` +
           </div>
 
           {/* User Table */}
-          <div className="overflow-x-auto bg-slate-900/60 rounded-2xl border border-slate-800/90 shadow-sm">
-            <table className="w-full text-left border-collapse text-xs">
+          {/* User Table */}
+          <div className="overflow-x-auto bg-[#0a0d17]/80 rounded-2xl border border-white/[0.08] shadow-2xl backdrop-blur-xl">
+            <table className="min-w-[1120px] w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-wider font-bold bg-slate-900/90">
-                  <th className="py-3.5 px-4">User Details</th>
-                  <th className="py-3.5 px-4">Plan Tier</th>
-                  <th className="py-3.5 px-4">Last Activity</th>
-                  <th className="py-3.5 px-4">Trading Profile</th>
-                  <th className="py-3.5 px-4 text-center">Accounts & Trades</th>
-                  <th className="py-3.5 px-4">Referral Info</th>
-                  <th className="py-3.5 px-4 text-center">Status</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
+                <tr className="border-b border-white/[0.08] text-slate-400 uppercase tracking-wider font-extrabold bg-white/[0.02] text-[10px]">
+                  <th className="py-3 px-4 min-w-[210px]">User Details</th>
+                  <th className="py-3 px-4 min-w-[130px]">Plan Tier</th>
+                  <th className="py-3 px-4 min-w-[150px]">Last Activity</th>
+                  <th className="py-3 px-4 min-w-[130px]">Trading Profile</th>
+                  <th className="py-3 px-4 text-center min-w-[190px]">Accounts &amp; Trades</th>
+                  <th className="py-3 px-4 min-w-[150px]">Referral Info</th>
+                  <th className="py-3 px-4 text-center min-w-[110px]">Status</th>
+                  <th className="py-3 px-4 text-right min-w-[230px]">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-white/[0.05]">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-10 text-center text-slate-500">
+                    <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
                       No matching users found in registry.
                     </td>
                   </tr>
                 ) : (
                   filteredUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-800/40 transition group">
+                    <tr key={u.id} className="hover:bg-white/[0.025] transition-colors group">
                       {/* User Details */}
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-white flex items-center gap-1.5">
-                          {u.name || 'Trader'}
+                        <div className="font-bold text-white flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-bold text-white tracking-tight">{u.name || 'Trader'}</span>
                           {u.authProvider === 'google' && (
-                            <span title="Google Account" className="text-[10px] px-1 rounded bg-red-500/10 text-red-400 border border-red-500/20">G</span>
+                            <span title="Google Account" className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.06] text-slate-300 border border-white/10 font-bold">
+                              G
+                            </span>
                           )}
                           {u.role && u.role !== 'USER' && (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                              {u.role}
+                            <span className="text-[9.5px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-violet-500/15 text-violet-300 border border-violet-500/25">
+                              {u.role === 'SUPER_ADMIN' ? 'Super Admin' : u.role}
                             </span>
                           )}
                         </div>
                         {!isSubAdmin && (
-                          <div className="text-[11px] text-slate-400 font-mono mt-0.5">{u.email}</div>
+                          <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate max-w-[220px]" title={u.email}>
+                            {u.email}
+                          </div>
                         )}
                       </td>
 
                       {/* Plan Tier with quick toggle */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex flex-col items-start gap-1">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap shadow-xs ${
                             u.isPro 
-                              ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' 
-                              : 'bg-slate-800 text-slate-400 border border-slate-700'
+                              ? 'bg-amber-400/[0.08] text-amber-300 border border-amber-400/25' 
+                              : 'bg-slate-800/60 text-slate-400 border border-slate-700/50'
                           }`}>
-                            {u.isPro ? <Crown className="h-3 w-3 text-amber-400 fill-amber-400" /> : null}
+                            {u.isPro ? <Crown className="h-3 w-3 text-amber-400 fill-amber-400/80 shrink-0" /> : null}
                             {u.isPro ? 'Pro Member' : 'Free Basic'}
                           </span>
                           <button
                             onClick={() => handleToggleUserPlan(u.id, !!u.isPro)}
-                            className="text-[10px] text-slate-500 hover:text-slate-300 underline decoration-dotted transition"
+                            className="text-[10px] text-slate-500 hover:text-slate-300 underline decoration-dotted transition cursor-pointer"
                           >
                             {u.isPro ? 'Revoke Pro' : 'Grant Pro'}
                           </button>
@@ -898,82 +903,81 @@ Their referral link stops working and ` +
                       </td>
 
                       {/* Last Activity */}
-                      <td className="py-3.5 px-4">
-                        <div className="text-slate-300 font-medium text-[11px]">{formatDateTime(u.lastLogin)}</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="text-slate-200 font-medium text-xs">{formatDateTime(u.lastLogin)}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
                           Joined: {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
                         </div>
                       </td>
 
                       {/* Trading Profile */}
-                      <td className="py-3.5 px-4">
-                        <div className="text-slate-200 font-medium">{u.tradingStyle || 'Discretionary'}</div>
-                        <div className="text-[10px] text-slate-400">{u.experience || 'Intermediate'}</div>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="text-slate-200 font-medium text-xs">{u.tradingStyle || 'Discretionary'}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">{u.experience || 'Intermediate'}</div>
                       </td>
 
                       {/* Accounts & Trades Count */}
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="inline-flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono font-bold">
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-300 text-xs font-semibold whitespace-nowrap">
                             {u.accountsCount || 0} acc
                           </span>
                           <button
                             type="button"
                             onClick={() => onInspectUser?.(u)}
-                            className="px-2.5 py-1 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 hover:border-emerald-400 font-mono font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 border border-emerald-500/20 hover:border-emerald-500/35 text-xs font-semibold transition-all whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
                             title="Click to inspect all trades & journal"
                           >
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/25 shrink-0" />
                             <span>{u.tradesCount || 0} trades</span>
                           </button>
                         </div>
                       </td>
 
                       {/* Referral Info */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1 text-[11px] font-mono text-violet-300">
-                          <Gift className="h-3 w-3 text-violet-400" />
-                          <span className="bg-violet-500/10 px-1.5 py-0.2 rounded border border-violet-500/20">
-                            {u.referralCode || 'FX-100'}
-                          </span>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5 text-xs font-mono text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded-lg border border-violet-500/20 whitespace-nowrap">
+                          <Gift className="h-3 w-3 text-violet-400 shrink-0" />
+                          <span className="font-bold">{u.referralCode || 'FX-100'}</span>
                         </div>
-                        <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
-                          <span>Ref: <strong className="text-white">{u.referralCount || 0}</strong></span>
-                          <span>Earned: <strong className="text-emerald-400">₹{u.referralIncome || 0}</strong></span>
+                        <div className="text-[10.5px] text-slate-400 mt-1 flex items-center gap-1.5 whitespace-nowrap">
+                          <span>Ref: <strong className="text-white font-semibold">{u.referralCount || 0}</strong></span>
+                          <span className="text-slate-600">•</span>
+                          <span>Earned: <strong className="text-emerald-400 font-semibold">₹{u.referralIncome || 0}</strong></span>
                         </div>
                       </td>
 
                       {/* Status */}
-                      <td className="py-3.5 px-4 text-center">
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         {u.role === 'PARTNER' && (
-                          <span className="mb-1 block mx-auto w-fit px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-violet-500/10 text-violet-300 border border-violet-500/25">
+                          <span className="mb-1 block mx-auto w-fit px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-violet-500/15 text-violet-300 border border-violet-500/25 whitespace-nowrap">
                             Partner
                           </span>
                         )}
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase ${
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase whitespace-nowrap ${
                           !u.status || u.status === 'ACTIVE' 
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                             : 'bg-red-500/10 text-red-400 border border-red-500/20'
                         }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${(!u.status || u.status === 'ACTIVE') ? 'bg-emerald-400' : 'bg-red-400'}`} />
                           {u.status || 'ACTIVE'}
                         </span>
                       </td>
 
                       {/* Actions: Analysis Icon on the right side */}
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                           {/* MENTOR ANALYSIS ICON BUTTON */}
                           <button
                             onClick={() => onInspectUser?.(u)}
-                            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:via-purple-500 hover:to-indigo-500 text-white font-black text-xs flex items-center gap-1.5 transition-all shadow-md shadow-violet-500/30 hover:scale-105 active:scale-95 shrink-0 border border-violet-400/30 cursor-pointer"
+                            className="px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm hover:shadow-violet-600/30 hover:scale-[1.02] active:scale-95 shrink-0 border border-violet-400/30 cursor-pointer"
                             title="Inspect User Dashboard & Analysis (Mentor Read-Only Mode)"
                           >
-                            <BarChart3 className="h-4 w-4 text-white" />
+                            <BarChart3 className="h-3.5 w-3.5 text-white" />
                             <span>Analysis</span>
                           </button>
 
-                          {/* Partner role. Only offered where it makes sense —
-                              an admin account is already above this. */}
+                          {/* Partner role */}
                           {myPermissions.includes('partner.manage') &&
                            !['SUPER_ADMIN', 'ADMIN'].includes(u.role) && (
                             u.role === 'PARTNER' ? (
@@ -981,7 +985,7 @@ Their referral link stops working and ` +
                                 onClick={() => handleRemovePartner(u)}
                                 disabled={partnerBusy === u.id}
                                 title="Remove Partner access"
-                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-700/40 text-slate-300 hover:bg-slate-700/70 border border-slate-600/40 transition disabled:opacity-40"
+                                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] text-slate-300 border border-white/[0.08] transition disabled:opacity-40 cursor-pointer"
                               >
                                 Remove Partner
                               </button>
@@ -990,26 +994,26 @@ Their referral link stops working and ` +
                                 onClick={() => handleUpgradeToPartner(u)}
                                 disabled={partnerBusy === u.id}
                                 title="Make this user a Partner — grants Pro and a referral link"
-                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-violet-500/10 text-violet-300 hover:bg-violet-500/20 border border-violet-500/25 transition disabled:opacity-40"
+                                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-violet-500/10 text-violet-300 hover:bg-violet-500/20 border border-violet-500/25 transition disabled:opacity-40 cursor-pointer"
                               >
                                 {partnerBusy === u.id ? 'Working…' : 'Upgrade to Partner'}
                               </button>
                             )
                           )}
 
-                          {/* Suspend / Reactivate - Admins only, never Sub-Admin / Mentors */}
+                          {/* Suspend / Reactivate */}
                           {!isSubAdmin && myPermissions.includes('users.manage') && (
                             (!u.status || u.status === 'ACTIVE') ? (
                               <button
                                 onClick={() => handleUpdateUserStatus(u.id, 'SUSPENDED')}
-                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition"
+                                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition cursor-pointer"
                               >
                                 Suspend
                               </button>
                             ) : (
                               <button
                                 onClick={() => handleUpdateUserStatus(u.id, 'ACTIVE')}
-                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition"
+                                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition cursor-pointer"
                               >
                                 Reactivate
                               </button>

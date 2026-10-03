@@ -760,9 +760,9 @@ const TradingViewChart = memo(function TradingViewChart({
 
             <div className={`w-px h-4 ${isDark ? 'bg-slate-700' : 'bg-slate-200'} mx-0.5 flex-shrink-0 hidden sm:block`} />
 
-            {/* Timeframe selector (horizontal swipeable without wrapping on mobile) */}
+            {/* Timeframe selector (desktop only inline, mobile has dedicated row below) */}
             <div
-              className="flex items-center gap-1 overflow-x-auto py-0.5 flex-1 min-w-0"
+              className="hidden md:flex items-center gap-1 overflow-x-auto py-0.5 flex-1 min-w-0"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {TIMEFRAMES.map(tf => (
@@ -816,7 +816,7 @@ const TradingViewChart = memo(function TradingViewChart({
             )}
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
+            <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
               {/* Mobile Filter toggle */}
               <button
                 type="button"
@@ -861,6 +861,27 @@ const TradingViewChart = memo(function TradingViewChart({
                 <ChevronUp className="h-3.5 w-3.5" />
               </button>
             </div>
+          </div>
+
+          {/* Dedicated Mobile Timeframe Row */}
+          <div
+            className="flex md:hidden items-center gap-1.5 overflow-x-auto py-1 scrollbar-none w-full border-t border-slate-200/50 dark:border-slate-800/60"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {TIMEFRAMES.map(tf => (
+              <button
+                key={tf.value}
+                onClick={() => setTimeframe(tf.value)}
+                className={`text-xs font-bold px-2.5 py-1 rounded-lg transition shrink-0 cursor-pointer ${timeframe === tf.value ? btnActive : btnInactive}`}
+              >
+                {tf.label}
+              </button>
+            ))}
+            {countdown && (
+              <span className={`ml-auto flex items-center gap-1 text-[10px] font-bold ${isDark ? 'text-indigo-400 bg-indigo-900/30' : 'text-indigo-600 bg-indigo-50'} px-2 py-1 rounded-md shrink-0`}>
+                ⏱ {countdown}
+              </span>
+            )}
           </div>
 
           {/* Mobile Collapsible Filters Drawer */}

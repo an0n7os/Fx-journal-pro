@@ -771,14 +771,172 @@ export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
   };
 
   return (
-    <div className="w-full text-slate-100 antialiased pb-8">
+    <div className="w-full text-slate-100 antialiased pb-24 md:pb-8">
       {/* Main Glass Workspace Container */}
-      <div className="dx-dark-surface relative rounded-2xl bg-[#080C16] border border-slate-800/90 shadow-2xl overflow-hidden min-h-[680px] h-[calc(100vh-215px)] flex flex-col md:flex-row backdrop-blur-xl">
+      <div className="dx-dark-surface relative rounded-2xl bg-[#080C16] border border-slate-800/90 shadow-2xl overflow-hidden min-h-[500px] md:min-h-[680px] h-[calc(100dvh-135px)] md:h-[calc(100vh-215px)] flex flex-col md:flex-row backdrop-blur-xl">
         
         {/* ========================================================
-            LEFT SIDEBAR (Search, New button, Navigation, Folders, Tags)
+            MOBILE TOP COMPACT BAR (Visible on mobile when not editing)
             ======================================================== */}
-        <aside className={`w-full md:w-64 lg:w-72 shrink-0 bg-[#070a12]/95 border-b md:border-b-0 md:border-r border-slate-800/80 p-4 flex flex-col justify-between select-none ${mobileShowEditor ? 'hidden md:flex' : 'flex'}`}>
+        <div className={`md:hidden shrink-0 bg-[#070a12]/95 border-b border-slate-800/80 p-2.5 flex flex-col gap-2 select-none ${mobileShowEditor ? 'hidden' : 'flex'}`}>
+          {/* Row 1: Search + New Note Button */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search notes..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-[#0d1322] border border-slate-700/60 rounded-xl pl-8 pr-7 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Mobile New Note Button */}
+            <div className="relative shrink-0" ref={templateMenuRef}>
+              <div className="flex items-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 shadow-md">
+                <button
+                  onClick={() => handleCreateNote()}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white tracking-wide active:scale-95"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>New</span>
+                </button>
+                <button
+                  onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
+                  className="px-1.5 py-1.5 border-l border-white/20 text-white/90"
+                  title="Choose Template"
+                >
+                  <ChevronDown className={`h-3 w-3 transition-transform ${templateMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+
+              {templateMenuOpen && (
+                <div className="absolute right-0 top-full mt-1.5 z-50 w-56 rounded-xl bg-[#0f172a] border border-slate-700/80 shadow-2xl p-1.5 animate-in fade-in">
+                  <div className="px-2.5 py-1 text-[10px] font-mono uppercase text-slate-400 tracking-wider">
+                    Quick Templates
+                  </div>
+                  <button
+                    onClick={() => handleCreateNote('blank')}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:bg-indigo-600/20 hover:text-indigo-300 flex items-center gap-2"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Blank Note</span>
+                  </button>
+                  <button
+                    onClick={() => handleCreateNote('preMarket')}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:bg-indigo-600/20 hover:text-indigo-300 flex items-center gap-2"
+                  >
+                    <span>🌅</span>
+                    <span>Daily Pre-Market Prep</span>
+                  </button>
+                  <button
+                    onClick={() => handleCreateNote('postMarket')}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:bg-indigo-600/20 hover:text-indigo-300 flex items-center gap-2"
+                  >
+                    <span>🌆</span>
+                    <span>Daily Post-Market Review</span>
+                  </button>
+                  <button
+                    onClick={() => handleCreateNote('psychology')}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:bg-indigo-600/20 hover:text-indigo-300 flex items-center gap-2"
+                  >
+                    <span>🧠</span>
+                    <span>Psychology Check</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Horizontal Filter Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 text-xs">
+            <button
+              onClick={() => { setFilterType('all'); setSelectedTag(null); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold shrink-0 transition flex items-center gap-1 ${
+                filterType === 'all'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80'
+              }`}
+            >
+              <FileText className="h-3 w-3" />
+              <span>All ({navCounts.all})</span>
+            </button>
+
+            <button
+              onClick={() => { setFilterType('favourites'); setSelectedTag(null); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold shrink-0 transition flex items-center gap-1 ${
+                filterType === 'favourites'
+                  ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
+                  : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80'
+              }`}
+            >
+              <Star className="h-3 w-3 fill-current text-amber-400" />
+              <span>Favs ({navCounts.favourites})</span>
+            </button>
+
+            {folders.map(folder => {
+              const isSelected = filterType === 'folder' && selectedFolder === folder;
+              return (
+                <button
+                  key={folder}
+                  onClick={() => { setFilterType('folder'); setSelectedFolder(folder); setSelectedTag(null); }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold shrink-0 transition flex items-center gap-1 ${
+                    isSelected
+                      ? 'bg-blue-600/25 border border-blue-500/40 text-blue-300'
+                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80'
+                  }`}
+                >
+                  <Folder className="h-3 w-3 text-blue-400" />
+                  <span>{folder} ({folderCounts[folder] || 0})</span>
+                </button>
+              );
+            })}
+
+            {customTags.map(tag => {
+              const isSelected = filterType === 'tag' && selectedTag === tag;
+              return (
+                <button
+                  key={tag}
+                  onClick={() => { setFilterType('tag'); setSelectedTag(tag); }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono shrink-0 transition flex items-center gap-1 ${
+                    isSelected
+                      ? 'bg-violet-600/25 border border-violet-500/40 text-violet-300'
+                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80'
+                  }`}
+                >
+                  <TagIcon className="h-3 w-3 text-violet-400" />
+                  <span>#{tag}</span>
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => { setFilterType('trash'); setSelectedTag(null); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold shrink-0 transition flex items-center gap-1 ${
+                filterType === 'trash'
+                  ? 'bg-rose-500/20 border border-rose-500/40 text-rose-300'
+                  : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700/80'
+              }`}
+            >
+              <Trash2 className="h-3 w-3 text-rose-400" />
+              <span>Trash ({navCounts.trash})</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ========================================================
+            DESKTOP LEFT SIDEBAR (Hidden on mobile)
+            ======================================================== */}
+        <aside className="hidden md:flex w-64 lg:w-72 shrink-0 bg-[#070a12]/95 border-r border-slate-800/80 p-4 flex-col justify-between select-none">
           <div className="space-y-4">
             
             {/* Search Input */}
@@ -1118,8 +1276,8 @@ export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
           /* 2 Panes when notes exist: Column 2 (Notes List) + Column 3 (Full Note Editor) */
           <>
             {/* Column 2: Note Cards List */}
-            <section className={`w-full md:w-72 lg:w-80 shrink-0 border-b md:border-b-0 md:border-r border-slate-800/80 bg-[#070b14]/70 flex flex-col min-w-0 ${mobileShowEditor ? 'hidden md:flex' : 'flex'}`}>
-              <div className="h-14 border-b border-slate-800/80 px-4 flex items-center justify-between shrink-0 bg-[#070a12]/40">
+            <section className={`flex-1 w-full md:w-72 lg:w-80 md:shrink-0 border-b md:border-b-0 md:border-r border-slate-800/80 bg-[#070b14]/70 flex flex-col min-w-0 ${mobileShowEditor ? 'hidden md:flex' : 'flex'}`}>
+              <div className="h-12 sm:h-14 border-b border-slate-800/80 px-3 sm:px-4 flex items-center justify-between shrink-0 bg-[#070a12]/40">
                 <span className="text-xs font-bold uppercase tracking-[0.16em] text-slate-300 font-sans truncate">
                   {getHeaderTitle()}
                 </span>
@@ -1128,7 +1286,7 @@ export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
                 </span>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar pb-24 md:pb-2">
                 {filteredNotes.map(note => {
                   const isSelected = selectedNoteId === note.id;
                   const previewText = note.content
@@ -1227,7 +1385,7 @@ export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
               {currentNote ? (
                 <>
                   {/* Editor Top Bar */}
-                  <div className="h-14 border-b border-slate-800/80 px-4 sm:px-6 flex items-center justify-between shrink-0 bg-[#070a12]/40">
+                  <div className="h-12 sm:h-14 border-b border-slate-800/80 px-3 sm:px-6 flex items-center justify-between shrink-0 bg-[#070a12]/40">
                     <div className="flex items-center gap-3 min-w-0">
                       {mobileShowEditor && (
                         <button
@@ -1323,9 +1481,9 @@ export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
                   </div>
 
                   {/* Note Meta Bar */}
-                  <div className="px-5 py-2.5 border-b border-slate-800/80 bg-[#0a0e1b]/40 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="px-3 sm:px-5 py-2 border-b border-slate-800/80 bg-[#0a0e1b]/40 flex items-center gap-2 overflow-x-auto scrollbar-none text-xs flex-nowrap shrink-0">
                     {/* Folder Selector */}
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/40 border border-slate-700/50 hover:border-blue-500/40 transition-colors">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/40 border border-slate-700/50 hover:border-blue-500/40 transition-colors shrink-0">
                       <Folder className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                       <select
                         value={currentNote.folder || 'Daily Journal'}
@@ -1355,7 +1513,7 @@ export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
                         try { dateInputRef.current?.showPicker?.(); }
                         catch (_) { dateInputRef.current?.focus(); }
                       }}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/40 border border-slate-700/50 hover:border-violet-500/40 transition-colors cursor-pointer"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/40 border border-slate-700/50 hover:border-violet-500/40 transition-colors cursor-pointer shrink-0"
                       title="Click to change date"
                     >
                       <Calendar className="h-3.5 w-3.5 text-violet-400 shrink-0 pointer-events-none" />
@@ -1371,7 +1529,7 @@ export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
                     </div>
 
                     {/* Mindset Selector */}
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/40 border border-slate-700/50 hover:border-emerald-500/40 transition-colors">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/40 border border-slate-700/50 hover:border-emerald-500/40 transition-colors shrink-0">
                       <Smile className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                       <span className="text-slate-400 text-[11px]">Mindset:</span>
                       <select
@@ -1390,7 +1548,7 @@ export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
                     </div>
 
                     {/* Interactive Tag Manager Popover */}
-                    <div className="relative flex items-center gap-1.5 flex-wrap" ref={tagMenuRef}>
+                    <div className="relative flex items-center gap-1.5 shrink-0" ref={tagMenuRef}>
                       <div className="flex items-center gap-1 text-slate-400">
                         <TagIcon className="h-3.5 w-3.5 text-violet-400 shrink-0" />
                         <span className="text-[11px]">Tags:</span>
@@ -1494,7 +1652,7 @@ export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
                   </div>
 
                   {/* Rich Formatting Toolbar */}
-                  <div className="px-5 py-2 border-b border-slate-800/80 bg-[#070a12]/60 flex items-center gap-1 overflow-x-auto custom-scrollbar">
+                  <div className="px-3 sm:px-5 py-1.5 border-b border-slate-800/80 bg-[#070a12]/60 flex items-center gap-1 overflow-x-auto scrollbar-none shrink-0">
                     <button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
@@ -1658,13 +1816,13 @@ export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
                   </div>
 
                   {/* Note Content Editor Area */}
-                  <div className="flex-1 flex flex-col p-5 overflow-y-auto custom-scrollbar">
+                  <div className="flex-1 flex flex-col p-3 sm:p-5 overflow-y-auto custom-scrollbar pb-28 md:pb-6">
                     <input
                       type="text"
                       value={currentNote.title}
                       onChange={e => handleUpdateNote('title', e.target.value)}
                       placeholder="Note title..."
-                      className="w-full bg-transparent text-xl sm:text-2xl font-extrabold text-white placeholder-slate-600 focus:outline-none mb-3 font-display"
+                      className="w-full bg-transparent text-lg sm:text-2xl font-extrabold text-white placeholder-slate-600 focus:outline-none mb-2 font-display shrink-0"
                     />
 
                     {viewMode === 'preview' ? (
@@ -1764,8 +1922,7 @@ export default function NotebookTab({ user, authFetch }: NotebookTabProps) {
                           value={currentNote.content}
                           onChange={e => handleUpdateNote('content', e.target.value)}
                           placeholder="Write your trading notes, analysis, feelings, plans, and lessons here... (Markdown supported)"
-                          className="flex-1 w-full bg-transparent text-slate-200 text-sm leading-relaxed placeholder-slate-600 focus:outline-none resize-none font-sans"
-                          rows={16}
+                          className="flex-1 min-h-[260px] md:min-h-[350px] w-full bg-transparent text-slate-200 text-base sm:text-sm leading-relaxed placeholder-slate-600 focus:outline-none resize-none font-sans"
                         />
                       </>
                     )}
