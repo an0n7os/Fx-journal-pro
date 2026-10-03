@@ -52,6 +52,7 @@ export interface TradingAccount {
    */
   syncMethod?: 'EA' | 'VPS' | 'CLOUD';
   connectionStatus?: string;
+  isDefaultDemo?: boolean;
 }
 
 export interface Trade {

@@ -1440,12 +1440,21 @@ export default function App() {
         // while a fresh load is in progress (prevents empty-data flash).
         setAccounts(loadedAccs);
         const storedSelectedId = sessionStorage.getItem('selected_account_id');
-        // Prefer stored selection → then first account
-        const defaultId = overrideAccountId
-          ? overrideAccountId
-          : (storedSelectedId && loadedAccs.some((a: any) => a.id === storedSelectedId)
-            ? storedSelectedId
-            : loadedAccs[0].id);
+        // Prefer stored selection if valid, or prioritize MT5 synced account over starter demo
+        const mt5Acc = loadedAccs.find((a: any) => a.isMt5Sync || a.is_mt5_sync || a.mt5Login);
+        const storedMatches = storedSelectedId && loadedAccs.some((a: any) => a.id === storedSelectedId);
+        const storedIsDemo = storedSelectedId && loadedAccs.some((a: any) => a.id === storedSelectedId && (a.accountType === 'Demo' || a.isDefaultDemo));
+
+        let defaultId = overrideAccountId;
+        if (!defaultId) {
+          if (mt5Acc && (!storedMatches || storedIsDemo)) {
+            defaultId = mt5Acc.id;
+          } else if (storedMatches) {
+            defaultId = storedSelectedId;
+          } else {
+            defaultId = loadedAccs[0].id;
+          }
+        }
 
         setSelectedAccountId(defaultId);
         persistSelectedAccount(defaultId);

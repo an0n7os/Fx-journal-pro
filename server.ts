@@ -469,7 +469,8 @@ function createEmptyUserDb(userId?: string, email?: string, injectDummyUser = fa
         equity: 10000,
         status: 'Active',
         eaToken: `ea_demo_${cleanUserId.slice(-8)}`,
-        eaStatus: 'Not Connected'
+        eaStatus: 'Not Connected',
+        isDefaultDemo: true
       }
     ] : [],
     trades: [],
@@ -2545,7 +2546,8 @@ async function ensureDefaultPortfolioAccount(
       equity: 10000,
       status: 'Active',
       eaToken: generateEaToken(),
-      eaStatus: 'Not Connected'
+      eaStatus: 'Not Connected',
+      isDefaultDemo: true
     };
     db.accounts.push(newAcc);
 
@@ -2568,6 +2570,68 @@ async function ensureDefaultPortfolioAccount(
   } catch (err: any) {
     console.error('[Auth] Failed to auto-create default portfolio account:', err?.message || err);
     return null;
+  }
+}
+
+// Check whether an account is the default starter demo account ($10k demo account)
+function isDefaultDemoAccount(acc: any): boolean {
+  if (!acc) return false;
+  if (acc.isDefaultDemo === true || acc.is_default_demo === true) return true;
+  if (acc.id === 'acc_demo_1') return true;
+  const isDemo = (acc.accountType === 'Demo' || acc.account_type === 'DEMO');
+  const isStarterBroker = (
+    acc.broker === 'MT5 Demo Broker' ||
+    acc.broker === 'Demo Broker' ||
+    acc.name === 'Portfolio Account' ||
+    acc.name === 'Main Trading Account'
+  );
+  const isNotSynced = !acc.isMt5Sync && !acc.is_mt5_sync && !acc.mt5Login && !acc.eaTerminalLogin;
+  return isDemo && isStarterBroker && isNotSynced;
+}
+
+// Option A: Automatically remove the default starter demo account when MT5 is connected/synced
+async function cleanupDefaultDemoAccounts(db: any, userId: string, exceptAccountId?: string): Promise<string[]> {
+  try {
+    if (!db || !Array.isArray(db.accounts) || !userId) return [];
+    const removedIds: string[] = [];
+    const toKeep: any[] = [];
+
+    for (const acc of db.accounts) {
+      const belongsToUser = acc.userId === userId || acc.user_id === userId;
+      if (belongsToUser && acc.id !== exceptAccountId && isDefaultDemoAccount(acc)) {
+        removedIds.push(acc.id);
+      } else {
+        toKeep.push(acc);
+      }
+    }
+
+    if (removedIds.length > 0) {
+      db.accounts = toKeep;
+      if (Array.isArray(db.trades)) {
+        db.trades = db.trades.filter((t: any) => !removedIds.includes(t.accountId || t.account_id));
+      }
+      if (Array.isArray(db.riskSettings)) {
+        db.riskSettings = db.riskSettings.filter((r: any) => !removedIds.includes(r.accountId || r.account_id));
+      }
+
+      if (useSupabase) {
+        try {
+          for (const id of removedIds) {
+            await supabase.from('trading_accounts').delete().eq('id', id);
+            await supabase.from('trades').delete().eq('account_id', id);
+            await supabase.from('risk_settings').delete().eq('account_id', id);
+          }
+        } catch (err) {
+          console.error('[cleanupDefaultDemoAccounts] Supabase delete error:', err);
+        }
+      }
+      console.log(`[cleanupDefaultDemoAccounts] Cleaned up default demo account(s) [${removedIds.join(', ')}] for user ${userId} upon MT5 connection`);
+    }
+
+    return removedIds;
+  } catch (err) {
+    console.error('[cleanupDefaultDemoAccounts] Error cleaning up demo accounts:', err);
+    return [];
   }
 }
 
@@ -2971,6 +3035,7 @@ app.use(async (req, res, next) => {
               equity: 10000,
               status: 'ACTIVE',
               is_mt5_sync: false,
+              is_default_demo: true,
             };
             await supabase.from('trading_accounts').upsert([defaultAcc], { onConflict: 'id' });
           } catch (createErr) {
@@ -4056,8 +4121,23 @@ app.get('/api/accounts', async (req, res) => {
       if (error) {
         console.error('[GET /api/accounts] Supabase error:', JSON.stringify(error));
       } else {
-        const accounts = toCamel(rows || []).map(sanitizeAccount);
+        let accounts = toCamel(rows || []).map(sanitizeAccount);
         console.log(`[GET /api/accounts] User: ${currentUser.id}, accounts from Supabase: ${accounts.length}`);
+
+        // Option A: If user has at least one MT5 synced account, clean up and remove any default starter demo accounts
+        const hasMt5 = accounts.some((a: any) => a.isMt5Sync || a.is_mt5_sync || a.mt5Login || a.eaTerminalLogin);
+        if (hasMt5) {
+          const demoAccs = accounts.filter(isDefaultDemoAccount);
+          if (demoAccs.length > 0) {
+            for (const d of demoAccs) {
+              await supabase.from('trading_accounts').delete().eq('id', d.id);
+              await supabase.from('trades').delete().eq('account_id', d.id);
+              await supabase.from('risk_settings').delete().eq('account_id', d.id);
+            }
+            accounts = accounts.filter((a: any) => !demoAccs.some((d: any) => d.id === a.id));
+          }
+        }
+
         if (accounts.length > 0) {
           return res.json({ accounts });
         }
@@ -4071,6 +4151,16 @@ app.get('/api/accounts', async (req, res) => {
   const db = (req as any).userDb;
   if (!db) return res.json({ accounts: [] });
   let userAccounts = (db.accounts || []).filter((acc: any) => acc.userId === currentUser.id || acc.user_id === currentUser.id);
+
+  // If user has an MT5 synced account, clean up any default starter demo accounts
+  const hasMt5 = userAccounts.some((a: any) => a.isMt5Sync || a.is_mt5_sync || a.mt5Login || a.eaTerminalLogin);
+  if (hasMt5) {
+    const removedIds = await cleanupDefaultDemoAccounts(db, currentUser.id);
+    if (removedIds.length > 0) {
+      userAccounts = userAccounts.filter((a: any) => !removedIds.includes(a.id));
+      await saveDatabase(db, currentUser.email);
+    }
+  }
   
   // Guarantee that every authenticated user always has at least 1 working starter portfolio account
   if (userAccounts.length === 0) {
@@ -4098,8 +4188,17 @@ app.post('/api/accounts', async (req, res) => {
   if (!db.accounts) db.accounts = [];
   if (!db.riskSettings) db.riskSettings = [];
 
+  const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType, login, server, investorPassword } = req.body;
+
   // Account limit check for Free vs Pro
-  const existingUserAccounts = db.accounts.filter((acc: any) => acc.userId === currentUser.id || acc.user_id === currentUser.id);
+  // If user is adding an MT5 synced account, default demo account will be removed to make room,
+  // so filter out default demo accounts when calculating active account count.
+  const existingUserAccounts = db.accounts.filter((acc: any) => {
+    const isOwner = acc.userId === currentUser.id || acc.user_id === currentUser.id;
+    if (!isOwner) return false;
+    if (isMt5Sync && isDefaultDemoAccount(acc)) return false;
+    return true;
+  });
   if (!hasPro(currentUser) && existingUserAccounts.length >= FREE_ACCOUNT_LIMIT) {
     return res.status(403).json({
       error: PRO_FEATURE_MESSAGES.unlimitedAccounts,
@@ -4107,8 +4206,6 @@ app.post('/api/accounts', async (req, res) => {
       feature: 'unlimitedAccounts',
     });
   }
-
-  const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType, login, server, investorPassword } = req.body;
 
   // Free plan is manual entry only. Checked here as well as in the UI, because
   // the UI check is a nicety and this is the actual limit.
@@ -4185,6 +4282,11 @@ app.post('/api/accounts', async (req, res) => {
       ...(isMt5Sync ? { syncMethod: 'EA', connectionStatus: 'Not Connected' } : {})
     })
   };
+
+  // Option A: Automatically remove default starter demo account when an MT5 synced account is added
+  if (isMt5Sync) {
+    await cleanupDefaultDemoAccounts(db, currentUser.id);
+  }
 
   db.accounts.push(newAcc);
 
@@ -5368,7 +5470,12 @@ app.post('/api/mt5/ea/sync', ...eaProtection, async (req, res) => {
   if (!auth) return;
   const { db, account: acc } = auth;
   const { deals, moneyFlows, account } = body;
-  const summary = applyEaSyncPayload(db, acc, deals, moneyFlows, account);
+  acc.isMt5Sync = true;
+  acc.isDefaultDemo = false;
+  const targetUserId = acc.userId || db.users?.[0]?.id;
+  if (targetUserId) {
+    await cleanupDefaultDemoAccounts(db, targetUserId, acc.id);
+  }
 
   logEaEvent(db, acc, 'EA_SYNC', 'info', `Deals: ${summary.added} new / ${deals.length} received; money flows: ${summary.moneyFlowAdded} new`);
   await saveDatabase(db, db.users?.[0]?.email);
@@ -6091,9 +6198,20 @@ app.post('/api/mt5/vps/connect', async (req, res) => {
   account.passwordKmsKeyId = enc.keyId;
   account.mt5Login = body.login;
   account.mt5Server = body.server;
+  account.isMt5Sync = true;
+  account.isDefaultDemo = false;
+  if (account.accountType === 'Demo' && (account.broker === 'MT5 Demo Broker' || account.broker === 'Demo Broker')) {
+    account.broker = body.server || 'MetaTrader 5';
+    if (account.name === 'Portfolio Account' || account.name === 'Main Trading Account') {
+      account.name = `MT5 - ${body.login}`;
+    }
+  }
   account.syncMethod = 'VPS';
   account.connectionStatus = 'Queued';
   account.eaStatus = 'Not Connected';
+
+  // Option A: Clean up any other default starter demo accounts
+  await cleanupDefaultDemoAccounts(db, currentUser.id, account.id);
 
   const jobId = enqueueConnectJob(db, account, 'SYNC_NOW');
   logEaEvent(db, account, 'VPS_CONNECT_REQUESTED', 'info', 'Queued for a VPS terminal; password stored encrypted');
