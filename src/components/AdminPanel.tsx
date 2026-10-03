@@ -1167,19 +1167,19 @@ Their referral link stops working and ` +
             </div>
 
             {/* Quick Role Assign Form */}
-            <form onSubmit={handleUpdateTeamRole} className="flex flex-col sm:flex-row items-center gap-2 shrink-0">
+            <form onSubmit={handleUpdateTeamRole} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-2 shrink-0 w-full lg:w-auto">
               <input
                 type="email"
                 required
                 value={roleEmail}
                 onChange={(e) => setRoleEmail(e.target.value)}
                 placeholder="User email to promote..."
-                className="px-3 py-2 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 w-full sm:w-56"
+                className="px-3.5 py-2.5 sm:py-2 bg-slate-900/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 w-full sm:w-56"
               />
               <select
                 value={roleSelect}
                 onChange={(e) => setRoleSelect(e.target.value)}
-                className="px-3 py-2 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-violet-500"
+                className="px-3.5 py-2.5 sm:py-2 bg-slate-900/90 border border-slate-700/80 rounded-xl text-xs text-white focus:outline-none focus:border-violet-500 w-full sm:w-auto cursor-pointer"
               >
                 <option value="SUB_ADMIN">SUB_ADMIN</option>
                 <option value="ADMIN">ADMIN</option>
@@ -1190,7 +1190,7 @@ Their referral link stops working and ` +
               <button
                 type="submit"
                 disabled={roleSubmitting}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-sm shrink-0 w-full sm:w-auto justify-center"
+                className="px-4 py-2.5 sm:py-2 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-sm shrink-0 w-full sm:w-auto justify-center cursor-pointer active:scale-95 disabled:opacity-50"
               >
                 <UserPlus className="h-3.5 w-3.5" />
                 <span>Assign Role</span>
@@ -1198,8 +1198,8 @@ Their referral link stops working and ` +
             </form>
           </div>
 
-          {/* Team Members Directory */}
-          <div className="overflow-x-auto bg-slate-900/60 rounded-2xl border border-slate-800/90 shadow-sm">
+          {/* Team Members Directory (Desktop Table: hidden on mobile) */}
+          <div className="hidden sm:block overflow-x-auto bg-slate-900/60 rounded-2xl border border-slate-800/90 shadow-sm">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <h4 className="font-bold text-xs text-slate-300 uppercase tracking-wider">Active Staff & Sub-Admins</h4>
               <span className="text-[11px] text-slate-500">{team.length} Team Members</span>
@@ -1279,6 +1279,85 @@ Their referral link stops working and ` +
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Team Members Directory (Mobile Cards: sm:hidden) */}
+          <div className="sm:hidden flex flex-col gap-2.5">
+            <div className="flex items-center justify-between px-1">
+              <h4 className="font-bold text-xs text-slate-300 uppercase tracking-wider">Active Staff &amp; Sub-Admins</h4>
+              <span className="text-[11px] text-slate-500">{team.length} Members</span>
+            </div>
+
+            {team.length === 0 ? (
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-center text-xs text-slate-500">
+                No custom team roles assigned yet. Promote any registered user above.
+              </div>
+            ) : (
+              team.map((m) => (
+                <div key={m.id || m.email} className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm text-white truncate">{m.name || 'Staff Member'}</div>
+                      <div className="font-mono text-xs text-slate-400 truncate">{m.email}</div>
+                    </div>
+                    <span className={`shrink-0 px-2.5 py-0.5 rounded-full font-extrabold text-[10px] tracking-wide uppercase ${
+                      m.role === 'SUPER_ADMIN' ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' :
+                      m.role === 'ADMIN' ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30' :
+                      m.role === 'SUB_ADMIN' ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30' :
+                      'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                    }`}>
+                      {m.role}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] pt-2 border-t border-slate-800/80 text-slate-400">
+                    <div>
+                      <span>Last Login: </span>
+                      <span className="text-slate-300 font-medium">{formatDateTime(m.lastLogin)}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-emerald-500/10 text-emerald-400">
+                      {m.status || 'ACTIVE'}
+                    </span>
+                  </div>
+
+                  {(m.role === 'SUB_ADMIN' || m.role !== 'SUPER_ADMIN') && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+                      {m.role === 'SUB_ADMIN' && (
+                        <button
+                          type="button"
+                          onClick={() => openAssignFor({ id: m.id, email: m.email })}
+                          className={`flex-1 text-xs font-semibold py-1.5 px-3 rounded-lg transition text-center ${
+                            assignFor?.id === m.id
+                              ? 'bg-violet-600/25 text-violet-200 border border-violet-500/30'
+                              : 'text-violet-400 hover:text-violet-300 bg-violet-500/10 hover:bg-violet-500/20'
+                          }`}
+                        >
+                          Assigned Users
+                        </button>
+                      )}
+                      {m.role !== 'SUPER_ADMIN' && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (confirm(`Remove staff privileges from ${m.email}?`)) {
+                              await fetch('/api/admin/team/role', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                                body: JSON.stringify({ email: m.email, role: 'USER' })
+                              });
+                              fetchData();
+                            }
+                          }}
+                          className="text-xs text-red-400 hover:text-red-300 font-semibold py-1.5 px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition"
+                        >
+                          Remove Role
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
 
           {/* Assigned users for the selected sub-admin */}

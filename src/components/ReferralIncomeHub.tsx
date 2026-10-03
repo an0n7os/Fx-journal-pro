@@ -74,6 +74,8 @@ export default function ReferralIncomeHub({
   const [editLinkLabel, setEditLinkLabel] = useState('');
   const [editLinkPrice, setEditLinkPrice] = useState<number>(399);
   const [savingEditLink, setSavingEditLink] = useState(false);
+  const [deletingLink, setDeletingLink] = useState<PartnerReferralLink | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Sent alongside the cookie, matching the rest of the app's fetches.
   const getAuthHeaders = (): Record<string, string> => {
@@ -321,17 +323,22 @@ export default function ReferralIncomeHub({
     }
   };
 
-  const handleDeleteReferralLink = async (link: PartnerReferralLink) => {
-    if (!confirm(`Delete referral link ${link.code}? Traders using this link will no longer receive the offer.`)) return;
+  const executeDeleteReferralLink = async () => {
+    if (!deletingLink) return;
+    setIsDeleting(true);
     try {
-      const res = await fetch(`/api/partner/links/${link.id}`, {
+      const linkId = deletingLink.id || deletingLink.code;
+      const res = await fetch(`/api/partner/links/${encodeURIComponent(linkId)}`, {
         method: 'DELETE',
         headers: { ...getAuthHeaders() },
         credentials: 'include',
       });
-      if (!res.ok) throw new Error('Could not delete link.');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not delete referral link.');
       
-      const updatedLinks = (partnerProfile?.links || []).filter((l: any) => l.id !== link.id);
+      const updatedLinks = (partnerProfile?.links || []).filter(
+        (l: any) => l.id !== deletingLink.id && l.code !== deletingLink.code
+      );
       const updatedProfile = {
         ...(partnerProfile || {}),
         links: updatedLinks,
@@ -339,11 +346,17 @@ export default function ReferralIncomeHub({
       setPartnerProfile(updatedProfile as any);
       onPartnerProfileUpdate?.(updatedProfile);
       
-      if (selectedCampaignCode === link.code) {
+      if (selectedCampaignCode === deletingLink.code) {
         onSelectCampaign?.(partnerProfile?.referralCode || '');
       }
+      
+      setCouponSaveMsg(`Referral link "${deletingLink.code}" deleted successfully.`);
+      setTimeout(() => setCouponSaveMsg(null), 3500);
+      setDeletingLink(null);
     } catch (e: any) {
       alert(e.message || 'Error deleting link');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -502,8 +515,8 @@ export default function ReferralIncomeHub({
             </button>
           </div>
 
-          {/* Links Table */}
-          <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
+          {/* Links Table (Desktop: hidden on mobile) */}
+          <div className="hidden sm:block overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-900/90 text-[9px] uppercase font-bold text-slate-400 border-b border-slate-800">
                 <tr>
@@ -739,11 +752,11 @@ export default function ReferralIncomeHub({
                           {/* Delete */}
                           <button
                             type="button"
-                            onClick={() => handleDeleteReferralLink(link)}
-                            className="p-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+                            onClick={() => setDeletingLink(link)}
+                            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition cursor-pointer border border-slate-700/60 hover:border-rose-500/30 active:scale-95"
                             title="Delete link"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </td>
@@ -752,6 +765,252 @@ export default function ReferralIncomeHub({
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Card List (sm:hidden: clean, aligned, fully visible on phones) */}
+          <div className="sm:hidden flex flex-col gap-2.5">
+            {/* Primary Default Link Card */}
+            <div className={`p-3 rounded-xl border transition ${
+              selectedCampaignCode === (partnerProfile?.referralCode || 'MENTOR60') || !selectedCampaignCode
+                ? 'bg-violet-950/30 border-violet-500/40 shadow-sm'
+                : 'bg-slate-950/60 border-slate-800'
+            }`}>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-mono font-bold text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded-lg border border-violet-500/20 text-xs">
+                    {partnerProfile?.referralCode || 'MENTOR60'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-semibold truncate">(Primary Default)</span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    Active
+                  </span>
+                  {(selectedCampaignCode === (partnerProfile?.referralCode || 'MENTOR60') || !selectedCampaignCode) && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                      Active at Top
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Pricing pill row */}
+              <div className="grid grid-cols-2 gap-2 p-2 rounded-lg bg-slate-900/80 border border-slate-800/80 mb-2.5">
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase font-semibold block">Student Pays</span>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className="line-through text-slate-500 text-[10px]">₹499</span>
+                    <strong className="text-emerald-400 font-bold text-xs">₹{currentOfferPrice}</strong>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase font-semibold block">Your Income</span>
+                  <div className="text-purple-300 font-bold text-xs mt-0.5">
+                    ₹{Math.max(0, currentOfferPrice - 199)}
+                    <span className="text-[9px] text-slate-500 font-normal ml-0.5">/ upgrade</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions button bar */}
+              <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-800/60">
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyRefLink(partnerProfile?.referralUrl || `${window.location.origin}/?ref=${partnerProfile?.referralCode || 'MENTOR60'}`, 'primary')}
+                    className="flex-1 py-1 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10.5px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer border border-slate-700 truncate"
+                  >
+                    {copiedItem?.id === 'primary' && copiedItem?.type === 'link' ? (
+                      <>
+                        <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                        <span className="text-emerald-300 font-bold">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3 w-3 text-slate-400 shrink-0" />
+                        <span>Copy Link</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCoupon(partnerProfile?.referralCode || 'MENTOR60', 'primary')}
+                    className="py-1 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10.5px] font-semibold flex items-center gap-1 transition cursor-pointer border border-slate-700 shrink-0"
+                  >
+                    {copiedItem?.id === 'primary' && copiedItem?.type === 'code' ? (
+                      <>
+                        <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                        <span className="text-emerald-300 font-bold">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Ticket className="h-3 w-3 text-violet-400 shrink-0" />
+                        <span>Code</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onSelectCampaign?.(partnerProfile?.referralCode || '')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer shrink-0 ${
+                    selectedCampaignCode === partnerProfile?.referralCode || !selectedCampaignCode
+                      ? 'bg-violet-600/30 text-violet-300 border border-violet-500/40'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  {selectedCampaignCode === partnerProfile?.referralCode || !selectedCampaignCode ? 'Active at Top' : 'Use at Top'}
+                </button>
+              </div>
+            </div>
+
+            {/* Custom Referral Links Cards */}
+            {(partnerProfile?.links || []).map((link) => {
+              const isSelected = selectedCampaignCode === link.code;
+              return (
+                <div
+                  key={link.id}
+                  className={`p-3 rounded-xl border transition ${
+                    isSelected
+                      ? 'bg-violet-950/30 border-violet-500/40 shadow-sm'
+                      : 'bg-slate-950/60 border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-mono font-bold text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded-lg border border-violet-500/20 text-xs">
+                        {link.code}
+                      </span>
+                      <span className="text-xs text-slate-300 font-medium truncate">
+                        {link.label || 'Custom Offer'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold border ${
+                        link.isActive
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                      }`}>
+                        {link.isActive ? 'Active' : 'Revoked'}
+                      </span>
+                      {isSelected && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                          Active at Top
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Pricing pill row */}
+                  <div className="grid grid-cols-2 gap-2 p-2 rounded-lg bg-slate-900/80 border border-slate-800/80 mb-2.5">
+                    <div>
+                      <span className="text-[9px] text-slate-400 uppercase font-semibold block">Student Pays</span>
+                      <div className="flex items-baseline gap-1 mt-0.5">
+                        <span className="line-through text-slate-500 text-[10px]">₹499</span>
+                        <strong className="text-emerald-400 font-bold text-xs">₹{link.offerPrice}</strong>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-400 uppercase font-semibold block">Your Income</span>
+                      <div className="text-purple-300 font-bold text-xs mt-0.5">
+                        ₹{Math.max(0, link.offerPrice - 199)}
+                        <span className="text-[9px] text-slate-500 font-normal ml-0.5">/ upgrade</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions button bar */}
+                  <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-800/60">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyRefLink(link.referralUrl || `${window.location.origin}/?ref=${encodeURIComponent(link.code)}`, link.id)}
+                        className="flex-1 py-1 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10.5px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer border border-slate-700 truncate"
+                      >
+                        {copiedItem?.id === link.id && copiedItem?.type === 'link' ? (
+                          <>
+                            <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                            <span className="text-emerald-300 font-bold">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3 text-slate-400 shrink-0" />
+                            <span>Copy Link</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCoupon(link.code, link.id)}
+                        className="py-1 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10.5px] font-semibold flex items-center gap-1 transition cursor-pointer border border-slate-700 shrink-0"
+                      >
+                        {copiedItem?.id === link.id && copiedItem?.type === 'code' ? (
+                          <>
+                            <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                            <span className="text-emerald-300 font-bold">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Ticket className="h-3 w-3 text-violet-400 shrink-0" />
+                            <span>Code</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onSelectCampaign?.(link.code)}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-violet-600/30 text-violet-300 border border-violet-500/40'
+                            : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                        }`}
+                      >
+                        {isSelected ? 'Active at Top' : 'Use at Top'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingLink(link);
+                          setEditLinkCode(link.code);
+                          setEditLinkLabel(link.label || '');
+                          setEditLinkPrice(link.offerPrice);
+                        }}
+                        className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer border border-slate-700"
+                        title="Edit campaign"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleLinkActive(link)}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition cursor-pointer ${
+                          link.isActive
+                            ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25'
+                            : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/25'
+                        }`}
+                      >
+                        {link.isActive ? 'Revoke' : 'Activate'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setDeletingLink(link)}
+                        className="p-1 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition cursor-pointer border border-slate-700"
+                        title="Delete link"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -996,6 +1255,64 @@ export default function ReferralIncomeHub({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete Referral Link Confirmation */}
+      {deletingLink && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-rose-500/30 rounded-2xl w-full max-w-sm p-5 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-base text-white">Delete Referral Link?</h3>
+                <p className="text-xs text-slate-400">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Referral Code:</span>
+                <span className="font-mono font-bold text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/20">
+                  {deletingLink.code}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Campaign:</span>
+                <span className="text-slate-200 font-medium">{deletingLink.label || 'Custom Offer'}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Offer Price:</span>
+                <span className="text-emerald-400 font-bold">₹{deletingLink.offerPrice}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Traders using this custom link will no longer receive this discount offer.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDeletingLink(null)}
+                disabled={isDeleting}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeDeleteReferralLink}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-lg shadow-rose-600/30 disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>{isDeleting ? 'Deleting...' : 'Delete Link'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

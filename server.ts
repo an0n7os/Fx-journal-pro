@@ -9637,7 +9637,7 @@ app.delete('/api/partner/links/:id', async (req, res) => {
   const { id } = req.params;
 
   const { links: existingLinks } = await getPartnerData(userId);
-  const curLinks = (existingLinks || []).filter((l) => l.id !== id);
+  const curLinks = (existingLinks || []).filter((l) => l.id !== id && l.code !== id);
   await savePartnerLinks(userId, curLinks);
 
   res.json({ success: true, message: 'Referral link removed.' });
