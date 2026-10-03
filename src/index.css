@@ -60,10 +60,12 @@ body,
 }
 
 /* Safe area padding utilities */
-.pt-safe { padding-top: var(--sat); }
-.pb-safe { padding-bottom: var(--sab); }
-.pl-safe { padding-left: var(--sal); }
-.pr-safe { padding-right: var(--sar); }
+/* Safe area padding utilities - preserves base padding while factoring in safe-area insets */
+.pt-safe { padding-top: max(1.25rem, calc(1rem + var(--sat))); }
+.pb-safe { padding-bottom: max(1.5rem, calc(1rem + var(--sab))); }
+.pl-safe { padding-left: max(1rem, calc(0.5rem + var(--sal))); }
+.pr-safe { padding-right: max(1rem, calc(0.5rem + var(--sar))); }
+
 .top-safe { top: var(--sat); }
 .bottom-safe { bottom: var(--sab); }
 
@@ -114,6 +116,39 @@ input:-webkit-autofill:active,
   caret-color: #f8fafc !important;
   transition: background-color 5000s ease-in-out 0s;
 }
+
+/* Modal backdrop blur fix for Tailwind v4 */
+.backdrop-blur-xs {
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+/* Custom sleek select dropdown styling across all themes */
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem 1rem;
+  padding-right: 2.5rem !important;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+/* Ensure native dropdown options render cleanly in dark mode on Windows / Chrome */
+select option {
+  background-color: #0c0d16;
+  color: #f8fafc;
+  padding: 10px 14px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
 
 @keyframes fade-up {
   from {
@@ -3019,22 +3054,16 @@ html.dark .dx-hero-tile {
  * the dark rail (or a dark chip on the light one) stays distinct on the
  * violet active row as well as on the plain background. */
 .dx-badge {
-  background-color: #1e293b;
-  color: #ffffff;
+  background-color: #10b981;
+  color: #ffffff !important;
   font-weight: 800;
-  /* The ring is what makes the chip work on ANY background rather than only
-     on the rail. Fill alone measured 2.57:1 against the violet active row —
-     under the 3:1 WCAG asks of a non-text element — so on the selected item
-     the badge started melting into the row again, which is the whole problem
-     this colour was meant to solve. A ring in the surrounding surface's own
-     colour separates it from the fill underneath whatever the hue is. */
-  box-shadow: 0 0 0 1.5px #ffffff, 0 1px 3px rgba(15, 23, 42, .3);
+  box-shadow: 0 0 0 1.5px #ffffff, 0 1px 4px rgba(16, 185, 129, .4);
 }
 
 html.dark .dx-badge {
-  background-color: #f1f3f9;
-  color: #0b0d16;
-  box-shadow: 0 0 0 1.5px #0a0a11, 0 1px 4px rgba(0, 0, 0, .5);
+  background-color: #10b981;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 1.5px #0a0a11, 0 0 8px rgba(16, 185, 129, .4);
 }
 
 /* ============================================================

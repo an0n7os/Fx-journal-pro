@@ -4037,7 +4037,14 @@ const sanitizeAccount = (account: any): any => {
 
 app.get('/api/accounts', async (req, res) => {
   let currentUser = (req as any).currentUser;
-  if (!currentUser) return res.json({ accounts: [] });
+  // 401, not an empty list. Answering 200 with `{accounts: []}` to a caller
+  // with no session told an expired customer that their accounts were gone
+  // instead of that they were signed out — on a trading journal, the worst
+  // possible way to say "please log in again". Every other route here answers
+  // 401, and the client already handles it: fetchAccountData only replaces
+  // state when the response actually carries an array, and the 401 path shows
+  // "your session has timed out".
+  if (!currentUser) return res.status(401).json({ error: 'Not authenticated' });
 
   // Always fetch fresh from Supabase when available
   if (useSupabase) {
@@ -4300,7 +4307,8 @@ app.delete('/api/accounts/:id', async (req, res) => {
 
 app.get('/api/trades', async (req, res) => {
   let currentUser = (req as any).currentUser;
-  if (!currentUser) return res.json({ trades: [] });
+  // 401 rather than an empty journal — see /api/accounts above.
+  if (!currentUser) return res.status(401).json({ error: 'Not authenticated' });
 
   const { accountId } = req.query;
   let accountTrades: any[] = [];
@@ -11967,50 +11975,172 @@ app.get('/api/chart/ohlc', async (req, res) => {
   }
 });
 
+async function fetchLiveForexRss(limit: number = 30): Promise<any[]> {
+  const url = 'https://news.google.com/rss/search?q=forex+trading+OR+"currency+market"+OR+"central+bank"+OR+"forex"+OR+"currency"&hl=en-US&gl=US&ceid=US:en';
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+  });
+  if (!res.ok) throw new Error(`Forex RSS responded with ${res.status}`);
+  const text = await res.text();
+  const rawItems = text.split('<item>').slice(1);
+
+  const CURRENCY_LIST = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD', 'CNY', 'XAU', 'BTC'];
+  const PAIRS_LIST = [
+    'EUR/USD', 'USD/JPY', 'GBP/USD', 'USD/CHF', 'AUD/USD', 'USD/CAD', 'NZD/USD',
+    'EUR/GBP', 'EUR/JPY', 'GBP/JPY', 'EUR/CHF', 'EUR/AUD', 'AUD/JPY', 'XAU/USD'
+  ];
+
+  const articles: any[] = [];
+  for (const raw of rawItems) {
+    if (articles.length >= limit) break;
+    let title = (raw.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/) || [])[1] || '';
+    const link = (raw.match(/<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/) || [])[1] || '';
+    const pubDate = (raw.match(/<pubDate>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/pubDate>/) || [])[1] || '';
+    let source = (raw.match(/<source[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/source>/) || [])[1] || '';
+
+    if (!title.trim()) continue;
+
+    // Clean source from title if embedded as "Title - Source"
+    if (title.includes(' - ') && !source) {
+      const parts = title.split(' - ');
+      source = parts.pop()?.trim() || '';
+      title = parts.join(' - ');
+    } else if (title.includes(' - ') && source) {
+      title = title.replace(new RegExp('\\s*-\\s*' + source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'), '');
+    }
+
+    const clean = (str: string) =>
+      str
+        .replace(/<[^>]+>/g, '')
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+
+    const cleanTitle = clean(title);
+    if (!cleanTitle) continue;
+
+    const upper = cleanTitle.toUpperCase();
+
+    // Currencies detected
+    const foundCurrencies = new Set<string>();
+    for (const c of CURRENCY_LIST) {
+      if (new RegExp(`\\b${c}\\b`).test(upper)) foundCurrencies.add(c);
+    }
+    if (foundCurrencies.size === 0) foundCurrencies.add('USD');
+
+    // Pairs detected
+    const foundPairs = new Set<string>();
+    for (const p of PAIRS_LIST) {
+      if (upper.includes(p) || upper.includes(p.replace('/', ''))) {
+        foundPairs.add(p);
+      }
+    }
+
+    // Category assignment
+    let category = 'Market Analysis';
+    if (/RATE|FED|FEDERAL RESERVE|FOMC|ECB|BOJ|BANK OF ENGLAND|CENTRAL BANK/i.test(upper)) {
+      category = 'Central Banks';
+    } else if (/INFLATION|CPI|PPI|PCE|PRICE INDEX/i.test(upper)) {
+      category = 'Inflation';
+    } else if (/JOB|PAYROLL|NFP|UNEMPLOYMENT|LABOR|EMPLOYMENT/i.test(upper)) {
+      category = 'Employment';
+    } else if (/GOLD|XAU|SILVER|CRUDE|OIL|BRENT|WTI|COMMODIT/i.test(upper)) {
+      category = 'Commodities';
+    } else if (/GDP|RECESSION|GROWTH|ECONOMIC EXPANSION/i.test(upper)) {
+      category = 'GDP';
+    } else if (/WAR|SANCTION|ELECTION|GEOPOLITIC|TARIFF|TRADE WAR/i.test(upper)) {
+      category = 'Geopolitics';
+    } else if (/FISCAL|BUDGET|DEBT CEILING|GOVERNMENT/i.test(upper)) {
+      category = 'Government';
+    }
+
+    // Sentiment heuristic
+    let sentimentScore = 0;
+    let sentimentLabel = 'Neutral';
+    const primaryCurrency = Array.from(foundCurrencies)[0] || 'USD';
+
+    if (/RALLY|SURGE|JUMP|GAIN|RECORD HIGH|BULLISH|CLIMB|BOOST|SOAR|STRENGTHEN|EXPAND/i.test(cleanTitle)) {
+      sentimentScore = 0.55;
+      sentimentLabel = `Bullish ${primaryCurrency}`;
+    } else if (/FALL|DROP|SLUMP|PLUNGE|DIP|BEARISH|WEAK|SINK|DECLINE|TUMBLE|SLIDE/i.test(cleanTitle)) {
+      sentimentScore = -0.55;
+      sentimentLabel = `Bearish ${primaryCurrency}`;
+    }
+
+    let publishedAt = new Date().toISOString();
+    if (pubDate) {
+      const parsed = new Date(pubDate);
+      if (!isNaN(parsed.getTime())) publishedAt = parsed.toISOString();
+    }
+
+    articles.push({
+      id: link || cleanTitle,
+      title: cleanTitle,
+      summary: cleanTitle,
+      url: link || '#',
+      source: source || 'Market Wire',
+      publishedAt,
+      category,
+      currencies: Array.from(foundCurrencies),
+      pairs: Array.from(foundPairs),
+      sentiment: { score: sentimentScore, label: sentimentLabel },
+    });
+  }
+
+  return articles;
+}
+
 app.get('/api/fx-news', async (req, res) => {
   const apiKey = process.env.ALPHA_VANTAGE_API_KEY?.trim();
   const limit = Math.min(Math.max(parseInt(String(req.query.limit || '25'), 10) || 25, 1), 50);
 
-  if (!apiKey) {
-    return res.status(503).json({
-      error: 'FX news is not configured. Add ALPHA_VANTAGE_API_KEY to your environment.',
-      code: 'NOT_CONFIGURED',
-    });
-  }
-
   const cacheKey = `fx-news:${limit}`;
   try {
     let articles = getCached<any[]>(cacheKey);
+    let sourceName = 'Global Forex Market Wire';
     if (!articles) {
-      const url = `${ALPHA_VANTAGE_BASE}/query?function=NEWS_SENTIMENT&topics=${FX_NEWS_TOPICS}&limit=${limit}&sort=LATEST&apikey=${encodeURIComponent(apiKey)}`;
-      const data = await fetchJson(url);
-      // Alpha Vantage returns HTTP 200 with a "Note"/"Information" key when rate-limited.
-      if (data?.Note || data?.Information || data?.Error) {
-        console.warn('[GET /api/fx-news] Provider rate limit or info message:', data?.Note || data?.Information || data?.Error);
-        return res.status(429).json({
-          error: 'The news provider rate limit has been reached. Please try again later.',
-          code: 'RATE_LIMITED',
-        });
+      if (apiKey) {
+        try {
+          const url = `${ALPHA_VANTAGE_BASE}/query?function=NEWS_SENTIMENT&topics=${FX_NEWS_TOPICS}&limit=${limit}&sort=LATEST&apikey=${encodeURIComponent(apiKey)}`;
+          const data = await fetchJson(url);
+          if (!data?.Note && !data?.Information && !data?.Error && Array.isArray(data?.feed) && data.feed.length > 0) {
+            articles = data.feed.map(normalizeNewsArticle).filter(Boolean);
+            sourceName = 'Alpha Vantage News & Sentiment';
+          }
+        } catch (avErr: any) {
+          console.warn('[GET /api/fx-news] Alpha Vantage failed, using live RSS feed:', avErr?.message || avErr);
+        }
       }
-      const feed = Array.isArray(data?.feed) ? data.feed : [];
-      articles = feed.map(normalizeNewsArticle).filter(Boolean);
-      setCached(cacheKey, articles, 15 * 60 * 1000);
+
+      // If Alpha Vantage is not configured or failed/rate-limited, use live Forex RSS feed
+      if (!articles || articles.length === 0) {
+        articles = await fetchLiveForexRss(limit);
+        sourceName = 'Global Forex Market Wire';
+      }
+
+      if (articles && articles.length > 0) {
+        setCached(cacheKey, articles, 10 * 60 * 1000);
+      }
     }
 
-    let filtered = articles;
+    let filtered = articles || [];
     const topic = typeof req.query.topic === 'string' ? req.query.topic : '';
     const currency = typeof req.query.currency === 'string' ? req.query.currency.toUpperCase() : '';
-    if (topic) filtered = filtered.filter(a => a.category === topic);
-    if (currency) filtered = filtered.filter(a => a.currencies.includes(currency));
+    if (topic && topic !== 'All') filtered = filtered.filter(a => a.category === topic);
+    if (currency && currency !== 'All') filtered = filtered.filter(a => a.currencies.includes(currency));
 
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.json({
       articles: filtered,
       categories: NEWS_CATEGORY_ORDER,
-      source: 'Alpha Vantage News & Sentiment',
+      source: sourceName,
       generatedAt: new Date().toISOString(),
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('[GET /api/fx-news] error:', err?.message || err);
     res.status(502).json({
       error: 'Unable to fetch FX news right now. Please try again shortly.',

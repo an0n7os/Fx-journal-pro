@@ -29,6 +29,7 @@
     "test:partner": "node --env-file-if-exists=.env tests/partner.test.mjs",
     "test:plan": "node --env-file-if-exists=.env tests/plan-gates.test.mjs",
     "test:payments": "node --env-file-if-exists=.env tests/payment-replay.test.mjs",
+    "test:tenant": "node --env-file-if-exists=.env tests/tenant-isolation.test.mjs",
     "test:concurrency": "node --env-file-if-exists=.env tests/concurrency.test.mjs",
     "test:subadmin-scope": "node --env-file-if-exists=.env tests/subadmin-scope.test.mjs"
   },

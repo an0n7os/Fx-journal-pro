@@ -8,7 +8,7 @@ import {
   Clock, Heart, Edit3, Image as ImageIcon, Eye, EyeOff, RefreshCw,
   Terminal, Globe, Bell, CreditCard, Info, Activity, Sun, Moon, Brain, Upload,
   FileSpreadsheet, FileText, Mail, Wrench, X, Newspaper, Trophy, Lock, MessageSquare, MoreHorizontal, Users,
-  Settings, Instagram, Phone, GraduationCap, Share2
+  Settings, Instagram, Phone, GraduationCap, Share2, Loader2, ShieldCheck, CheckCheck
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -372,6 +372,16 @@ export default function App() {
   const [showMobileNavProfile, setShowMobileNavProfile] = useState(false);
   const [showMobileMore, setShowMobileMore] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('fxj_read_notifications');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [notificationFilter, setNotificationFilter] = useState<'all' | 'unread'>('all');
 
   const handleMainScroll = (e: React.UIEvent<HTMLElement>) => {
     setIsScrolled(e.currentTarget.scrollTop > 150);
@@ -575,6 +585,7 @@ export default function App() {
 
   // Sign-out confirmation modal
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   // Set for the one render in which a sign-out lands, so the route guard does
   // not mistake the half-applied state for an unauthenticated deep link.
   const justLoggedOutRef = useRef(false);
@@ -689,6 +700,173 @@ export default function App() {
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [showMobileNavProfile]);
+
+  useEffect(() => {
+    if (!showMobileNavNotifications) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (!notificationMenuRef.current?.contains(e.target as Node)) setShowMobileNavNotifications(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowMobileNavNotifications(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showMobileNavNotifications]);
+
+  const markNotificationAsRead = useCallback((id: string) => {
+    setReadNotificationIds(prev => {
+      if (prev.includes(id)) return prev;
+      const updated = [...prev, id];
+      try {
+        localStorage.setItem('fxj_read_notifications', JSON.stringify(updated));
+      } catch {
+        /* storage unavailable */
+      }
+      return updated;
+    });
+  }, []);
+
+  const markAllNotificationsAsRead = useCallback((ids: string[]) => {
+    setReadNotificationIds(prev => {
+      const merged = Array.from(new Set([...prev, ...ids]));
+      try {
+        localStorage.setItem('fxj_read_notifications', JSON.stringify(merged));
+      } catch {
+        /* storage unavailable */
+      }
+      return merged;
+    });
+  }, []);
+
+  const systemNotifications = React.useMemo(() => {
+    const list: {
+      id: string;
+      title: string;
+      message: string;
+      time: string;
+      badgeText: string;
+      type: 'success' | 'info' | 'warning' | 'ai' | 'news';
+      icon: any;
+      actionTab?: string;
+      actionLabel?: string;
+      onAction?: () => void;
+    }[] = [];
+
+    // 1. MT5 Accounts Sync
+    if (accounts.length > 0) {
+      list.push({
+        id: 'notif-mt5-active',
+        title: 'MT5 Accounts Connected',
+        message: `${accounts.length} trading ${accounts.length === 1 ? 'account is' : 'accounts are'} actively syncing live trades & equity in real-time.`,
+        time: 'Live',
+        badgeText: 'Live Sync',
+        type: 'success',
+        icon: Layers,
+        actionTab: 'accounts',
+        actionLabel: 'Manage Accounts'
+      });
+    } else {
+      list.push({
+        id: 'notif-mt5-connect',
+        title: 'Connect MT5 Account',
+        message: 'Link your MetaTrader 5 account credentials to enable automatic background trade journaling.',
+        time: 'Setup',
+        badgeText: 'Action Required',
+        type: 'info',
+        icon: Plus,
+        onAction: () => setShowAccountModal(true),
+        actionLabel: 'Connect MT5 Now'
+      });
+    }
+
+    // 2. Risk Guard
+    if (riskSettings) {
+      list.push({
+        id: 'notif-risk-guard',
+        title: 'Risk Guard Monitoring',
+        message: `Drawdown guard armed at ${riskSettings.maxDrawdownLimit || 5}%. Capital protection rules are actively protecting your accounts.`,
+        time: 'Active',
+        badgeText: 'Guard Armed',
+        type: 'warning',
+        icon: Shield,
+        actionTab: 'settings',
+        actionLabel: 'Adjust Guard Rules'
+      });
+    }
+
+    // 3. Live FX News Wire
+    list.push({
+      id: 'notif-fx-news',
+      title: 'Global Forex Wire Active',
+      message: 'Forex market headlines, central bank policy announcements & economic calendar are streaming live.',
+      time: 'Live',
+      badgeText: 'Market Wire',
+      type: 'news',
+      icon: Newspaper,
+      actionTab: 'fxnews',
+      actionLabel: 'Open News Desk'
+    });
+
+    // 4. Heyza AI Mentor
+    list.push({
+      id: 'notif-heyza-ai',
+      title: 'Heyza AI Copilot Ready',
+      message: 'Need deep trade psychology breakdown, setup review, or expectancy optimization? Heyza AI is standing by.',
+      time: 'AI',
+      badgeText: 'Heyza AI',
+      type: 'ai',
+      icon: Sparkles,
+      actionTab: 'insights',
+      actionLabel: 'Chat with Heyza'
+    });
+
+    // 5. Trades milestone
+    if (trades.length > 0) {
+      list.push({
+        id: 'notif-trades-count',
+        title: 'Trading Journal Synced',
+        message: `${trades.length} recorded trade${trades.length > 1 ? 's' : ''} across all portfolios. Win-rate & profit factor metrics updated.`,
+        time: 'Today',
+        badgeText: `${trades.length} Trades`,
+        type: 'info',
+        icon: BookOpen,
+        actionTab: 'journal',
+        actionLabel: 'View Analytics'
+      });
+    }
+
+    // 6. Announcements from admin
+    if (Array.isArray(announcements)) {
+      announcements.forEach((a: any) => {
+        list.push({
+          id: `notif-ann-${a.id}`,
+          title: a.title || 'Platform Announcement',
+          message: a.content || '',
+          time: 'Update',
+          badgeText: 'Official',
+          type: 'info',
+          icon: Bell,
+        });
+      });
+    }
+
+    return list;
+  }, [accounts.length, riskSettings, trades.length, announcements]);
+
+  const unreadNotificationCount = React.useMemo(() => {
+    return systemNotifications.filter(n => !readNotificationIds.includes(n.id)).length;
+  }, [systemNotifications, readNotificationIds]);
+
+  const displayedNotifications = React.useMemo(() => {
+    if (notificationFilter === 'unread') {
+      return systemNotifications.filter(n => !readNotificationIds.includes(n.id));
+    }
+    return systemNotifications;
+  }, [systemNotifications, notificationFilter, readNotificationIds]);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
@@ -4280,7 +4458,7 @@ export default function App() {
     {
       label: 'Tools & AI',
       items: [
-        { id: 'insights', label: 'Heyza', icon: Brain, pro: true },
+        { id: 'insights', label: 'Heyza AI', icon: Sparkles, pro: true },
         { id: 'tools', label: 'Tools', icon: Wrench },
         { id: 'settings', label: 'Settings', icon: Settings },
       ]
@@ -4346,35 +4524,252 @@ export default function App() {
         <div className="flex items-center gap-2">
 
           {/* Notification Bell */}
-          <div className="relative">
+          <div className="relative" ref={notificationMenuRef}>
             <button
               onClick={() => { setShowMobileNavNotifications(!showMobileNavNotifications); setShowMobileNavProfile(false); }}
               aria-label="Notifications"
               aria-expanded={showMobileNavNotifications}
               title="Notifications"
-              className="p-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors relative rounded-xl hover:bg-slate-100 dark:hover:bg-white/5"
+              className="p-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors relative rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 active:scale-95"
             >
               <Bell className="h-[18px] w-[18px]" />
-              {false && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-[#FBFBFA] dark:border-slate-900"></span>
+              {unreadNotificationCount > 0 && (
+                <span className="absolute top-1 right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-rose-500 text-white text-[9px] font-black border-2 border-[#FBFBFA] dark:border-slate-950 shadow-sm animate-pulse">
+                  {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                </span>
               )}
             </button>
 
             {/* Notification Dropdown */}
             {showMobileNavNotifications && (
-              <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                  <h3 className="font-bold text-sm">Notifications</h3>
-                  <button
-                    onClick={() => setShowMobileNavNotifications(false)}
-                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+              <div
+                role="dialog"
+                aria-label="Notifications"
+                className="absolute right-0 mt-3 w-[340px] sm:w-[420px] bg-white/95 dark:bg-[#0c0e18]/95 backdrop-blur-2xl rounded-2xl shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65)] border border-slate-200/90 dark:border-white/10 z-50 overflow-hidden ring-1 ring-black/5 dark:ring-white/5 animate-in fade-in zoom-in-95 duration-150"
+              >
+                {/* Header */}
+                <div className="p-3.5 px-4 border-b border-slate-100 dark:border-white/[0.07]">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                        <Bell className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-sm text-slate-900 dark:text-white">Notifications</h3>
+                          {unreadNotificationCount > 0 && (
+                            <span className="px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-600 dark:text-violet-300 text-[10px] font-bold">
+                              {unreadNotificationCount} new
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {unreadNotificationCount > 0 && (
+                        <button
+                          onClick={() => markAllNotificationsAsRead(systemNotifications.map(n => n.id))}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-white/5 transition"
+                          title="Mark all notifications as read"
+                        >
+                          <CheckCheck className="h-3.5 w-3.5 text-violet-500" />
+                          <span>Mark all read</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowMobileNavNotifications(false)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
+                        aria-label="Close"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Filter Tabs */}
+                  <div className="grid grid-cols-2 gap-1 mt-3 p-1 bg-slate-100/90 dark:bg-white/[0.04] rounded-xl border border-slate-200/60 dark:border-white/[0.06]">
+                    <button
+                      onClick={() => setNotificationFilter('all')}
+                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
+                        notificationFilter === 'all'
+                          ? 'bg-white dark:bg-[#161a29] text-slate-900 dark:text-white shadow-sm font-bold'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <span>All Updates</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                        notificationFilter === 'all'
+                          ? 'bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 font-bold'
+                          : 'bg-transparent text-slate-400'
+                      }`}>
+                        {systemNotifications.length}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setNotificationFilter('unread')}
+                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
+                        notificationFilter === 'unread'
+                          ? 'bg-white dark:bg-[#161a29] text-slate-900 dark:text-white shadow-sm font-bold'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <span>Unread</span>
+                      {unreadNotificationCount > 0 ? (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-violet-600 text-white font-bold animate-pulse">
+                          {unreadNotificationCount}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/50 dark:bg-white/10 text-slate-400">
+                          0
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
-                  <Bell className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                  <p>No new notifications</p>
+
+                {/* Notifications List */}
+                <div className="max-h-[390px] overflow-y-auto p-2.5 space-y-2">
+                  {displayedNotifications.length === 0 ? (
+                    notificationFilter === 'unread' ? (
+                      <div className="py-12 px-6 text-center">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-emerald-500/10">
+                          <ShieldCheck className="h-6 w-6" />
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">All Caught Up!</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-[240px] mx-auto">
+                          You have no unread notifications. All live trading alerts are up to date.
+                        </p>
+                        <button
+                          onClick={() => setNotificationFilter('all')}
+                          className="mt-3.5 inline-flex items-center gap-1 text-[11.5px] font-semibold text-violet-600 dark:text-violet-400 hover:underline"
+                        >
+                          <span>View all updates</span>
+                          <ChevronRight className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+                        <Bell className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                        <p>No notifications yet</p>
+                      </div>
+                    )
+                  ) : (
+                    displayedNotifications.map(item => {
+                      const isUnread = !readNotificationIds.includes(item.id);
+                      const typeConfig = {
+                        success: {
+                          bg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-emerald-500/10',
+                          chip: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/25',
+                          dot: 'bg-emerald-400',
+                        },
+                        info: {
+                          bg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 shadow-blue-500/10',
+                          chip: 'bg-blue-500/10 text-blue-600 dark:text-blue-300 border-blue-500/25',
+                          dot: 'bg-blue-400',
+                        },
+                        warning: {
+                          bg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 shadow-amber-500/10',
+                          chip: 'bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/25',
+                          dot: 'bg-amber-400',
+                        },
+                        ai: {
+                          bg: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20 shadow-violet-500/10',
+                          chip: 'bg-violet-500/10 text-violet-600 dark:text-violet-300 border-violet-500/25',
+                          dot: 'bg-violet-400',
+                        },
+                        news: {
+                          bg: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20 shadow-cyan-500/10',
+                          chip: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 border-cyan-500/25',
+                          dot: 'bg-cyan-400',
+                        },
+                      }[item.type];
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => {
+                            markNotificationAsRead(item.id);
+                            if (item.onAction) {
+                              item.onAction();
+                              setShowMobileNavNotifications(false);
+                            } else if (item.actionTab) {
+                              setActiveTab(item.actionTab as any);
+                              setShowMobileNavNotifications(false);
+                            }
+                          }}
+                          className={`p-3.5 rounded-xl transition-all cursor-pointer flex items-start gap-3 relative group border ${
+                            isUnread
+                              ? 'bg-violet-500/[0.04] dark:bg-white/[0.04] border-violet-500/30 dark:border-violet-500/25 shadow-sm hover:border-violet-500/50 hover:bg-violet-500/[0.07] dark:hover:bg-white/[0.06]'
+                              : 'bg-slate-50/60 dark:bg-white/[0.015] border-slate-200/60 dark:border-white/[0.05] hover:bg-slate-100/70 dark:hover:bg-white/[0.04] opacity-80 hover:opacity-100'
+                          }`}
+                        >
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border shadow-sm ${typeConfig.bg}`}>
+                            <item.icon className="h-4 w-4" />
+                          </div>
+
+                          <div className="flex-1 min-w-0 pr-1">
+                            <div className="flex items-center justify-between gap-1.5 mb-1">
+                              <p className={`text-xs font-semibold truncate ${isUnread ? 'text-slate-900 dark:text-white font-bold' : 'text-slate-700 dark:text-slate-300'}`}>
+                                {item.title}
+                              </p>
+                              <span className={`inline-flex items-center gap-1 text-[9.5px] font-semibold px-2 py-0.5 rounded-full shrink-0 border ${typeConfig.chip}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${typeConfig.dot} animate-pulse`} />
+                                {item.badgeText || item.time}
+                              </span>
+                            </div>
+
+                            <p className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">
+                              {item.message}
+                            </p>
+
+                            <div className="mt-2.5 flex items-center justify-between">
+                              {item.actionLabel ? (
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-200/60 dark:bg-white/[0.06] group-hover:bg-violet-600 group-hover:text-white dark:group-hover:bg-violet-500 text-slate-700 dark:text-slate-300 text-[10.5px] font-semibold transition-all">
+                                  <span>{item.actionLabel}</span>
+                                  <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+                                </div>
+                              ) : <span />}
+
+                              {isUnread && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markNotificationAsRead(item.id);
+                                  }}
+                                  title="Mark as read"
+                                  className="opacity-0 group-hover:opacity-100 p-1 px-1.5 rounded-md text-slate-400 hover:text-emerald-500 hover:bg-slate-200 dark:hover:bg-white/10 transition-all text-[10.5px] flex items-center gap-1"
+                                >
+                                  <Check className="h-3 w-3" />
+                                  <span className="hidden sm:inline">Mark read</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {isUnread && (
+                            <span className="relative flex h-2 w-2 shrink-0 self-center">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500" />
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-2.5 px-4 bg-slate-50/90 dark:bg-white/[0.02] border-t border-slate-100 dark:border-white/[0.06] flex items-center justify-between text-[10.5px]">
+                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 font-medium">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    <span>Live System Monitor</span>
+                    <span className="text-slate-300 dark:text-slate-600">•</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[10px]">ALL SYSTEMS ONLINE</span>
+                  </div>
+                  <span className="font-mono text-[9.5px] font-semibold text-slate-400 dark:text-slate-500">FX JOURNAL PRO</span>
                 </div>
               </div>
             )}
@@ -4519,7 +4914,7 @@ export default function App() {
                     onClick={() => { setActiveTab('insights'); setShowMobileNavProfile(false); }}
                     className="profile-menu-item w-full text-left px-3 py-2.5 text-sm text-slate-700 dark:text-slate-300 rounded-xl flex items-center gap-2.5"
                   >
-                    <Brain className="h-4 w-4 text-slate-400 dark:text-slate-500" /> Heyza AI
+                    <Sparkles className="h-4 w-4 text-violet-500 dark:text-violet-400" /> Heyza AI
                     {!isProActive && (
                       <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-violet-500/12 border border-violet-500/25 px-1.5 py-px text-[8px] font-extrabold uppercase tracking-wider text-violet-600 dark:text-violet-300">
                         <Lock className="h-2 w-2" /> Pro
@@ -4568,7 +4963,7 @@ export default function App() {
                   <button
                     role="menuitem"
                     onClick={() => { handleLogout(); setShowMobileNavProfile(false); }}
-                    className="profile-menu-item profile-menu-item-danger w-full text-left px-3 py-2.5 text-sm text-rose-600 dark:text-rose-400 rounded-xl flex items-center gap-2.5"
+                    className="profile-menu-item profile-menu-item-danger w-full text-left px-3 py-2.5 text-sm font-medium text-rose-600 dark:text-rose-400 rounded-xl flex items-center gap-2.5 transition-all duration-150 active:scale-95 cursor-pointer hover:bg-rose-500/10"
                   >
                     <LogOut className="h-4 w-4" /> Log out
                   </button>
@@ -4825,7 +5220,7 @@ export default function App() {
                                   activeTab === 'fxnews' ? 'FX News' :
                                     activeTab === 'settings' ? 'Settings' :
                                       activeTab === 'tools' ? 'Tools' :
-                                        activeTab === 'insights' ? 'Heyza' :
+                                        activeTab === 'insights' ? 'Heyza AI' :
                                           activeTab === 'partner' ? 'Partner Portal' : (adminRole === 'SUB_ADMIN' ? 'PARTNER PORTAL' : 'Admin Panel')}
                   </h1>
                   <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 sm:line-clamp-1">
@@ -8619,7 +9014,7 @@ export default function App() {
           { id: 'calendar', icon: Calendar, label: 'Calendar' },
           { id: 'chart', icon: LineChart, label: 'Live Chart', pro: true },
           { id: 'tools', icon: Wrench, label: 'Tools' },
-          { id: 'insights', icon: Brain, label: 'Heyza', pro: true },
+          { id: 'insights', icon: Sparkles, label: 'Heyza AI', pro: true },
           { id: 'settings', icon: Settings, label: 'Settings' },
           ...(isPartner ? [{ id: 'partner', icon: Users, label: 'Partner Portal' }] : []),
           ...(isAdmin && adminRole !== 'PARTNER' ? [{ id: 'admin', icon: Shield, label: 'Admin Panel' }] : []),
@@ -8808,57 +9203,57 @@ export default function App() {
 
       {/* Edit Account Modal */}
       {showEditAccountModal && editingAccount && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-[70] animate-fade-in">
-          <div className="bg-white dark:bg-[#0c0d16] rounded-t-[28px] sm:rounded-2xl shadow-2xl border-t sm:border border-slate-100 dark:border-white/10 max-w-md w-full p-5 sm:p-6 pb-safe relative">
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 z-[70] animate-fade-in">
+          <div className="bg-white dark:bg-[#0c0d16] rounded-t-[28px] sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200/80 dark:border-white/10 max-w-md w-full p-6 sm:p-7 pb-8 sm:pb-7 relative">
             <div className="sm:hidden flex justify-center pt-1 pb-3">
-              <span className="h-1 w-9 rounded-full bg-slate-300 dark:bg-white/20" aria-hidden="true" />
+              <span className="h-1.5 w-10 rounded-full bg-slate-300 dark:bg-white/20" aria-hidden="true" />
             </div>
             <button
               onClick={() => {
                 setShowEditAccountModal(false);
                 setEditingAccount(null);
               }}
-              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 dark:bg-white/[0.06] active:scale-95 transition"
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
             </button>
             <form onSubmit={handleEditAccount} className="space-y-4">
-              <div>
-                <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Edit Trading Portfolio</h3>
-                <p className="text-[11px] text-slate-400">Modify the alias name and starting capital for {editingAccount.broker}.</p>
+              <div className="pr-8">
+                <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Edit Trading Portfolio</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Modify alias name and starting capital for <span className="font-semibold text-slate-700 dark:text-slate-200">{editingAccount.broker || 'Trading Account'}</span>.</p>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Account Alias / Name</label>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">Account Alias / Name</label>
                 <input
                   type="text"
                   required
                   value={editAccName}
                   onChange={(e) => setEditAccName(e.target.value)}
                   placeholder="Primary Live Scalper"
-                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full font-semibold focus:ring-violet-500 focus:border-violet-500"
+                  className="h-11 w-full bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/25 focus:border-violet-500 transition"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Starting Capital / Balance</label>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">Starting Capital / Balance</label>
                 <input
                   type="number"
                   required
                   value={editAccStartingBalance}
                   onChange={(e) => setEditAccStartingBalance(e.target.value)}
                   placeholder="10000"
-                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full font-semibold focus:ring-violet-500 focus:border-violet-500"
+                  className="h-11 w-full bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/25 focus:border-violet-500 transition"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Account Currency</label>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">Account Currency</label>
                 <select
                   value={editAccCurrency}
                   onChange={(e) => setEditAccCurrency(e.target.value)}
-                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 w-full font-semibold focus:ring-violet-500 focus:border-violet-500"
+                  className="h-11 w-full bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/25 focus:border-violet-500 transition cursor-pointer"
                 >
                   <option value="USD">USD ($)</option>
                   <option value="EUR">EUR (€)</option>
@@ -8870,12 +9265,12 @@ export default function App() {
                 </select>
               </div>
 
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 mt-2">
+              <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100 dark:border-slate-800/80 mt-5 pb-1">
                 <button
                   type="button"
                   onClick={handleDeleteAccount}
                   disabled={actionLoading}
-                  className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:hover:bg-red-900/50 dark:text-red-400 font-bold text-xs rounded-lg py-2.5 px-3 transition flex items-center gap-1.5 disabled:opacity-50 border border-red-200 dark:border-red-900/50"
+                  className="h-10 px-3.5 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50/80 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:hover:bg-red-900/50 dark:text-red-400 font-semibold text-xs transition flex items-center gap-1.5 disabled:opacity-50"
                   title="Delete Portfolio Account"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -8888,14 +9283,14 @@ export default function App() {
                       setShowEditAccountModal(false);
                       setEditingAccount(null);
                     }}
-                    className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-lg py-2.5 px-3.5 transition"
+                    className="h-10 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs transition"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-bold text-xs rounded-lg py-2.5 px-4 transition disabled:opacity-50"
+                    className="h-10 px-5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs transition shadow-md shadow-violet-600/25 disabled:opacity-50 active:scale-95"
                   >
                     {actionLoading ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -10220,10 +10615,9 @@ export default function App() {
       {/* Sign-out confirmation modal */}
       {showSignOutModal && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(3,4,8,0.55)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
-          onClick={() => setShowSignOutModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowSignOutModal(false); }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-fade-in"
+          onClick={() => !isLoggingOut && setShowSignOutModal(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape' && !isLoggingOut) setShowSignOutModal(false); }}
         >
           <div
             role="alertdialog"
@@ -10231,36 +10625,104 @@ export default function App() {
             aria-labelledby="signout-title"
             aria-describedby="signout-desc"
             onClick={(e) => e.stopPropagation()}
-            className="profile-menu rounded-2xl max-w-sm w-full p-6"
-            style={{ animation: 'modalIn 0.2s ease-out' }}
+            className="relative max-w-sm sm:max-w-md w-full bg-[#090b12]/95 border border-white/[0.08] shadow-[0_32px_80px_-20px_rgba(0,0,0,0.95),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_0_rgba(255,255,255,0.12)] rounded-3xl p-6 sm:p-7 overflow-hidden text-left animate-in fade-in zoom-in-95 duration-200"
           >
-            <div className="flex items-center gap-3.5 mb-1">
-              <div className="h-11 w-11 rounded-full bg-rose-100 dark:bg-rose-500/12 dark:border dark:border-rose-400/25 flex items-center justify-center flex-shrink-0">
-                <LogOut className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+            {/* Top ambient highlight hairline & glow */}
+            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-rose-500/50 to-transparent" />
+            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-36 bg-gradient-to-b from-rose-500/20 via-violet-600/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+            {/* Close button */}
+            <button
+              onClick={() => setShowSignOutModal(false)}
+              disabled={isLoggingOut}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white w-8 h-8 rounded-xl flex items-center justify-center bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] transition-all active:scale-95 disabled:opacity-50"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Header with dual-layer glowing icon badge */}
+            <div className="flex items-start gap-4 mb-5">
+              <div className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] border border-white/[0.1] shadow-[0_8px_16px_-4px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.2)] flex-shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-500/25 via-rose-600/10 to-transparent border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-[0_0_16px_rgba(244,63,94,0.35)]">
+                  <LogOut className="w-4.5 h-4.5 stroke-[2.2]" />
+                </div>
               </div>
-              <div>
-                <h3 id="signout-title" className="text-sm font-bold text-slate-800 dark:text-white">Sign out of FX Journal Pro?</h3>
-                <p id="signout-desc" className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Your journal stays saved. You can sign back in anytime.
+              <div className="pr-6">
+                <h3 id="signout-title" className="text-base sm:text-lg font-semibold text-white tracking-tight">
+                  Sign out of FX Journal Pro?
+                </h3>
+                <p id="signout-desc" className="text-xs sm:text-sm text-slate-400/90 mt-1 leading-relaxed">
+                  Your journal data and MT5 sync settings are safely saved. You can sign back in anytime.
                 </p>
               </div>
             </div>
-            <div className="flex gap-2 justify-end mt-7">
+
+            {/* Active Session & Security card */}
+            <div className="mb-5 space-y-2">
+              {user?.email && (
+                <div className="p-3 rounded-2xl bg-gradient-to-r from-white/[0.04] to-white/[0.015] border border-white/[0.07] flex items-center justify-between gap-3 shadow-inner">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600/40 to-rose-500/25 border border-white/10 flex items-center justify-center text-xs font-bold text-slate-100 uppercase shrink-0 shadow-sm">
+                      {user.email.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] uppercase font-semibold tracking-wider text-slate-400">Current Session</div>
+                      <div className="text-xs font-medium text-slate-200 truncate">{user.email}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-semibold text-emerald-400 shrink-0">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+                    </span>
+                    Active
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 px-1 text-[11px] text-slate-400/80">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400/90 shrink-0" />
+                <span>All trading history and MT5 credentials remain safely backed up</span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2.5 justify-end pt-4 border-t border-white/[0.07]">
               <button
+                type="button"
+                disabled={isLoggingOut}
                 onClick={() => setShowSignOutModal(false)}
-                className="px-4 py-2.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 dark:text-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.11] dark:border dark:border-white/10 rounded-xl transition"
+                className="h-10 px-4 rounded-xl font-medium text-xs text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.02] border border-white/[0.08] hover:border-white/[0.15] shadow-sm transition-all duration-150 active:scale-[0.98] disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 autoFocus
+                type="button"
+                disabled={isLoggingOut}
                 onClick={async () => {
-                  setShowSignOutModal(false);
-                  await performLogout();
+                  setIsLoggingOut(true);
+                  try {
+                    await performLogout();
+                  } finally {
+                    setIsLoggingOut(false);
+                    setShowSignOutModal(false);
+                  }
                 }}
-                className="px-4 py-2.5 text-xs font-semibold text-white rounded-xl transition bg-gradient-to-b from-rose-500 to-rose-600 hover:brightness-110 active:translate-y-px border border-rose-400/50 shadow-[0_10px_24px_-12px_rgba(244,63,94,.9),inset_0_1px_0_rgba(255,255,255,.22)]"
+                className="h-10 px-5 rounded-xl font-semibold text-xs text-white bg-gradient-to-b from-rose-500 via-rose-600 to-rose-700 hover:from-rose-400 hover:via-rose-500 hover:to-rose-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_16px_rgba(225,29,72,0.35)] border border-rose-400/40 transition-all duration-150 flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50"
               >
-                Sign out
+                {isLoggingOut ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Signing out...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign out</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
