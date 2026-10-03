@@ -5649,20 +5649,35 @@ export default function App() {
                       const circumference = Math.PI * radius; // ~125.66
                       const strokeDashoffset = circumference - (wrPercentage * circumference);
 
+                      const rating = !hasTrades ? 'No data' : winRate < 40 ? 'Needs Work' : winRate < 50 ? 'Average' : winRate < 65 ? 'Good' : 'Excellent';
+                      const badgeStyle = !hasTrades ? 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-white/[0.06] dark:text-slate-400 dark:border-white/10' :
+                        winRate < 40 ? 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30' :
+                        winRate < 50 ? 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30' :
+                        winRate < 65 ? 'bg-violet-50 text-violet-600 border-violet-100 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/30' :
+                        'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30';
+
                       return (
                         <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between h-72 sm:h-80 relative overflow-hidden">
-                          <div className="flex items-center gap-1.5 relative z-10">
-                            <h3 className="font-bold text-slate-900 dark:text-white text-sm tracking-wide">Win / Loss Rate</h3>
-                            <button
-                              onClick={() => alert("Win Rate is calculated as:\n(Total Winning Trades ÷ Total Executed Trades) × 100")}
-                              title="How is Win Rate calculated?"
-                              className="hover:scale-110 transition-transform -m-2 p-2 shrink-0 cursor-pointer"
-                            >
-                              <HelpCircle className="w-4 h-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer" />
-                            </button>
+                          <div className="flex justify-between items-start relative z-10">
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <h3 className="font-bold text-slate-900 dark:text-white text-sm">Win / Loss Rate</h3>
+                                <button
+                                  onClick={() => alert("Win Rate is calculated as:\n(Total Winning Trades ÷ Total Executed Trades) × 100")}
+                                  title="How is Win Rate calculated?"
+                                  className="hover:scale-110 transition-transform -m-1.5 p-1.5 shrink-0 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                >
+                                  <HelpCircle className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <p className="text-[10px] text-slate-400 mt-0.5">Percentage of profitable closed positions</p>
+                            </div>
+                            <span className={`text-[9px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${badgeStyle}`}>
+                              {rating}
+                            </span>
                           </div>
 
-                          <div className="relative w-full flex-1 flex flex-col items-center justify-center mt-3 sm:mt-6">
+                          <div className="relative w-full flex-1 flex flex-col items-center justify-center my-1 sm:my-3">
                             <div className="relative w-56 sm:w-64 h-32 sm:h-36 flex items-end justify-center overflow-visible">
                               <svg className="w-full h-full overflow-visible" viewBox="0 0 100 55">
                                 {/* Background Track */}
@@ -5695,15 +5710,26 @@ export default function App() {
                                 />
                               </svg>
 
-                              <div className="absolute flex flex-col items-center justify-end pb-2 sm:pb-3 gap-1.5 sm:gap-2 z-10">
-                                <span className="gauge-chip text-xs font-bold px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-full">
-                                  {!hasTrades ? 'No data yet' : winRate < 40 ? 'Needs Work' : winRate < 50 ? 'Average' : winRate < 65 ? 'Good!' : 'Excellent!'}
+                              <div className="absolute flex flex-col items-center justify-end pb-1 sm:pb-2 z-10">
+                                <span className="font-display text-3xl sm:text-4xl font-black text-slate-900 dark:text-white font-mono tracking-tight tabular-nums">
+                                  {hasTrades ? wrVal.toFixed(0) + '%' : '—'}
                                 </span>
-                                <span className="gauge-chip text-xs font-medium px-4 py-1.5 sm:px-5 sm:py-2 rounded-full flex items-center gap-1.5">
-                                  <span className="gauge-chip-value font-bold text-sm tracking-tight">{hasTrades ? wrVal.toFixed(0) + '%' : '—'}</span> Win Rate
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                                  Win Accuracy
                                 </span>
                               </div>
                             </div>
+                          </div>
+
+                          <div className="border-t border-slate-100 dark:border-slate-800/80 pt-2.5 sm:pt-3 flex justify-between items-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              {wins.length} Winning
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                              {losses.length} Losing
+                            </span>
                           </div>
                         </div>
                       );
@@ -5711,14 +5737,17 @@ export default function App() {
 
                     {/* Winning vs Losing Trades Donut Chart */}
                     <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between h-72 sm:h-80 relative overflow-hidden">
-                      <div className="flex items-center justify-between relative z-10">
+                      <div className="flex justify-between items-start relative z-10">
                         <div>
                           <h3 className="font-bold text-slate-900 dark:text-white text-sm">Win / Loss Ratio</h3>
-                          <p className="text-[10px] text-slate-400">Total executions split by outcome</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Total executions split by outcome</p>
                         </div>
+                        <span className="text-[9px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-slate-300 whitespace-nowrap shrink-0">
+                          {totalTradesCount} Trades
+                        </span>
                       </div>
 
-                      <div className="relative w-full flex-1 flex items-center justify-center mt-1 sm:mt-2">
+                      <div className="relative w-full flex-1 flex items-center justify-center my-1 sm:my-2">
                         {totalTradesCount > 0 ? (
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
@@ -5729,8 +5758,8 @@ export default function App() {
                                 ]}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={58}
-                                outerRadius={78}
+                                innerRadius={48}
+                                outerRadius={68}
                                 paddingAngle={5}
                                 dataKey="value"
                                 stroke="none"
@@ -5748,29 +5777,29 @@ export default function App() {
                             </PieChart>
                           </ResponsiveContainer>
                         ) : (
-                          <div className="text-xs text-slate-500 text-center">No trades yet</div>
+                          <div className="text-xs text-slate-400 text-center">No trades yet</div>
                         )}
 
                         {totalTradesCount > 0 && (
                           <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter">
+                            <span className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white tracking-tighter tabular-nums">
                               {totalTradesCount}
                             </span>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 sm:mt-1">
-                              Trades
+                            <span className="text-[8.5px] font-bold text-slate-400 uppercase tracking-widest">
+                              Positions
                             </span>
                           </div>
                         )}
                       </div>
 
-                      <div className="flex justify-between items-center mt-3 sm:mt-4 border-t border-slate-100 dark:border-slate-800 pt-3 sm:pt-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-                          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{wins.length} Wins</span>
+                      <div className="border-t border-slate-100 dark:border-slate-800/80 pt-2.5 sm:pt-3 flex justify-between items-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span className="text-slate-600 dark:text-slate-300">{wins.length} Wins</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{losses.length} Losses</span>
-                          <div className="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-600 dark:text-slate-300">{losses.length} Losses</span>
+                          <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                         </div>
                       </div>
                     </div>
@@ -9187,10 +9216,10 @@ export default function App() {
                   handleOpenTradeModal();
                 }}
                 disabled={isMentorReadOnlyMode}
-                className="md:hidden fixed right-3.5 bottom-[calc(56px+env(safe-area-inset-bottom,0px)+12px)] z-[59] h-11 w-11 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-[0_6px_20px_rgba(124,58,237,0.5)] flex items-center justify-center transition-all duration-200 active:scale-90 hover:brightness-110 disabled:opacity-50 border border-white/20"
+                className="md:hidden fixed right-4 bottom-[calc(78px+env(safe-area-inset-bottom,0px))] z-[65] h-12 w-12 rounded-full bg-gradient-to-br from-violet-600 via-indigo-600 to-violet-500 text-white shadow-[0_8px_25px_rgba(124,58,237,0.6)] flex items-center justify-center transition-all duration-200 active:scale-90 hover:scale-105 hover:brightness-110 disabled:opacity-50 border border-white/25 ring-4 ring-violet-500/15"
                 aria-label="Add new trade"
               >
-                <Plus className="h-5 w-5" strokeWidth={2.5} />
+                <Plus className="h-6 w-6 text-white" strokeWidth={2.5} />
               </button>
             )}
           </>
