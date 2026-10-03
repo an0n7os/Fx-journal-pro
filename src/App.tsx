@@ -814,7 +814,7 @@ export default function App() {
     // 4. Heyza AI Mentor
     list.push({
       id: 'notif-heyza-ai',
-      title: 'Heyza AI Copilot Ready',
+      title: 'Heyza AI Ready',
       message: 'Need deep trade psychology breakdown, setup review, or expectancy optimization? Heyza AI is standing by.',
       time: 'AI',
       badgeText: 'Heyza AI',
@@ -5179,8 +5179,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Dynamic Title bar — hidden on mobile dashboard (hero card replaces it) */}
-            <div className={`flex flex-col sm:flex-row items-stretch sm:items-start justify-between gap-3 sm:gap-4 w-full ${activeTab === 'dashboard' ? 'hidden sm:flex' : ''
+            {/* Dynamic Title bar — hidden on mobile dashboard and insights (Heyza has dedicated assistant window) */}
+            <div className={`flex flex-col sm:flex-row items-stretch sm:items-start justify-between gap-3 sm:gap-4 w-full ${activeTab === 'dashboard' || activeTab === 'insights' ? 'hidden sm:flex' : ''
               }`}>
               <div className="flex-1 min-w-0">
                 <div>
@@ -8963,9 +8963,9 @@ export default function App() {
         ];
         // The role consoles and secondary features live in More drawer.
         const moreTabs: { id: string; icon: any; label: string; badge?: any; pro?: boolean }[] = [
-          { id: 'fxnews', icon: Globe, label: 'Forex News' },
+          { id: 'fxnews', icon: Globe, label: 'FX News' },
           { id: 'calendar', icon: Calendar, label: 'Economic Calendar' },
-          { id: 'insights', icon: Sparkles, label: 'Heyza AI Copilot', pro: true },
+          { id: 'insights', icon: Sparkles, label: 'Heyza AI', pro: true },
           { id: 'chart', icon: LineChart, label: 'Live Charts', pro: true },
           { id: 'notebook', icon: Edit3, label: 'Trader Notebook', pro: true },
           { id: 'tools', icon: Wrench, label: 'Trading Calculators' },
