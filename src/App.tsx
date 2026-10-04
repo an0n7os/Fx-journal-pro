@@ -1050,6 +1050,9 @@ export default function App() {
       // own navigation stand.
       if (justLoggedOutRef.current) {
         justLoggedOutRef.current = false;
+        if (location.pathname !== '/') {
+          navigate('/', { replace: true });
+        }
         return;
       }
       const path = location.pathname.toLowerCase();
@@ -1530,6 +1533,10 @@ export default function App() {
   };
 
   const performLogout = async () => {
+    // Set flag and navigate home FIRST, so auth-redirect effects don't bounce user to /login modal
+    justLoggedOutRef.current = true;
+    navigate('/', { replace: true });
+
     try {
       if (isSupabaseConfigured) {
         await supabase.auth.signOut();
@@ -1559,10 +1566,6 @@ export default function App() {
     setIsAdmin(false);
     setAdminRole('USER');
     setPartnerLink(null);
-    justLoggedOutRef.current = true;
-    // Home, not the sign-in form. Someone who just chose to sign out being
-    // handed a "Welcome back" prompt reads as the logout having failed.
-    navigate('/', { replace: true });
   };
 
   const submitOnboarding = async () => {
