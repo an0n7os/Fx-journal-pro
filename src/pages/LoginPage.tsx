@@ -298,7 +298,7 @@ const aiMentorQuestions = [
 
 const aiPoints = [
   'Ask about any trade, strategy, or market condition.',
-  'Get instant feedback on risk, entries, and exits.',
+  'Get AI-assisted feedback based on your recorded trades, risk patterns, entries, exits, and trading behavior.',
   'Receive actionable steps to improve next session.',
 ];
 
@@ -1119,7 +1119,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               </p>
 
               <p className="mt-4 sm:mt-6 text-sm sm:text-[17px] text-slate-400 leading-relaxed max-w-xl">
-                The fastest way to journal, analyze, and improve your trading. Auto-sync MetaTrader 5 trades, get AI mentor insights, and track every metric that matters.
+                A simple way to journal, analyze, and review your trading. Auto-sync MetaTrader 5 trades, get AI mentor insights, and track every metric that matters.
               </p>
 
               <div className="mt-6 sm:mt-7 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 sm:gap-y-3">
@@ -1165,12 +1165,24 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               <HeroPanel />
             </div>
           </div>
+        </div>
+      </section>
 
-          {/* The "Trader's Mindset" pull-quote used to sit here. Removed: it was
-            the company quoting itself, so the quote format borrowed no
-            authority, and it delayed the product story by 60 words. Bring it
-            back as a real trader testimonial — name and account type — if one
-            becomes available. */}
+      {/* ── What is FXJournalPro (Compliance & Overview) ── */}
+      <section className="relative px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        <div className="max-w-4xl mx-auto rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-7 shadow-xl backdrop-blur-sm space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-violet-400" />
+            <h3 className="text-xs font-mono uppercase tracking-wider font-bold text-violet-300">
+              What is FXJournalPro?
+            </h3>
+          </div>
+          <p className="text-sm sm:text-base text-slate-200 leading-relaxed font-medium">
+            FXJournalPro is a software and analytics platform that helps traders record, organize, analyze, and review their own trading activity. Users can manually journal trades or import their own MT5 trading history for performance analysis and reporting.
+          </p>
+          <p className="text-xs sm:text-[13px] text-slate-400 leading-relaxed border-t border-white/[0.06] pt-3">
+            FXJournalPro does not provide brokerage services, investment management, trade execution, or financial advisory services. FXJournalPro does not manage customer funds or access customer trading funds. Users are responsible for their own trading decisions.
+          </p>
         </div>
       </section>
 
@@ -1182,7 +1194,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               <Sparkles className="h-3.5 w-3.5 text-violet-300" />
               <span className="lp-eyebrow lp-num">{features.length + trackedMetrics.length} Core Features</span>
             </span>
-            <h2 className="font-display text-3xl sm:text-[38px] font-bold text-white tracking-[-0.025em] text-balance">Everything You Need to Win Consistently</h2>
+            <h2 className="font-display text-3xl sm:text-[38px] font-bold text-white tracking-[-0.025em] text-balance">Everything You Need to Analyze &amp; Improve Your Trading</h2>
             <p className="mt-4 text-slate-400 text-base leading-relaxed">
               From automatic MT5 sync to AI coaching and deep analytics — FX Journal Pro combines every tool a serious trader needs into one powerful platform.
             </p>
@@ -1292,9 +1304,9 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               <Newspaper className="h-3.5 w-3.5 text-violet-300" />
               <span className="lp-eyebrow">FX News &amp; Economic Calendar</span>
             </span>
-            <h2 className="font-display text-3xl sm:text-[38px] font-bold text-white tracking-[-0.025em] text-balance leading-tight">Never Trade Blind Again</h2>
+            <h2 className="font-display text-3xl sm:text-[38px] font-bold text-white tracking-[-0.025em] text-balance leading-tight">Stay Informed With Market News &amp; Economic Events</h2>
             <p className="mt-4 text-slate-400 text-base leading-relaxed">
-              Track live forex headlines and high-impact economic events — NFP, CPI, FOMC, GDP — all inside your journal, so you're always ahead of market-moving news.
+              Track live forex headlines and high-impact economic events — NFP, CPI, FOMC, GDP — all inside your journal, so you can review relevant market-moving events alongside your trading activity.
             </p>
             <div className="mt-6 space-y-3">
               {[
@@ -1441,6 +1453,9 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 </div>
               ))}
             </div>
+            <p className="mt-4 text-xs text-slate-400 leading-relaxed border-l-2 border-violet-500/40 pl-3">
+              Heyza provides educational and analytical insights based on your journal data. It does not provide financial advice, trade signals, or guaranteed outcomes.
+            </p>
             <button onClick={() => openAuthModal('register')} className="lp-btn-primary mt-8 inline-flex items-center gap-2 font-semibold rounded-full px-7 py-3.5 text-sm">
               Try the AI Mentor
               <ArrowUpRight className="h-4 w-4" />
@@ -1604,7 +1619,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               Start free. Upgrade when it pays for itself.
             </h2>
             <p className="mt-4 text-slate-400 text-[15px] leading-relaxed">
-              One trade saved from a bad habit covers a year of Pro.
+              Build better trading habits through consistent review.
             </p>
           </div>
 
@@ -1695,9 +1710,16 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                   <span>News reminder</span>
                 </li>
               </ul>
+
+              {/* Digital SaaS Subscription Notice */}
+              <div className="mt-5 p-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-[11.5px] text-slate-300 leading-relaxed">
+                <span className="font-semibold text-violet-200 block mb-0.5">Digital SaaS Subscription</span>
+                Pro provides access to premium software features within FXJournalPro. Payment is for software access and does not represent an investment, trading deposit, brokerage service, or managed investment.
+              </div>
+
               <button
                 onClick={() => openAuthModal('register')}
-                className="lp-btn-primary mt-7 w-full font-semibold rounded-full px-6 py-3 text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-violet-900/30"
+                className="lp-btn-primary mt-6 w-full font-semibold rounded-full px-6 py-3 text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-violet-900/30"
               >
                 <span>Go Pro — {PRO_PRICE_INR}</span>
                 <ArrowRight className="h-4 w-4" />
@@ -2164,7 +2186,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             <div className="lg:col-span-2">
               <h3 className="text-xs font-mono uppercase tracking-wider font-bold text-white mb-3 sm:mb-4">Legal &amp; Trust</h3>
               <ul className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-1 text-xs">
-                {(['terms', 'privacy', 'refunds', 'shipping', 'contact', 'risk'] as const).map((key) => (
+                {(['terms', 'privacy', 'refunds', 'shipping', 'risk', 'contact', 'about'] as const).map((key) => (
                   <li key={key}>
                     <button
                       type="button"
@@ -2236,9 +2258,17 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           </div>
 
 
+          {/* Risk Warning & Regulatory Notice */}
+          <div className="border-t border-white/[0.06] pt-5 text-[11px] leading-relaxed text-slate-400">
+            <p>
+              <strong className="text-slate-300 font-semibold">Regulatory Notice &amp; Risk Disclaimer:</strong>{' '}
+              FXJournalPro is a software and analytics service and does not provide brokerage, investment management, trade execution, or financial advisory services. Trading financial instruments involves substantial risk. Users are solely responsible for their trading decisions and financial outcomes.
+            </p>
+          </div>
+
           {/* Bottom Copyright & Sessions Bar */}
-          <div className="border-t border-white/[0.06] pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
-            <p>&copy; {new Date().getFullYear()} FX Journal Pro. Operated by Akshayraj (FX Journal Pro). All rights reserved.</p>
+          <div className="border-t border-white/[0.06] pt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+            <p>&copy; {new Date().getFullYear()} FXJournalPro. Operated by Akshayraj (FXJournalPro). Kasaragod, Kerala, India. All rights reserved.</p>
             <div className="flex items-center gap-4 text-[11px] font-mono">
               <span className="text-slate-400">
                 Built by{' '}
@@ -2288,12 +2318,33 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             <div className="h-72 overflow-y-auto pr-1 space-y-3 text-[13px] text-slate-400 leading-relaxed">
               {LEGAL_DOCS[legalDoc].body.map((para, i) => <p key={i}>{para}</p>)}
             </div>
-            <div className="flex justify-end mt-5">
+            <div className="flex items-center justify-between mt-5 pt-3 border-t border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => {
+                  const pathMap: Record<string, string> = {
+                    terms: '/terms-and-conditions',
+                    privacy: '/privacy-policy',
+                    refunds: '/cancellation-and-refund-policy',
+                    shipping: '/shipping-and-delivery',
+                    risk: '/risk-disclosure',
+                    contact: '/contact-us',
+                    about: '/about-us',
+                  };
+                  const target = pathMap[legalDoc] || `/${legalDoc}`;
+                  setLegalDoc(null);
+                  navigate(target);
+                }}
+                className="text-violet-400 hover:text-violet-300 text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
+              >
+                <span>View Full Page</span>
+                <ArrowUpRight className="h-3 w-3" />
+              </button>
               <button
                 type="button"
                 autoFocus
                 onClick={() => setLegalDoc(null)}
-                className="lp-btn-primary font-semibold text-xs rounded-xl px-5 py-2.5"
+                className="lp-btn-primary font-semibold text-xs rounded-xl px-5 py-2.5 cursor-pointer"
               >
                 Close
               </button>

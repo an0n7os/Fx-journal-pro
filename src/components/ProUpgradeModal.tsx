@@ -404,6 +404,12 @@ export default function ProUpgradeModal({
                 </div>
               ))}
             </div>
+
+            {/* Digital SaaS Subscription Notice */}
+            <div className="mt-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] p-2.5 sm:p-3 text-[11px] text-slate-300 leading-relaxed">
+              <span className="font-semibold text-violet-300 block mb-0.5">Digital SaaS Subscription</span>
+              Pro provides access to premium software features within FXJournalPro. Payment is for software access and does not represent an investment, trading deposit, brokerage service, or managed investment.
+            </div>
           </div>
 
           {/* Right on desktop / Bottom on mobile: Checkout & Actions */}

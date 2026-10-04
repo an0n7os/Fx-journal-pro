@@ -38,7 +38,9 @@ import CustomAlertModal from './components/CustomAlertModal';
 import OnboardingWizardModal from './components/OnboardingWizardModal';
 import ShareJournalModal from './components/ShareJournalModal';
 import KnowYourTrades from './components/KnowYourTrades';
+import { resolveDocKeyFromPath } from './legalDocs';
 const SharedJournalPage = React.lazy(() => import('./pages/SharedJournalPage'));
+const LegalPage = React.lazy(() => import('./pages/LegalPage'));
 
 // Screens that only ever render behind an activeTab check. Splitting them out
 // keeps the admin panel, the MT5 console and lightweight-charts out of the
@@ -1052,14 +1054,14 @@ export default function App() {
       }
       const path = location.pathname.toLowerCase();
       // Allow valid public landing & section routes without redirecting or stripping hashes
-      if (PUBLIC_PATHS.includes(path) || path.startsWith('/shared/') || path.startsWith('/share/')) {
+      if (PUBLIC_PATHS.includes(path) || path.startsWith('/shared/') || path.startsWith('/share/') || resolveDocKeyFromPath(path)) {
         return;
       }
       // If visiting a protected dashboard route without auth, redirect to /login while preserving hash and query
       navigate({ pathname: '/login', hash: location.hash, search: location.search }, { replace: true });
     } else {
       // Authenticated user
-      if (location.pathname.startsWith('/shared/') || location.pathname.startsWith('/share/')) {
+      if (location.pathname.startsWith('/shared/') || location.pathname.startsWith('/share/') || resolveDocKeyFromPath(location.pathname)) {
         return;
       }
       const pathRaw = location.pathname.replace(/^\//, '').toLowerCase();
@@ -1078,9 +1080,8 @@ export default function App() {
   // Keep URL pathname in sync with activeTab when user switches tabs
   useEffect(() => {
     if (!user) return;
-    // A shared journal is not a tab. Without this the effect below saw a path
-    // that matched no tab and replaced it with the viewer's own active tab.
-    if (sharedJournalToken(location.pathname)) return;
+    // A shared journal or compliance page is not a tab.
+    if (sharedJournalToken(location.pathname) || resolveDocKeyFromPath(location.pathname)) return;
     const currentPath = location.pathname.replace(/^\//, '').toLowerCase();
     const mappedCurrent = TAB_ALIASES[currentPath] || currentPath;
     if (activeTab && DASHBOARD_TABS.includes(activeTab) && mappedCurrent !== activeTab) {
@@ -1098,9 +1099,8 @@ export default function App() {
   // Synchronize document.title with activeTab when user is logged in
   useEffect(() => {
     if (!user) return;
-    // SharedJournalPage sets its own title; leaving this to run put
-    // "Dashboard | FX Journal Pro" on someone else's shared journal.
-    if (sharedJournalToken(location.pathname)) return;
+    // SharedJournalPage or LegalPage sets its own title
+    if (sharedJournalToken(location.pathname) || resolveDocKeyFromPath(location.pathname)) return;
     const tabTitles: Record<string, string> = {
       dashboard: 'Dashboard | FX Journal Pro',
       journal: 'Trading Journal | FX Journal Pro',
@@ -4345,6 +4345,28 @@ export default function App() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  // Check if current route is a legal / compliance page (/terms, /privacy, /refunds, /contact, etc.)
+  const legalDocKey = resolveDocKeyFromPath(location.pathname);
+  if (legalDocKey) {
+    return (
+      <React.Suspense
+        fallback={
+          <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+            <div className="text-center space-y-4 max-w-sm">
+              <Logo size={34} className="justify-center" />
+              <div className="flex items-center justify-center gap-2 text-violet-400 text-xs font-semibold">
+                <span className="h-2 w-2 rounded-full bg-violet-400 animate-ping" />
+                Loading policy...
+              </div>
+            </div>
+          </div>
+        }
+      >
+        <LegalPage initialKey={legalDocKey} />
+      </React.Suspense>
     );
   }
 
