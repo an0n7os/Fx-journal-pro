@@ -324,11 +324,48 @@ async function sendOtpEmail(email, otp, subject = 'Your FX Journal Pro Verificat
   const resendKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.SENDGRID_FROM_EMAIL || process.env.SENDER_EMAIL || 'noreply@fxjournalpro.com';
   const isReset = subject.toLowerCase().includes('reset');
-  const heading = isReset ? 'Reset your password' : 'Verify your email address';
-  const bodyText = isReset
-    ? 'You requested a password reset for your FX Journal Pro account. Use the code below to set a new password. This code expires in 10 minutes.'
-    : 'Thank you for registering with FX Journal Pro. Please use the following one-time password (OTP) to activate your account. This code is valid for 10 minutes.';
-  const emailHtml = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;"><h2 style="color: #0f172a; text-align: center;">${heading}</h2><p>${bodyText}</p><div style="text-align: center; margin: 30px 0;"><span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #2563eb; background-color: #f1f5f9; padding: 10px 20px; border-radius: 8px;">${otp}</span></div><p>If you did not request this code, please ignore this email.</p></div>`;
+  const heading = isReset ? 'Reset your password' : 'Verify your email';
+  const subheading = isReset
+    ? 'Use the code below to reset your FX Journal Pro password.'
+    : 'Use the code below to verify your FX Journal Pro account.';
+  const footerNote = isReset
+    ? 'This code expires in 10 minutes. If you did not request a password reset, you can safely ignore this email.'
+    : 'This code expires in 10 minutes. If you did not create an account with FX Journal Pro, you can safely ignore this email.';
+
+  // Premium branded HTML email template
+  const emailHtml = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${subject}</title></head>
+<body style="margin:0;padding:0;background-color:#0a0f1e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0f1e;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:560px;background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%);border-radius:16px;border:1px solid rgba(139,92,246,0.2);overflow:hidden;">
+        <!-- Header -->
+        <tr><td style="padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(139,92,246,0.15);">
+          <div style="display:inline-flex;align-items:center;gap:8px;">
+            <span style="font-size:22px;font-weight:800;background:linear-gradient(135deg,#a78bfa,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;color:#a78bfa;">FX Journal Pro</span>
+          </div>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:36px 40px;">
+          <h1 style="margin:0 0 12px;font-size:24px;font-weight:700;color:#f1f5f9;text-align:center;">${heading}</h1>
+          <p style="margin:0 0 32px;font-size:15px;color:#94a3b8;text-align:center;line-height:1.6;">${subheading}</p>
+          <!-- OTP Code Box -->
+          <div style="background:rgba(139,92,246,0.08);border:1.5px solid rgba(139,92,246,0.3);border-radius:12px;padding:28px;text-align:center;margin-bottom:32px;">
+            <p style="margin:0 0 8px;font-size:12px;font-weight:600;letter-spacing:2px;color:#8b5cf6;text-transform:uppercase;">Verification Code</p>
+            <div style="font-size:40px;font-weight:800;letter-spacing:12px;color:#f1f5f9;font-variant-numeric:tabular-nums;">${otp}</div>
+          </div>
+          <p style="margin:0;font-size:13px;color:#64748b;text-align:center;line-height:1.6;">${footerNote}</p>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:20px 40px 28px;border-top:1px solid rgba(139,92,246,0.15);text-align:center;">
+          <p style="margin:0;font-size:12px;color:#475569;">© ${new Date().getFullYear()} FX Journal Pro · <a href="https://fxjournalpro.com" style="color:#7c3aed;text-decoration:none;">fxjournalpro.com</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 
   // 1. Try SendGrid if API Key is configured
   if (sendgridKey && sendgridKey !== 'YOUR_SENDGRID_API_KEY' && !sendgridKey.startsWith('SG.xxxx')) {
@@ -388,7 +425,7 @@ async function sendOtpEmail(email, otp, subject = 'Your FX Journal Pro Verificat
       console.warn('[Resend] RESEND_FROM_EMAIL is not set — sending from the shared sandbox domain. Expect codes to land in spam.');
     }
     try {
-      console.log(`[Resend] Attempting to send OTP email to ${email}...`);
+      console.log(`[Resend] Sending OTP email to ${email} from ${resendFrom}...`);
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -404,9 +441,12 @@ async function sendOtpEmail(email, otp, subject = 'Your FX Journal Pro Verificat
       });
       const data = await response.json();
       if (!response.ok) {
-        console.error('[Resend Email Error]', data);
+        console.error(`[Resend Email Error] HTTP ${response.status}:`, JSON.stringify(data));
+        if (data?.name === 'validation_error') {
+          console.error('[Resend] Validation error — check that RESEND_FROM_EMAIL is a verified sender domain.');
+        }
       } else {
-        console.log('[Resend] Email OTP sent successfully to ' + email);
+        console.log(`[Resend] OTP sent successfully to ${email} (id: ${data.id})`);
         return { success: true, provider: 'Resend' };
       }
     } catch (error) {
@@ -3671,6 +3711,37 @@ app.post('/api/auth/verify-otp', otpRateLimiter, async (req, res) => {
       }
 
       const verifiedUser = toCamel({ ...row, is_email_verified: true, email_otp: null, otp_expires_at: null });
+
+      // Upsert the user in Supabase Auth so signInWithPassword works and
+      // Supabase never sends its own confirmation email (email_confirm: true
+      // skips Supabase's built-in email flow entirely).
+      if (useSupabase && supabase?.auth?.admin) {
+        try {
+          // Use a page-1 filter to avoid pulling all users
+          const { data: authList } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+          const existingAuthUser = authList?.users?.find((u: any) => u.email === normalizedEmail);
+          if (existingAuthUser) {
+            // Already in Supabase Auth — just mark the email as confirmed
+            await supabase.auth.admin.updateUserById(existingAuthUser.id, {
+              email_confirm: true,
+            });
+          } else {
+            // Create in Supabase Auth with email pre-confirmed; use a random
+            // secure password — this account should only be signed into via
+            // our custom OTP flow or Google OAuth, not via Supabase directly.
+            await supabase.auth.admin.createUser({
+              email: normalizedEmail,
+              email_confirm: true,
+              password: crypto.randomBytes(32).toString('hex'),
+              user_metadata: { name: row.name || normalizedEmail.split('@')[0] },
+            });
+          }
+          console.log(`[verify-otp] Supabase Auth synced for ${normalizedEmail} (email_confirm=true)`);
+        } catch (authErr: any) {
+          // Non-fatal: the user is verified in our DB regardless.
+          console.warn('[verify-otp] Supabase Auth upsert skipped:', authErr?.message || authErr);
+        }
+      }
 
       // Auto-create a default portfolio account for the newly verified user
       try {

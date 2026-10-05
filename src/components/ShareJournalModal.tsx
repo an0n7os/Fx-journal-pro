@@ -18,6 +18,7 @@ import {
   Loader2,
   Sparkles,
 } from 'lucide-react';
+import { useScrollLock } from '../lib/useScrollLock';
 
 export interface SharedLinkItem {
   token: string;
@@ -46,6 +47,9 @@ export default function ShareJournalModal({
   onUpgrade,
   getAuthHeaders,
 }: ShareJournalModalProps) {
+  // Prevent background scrolling when share modal is open
+  useScrollLock(isOpen);
+
   const [activeTab, setActiveTab] = useState<'create' | 'manage'>('create');
 
   // Creation state
@@ -227,7 +231,7 @@ export default function ShareJournalModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn overscroll-contain modal-backdrop-contain">
       <div className="relative w-full max-w-2xl bg-white dark:bg-[#0f172a] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/40">

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
 import {
   Compass, TrendingUp, Trophy, Flame, Clock,
   BarChart3, Globe, Sparkles, LineChart, Cpu,
   ArrowRight, ArrowLeft, Check, RefreshCw, X
 } from 'lucide-react';
+import { useScrollLock } from '../lib/useScrollLock';
 
 interface OnboardingWizardModalProps {
   onboardingStep: number;
@@ -34,6 +34,9 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
   canDismiss = false,
   onClose,
 }) => {
+  // Prevent background scrolling while onboarding wizard is active
+  useScrollLock(true);
+
   const [currentStep, setCurrentStep] = useState<number>(() => {
     return onboardingStep === 2 ? 3 : 1;
   });
@@ -105,7 +108,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-[9999] min-h-screen bg-[#05070d]/95 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 font-sans antialiased text-slate-100 select-none overflow-y-auto">
+    <div className="fixed inset-0 z-[9999] min-h-screen bg-[#05070d]/95 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 font-sans antialiased text-slate-100 select-none overflow-y-auto overscroll-contain modal-backdrop-contain">
 
       {/* Violet ambient glows matching site hero */}
       <div className="fixed -top-60 -left-40 w-[520px] h-[520px] bg-violet-600/[0.12] rounded-full blur-[120px] pointer-events-none" />

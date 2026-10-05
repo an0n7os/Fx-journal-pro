@@ -44,6 +44,19 @@ body,
   overflow-x: hidden;
 }
 
+/* Prevent background scrolling when any modal, drawer, or login overlay is active */
+html.scroll-locked,
+body.scroll-locked {
+  overflow: hidden !important;
+  overscroll-behavior: contain !important;
+  touch-action: none !important;
+}
+
+.modal-backdrop-contain {
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
 /* Prevent iOS Safari from auto-zooming when focusing on inputs */
 @media screen and (max-width: 767px) {
   input[type="text"],

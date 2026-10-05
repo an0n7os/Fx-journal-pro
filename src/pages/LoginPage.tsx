@@ -14,6 +14,7 @@ import { LEGAL_DOCS, type LegalDocKey } from '../legalDocs';
 import { supabase } from '../supabaseClient';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { signIn } from '../lib/auth-client';
+import { useScrollLock } from '../lib/useScrollLock';
 
 /**
  * Reveals `[data-reveal]` elements as they scroll into view.
@@ -330,6 +331,9 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
   const [activeSection, setActiveSection] = useState<string>('top');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Freeze background scrolling when legal doc modal or mobile menu drawer is open
+  useScrollLock(!!legalDoc || mobileMenuOpen);
 
   const [isRegistering, setIsRegistering] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -2280,7 +2284,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           inside the app. Same copy as the in-app footer. */}
       {legalDoc && LEGAL_DOCS[legalDoc] && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overscroll-contain modal-backdrop-contain"
           style={{ backgroundColor: 'rgba(3,4,8,0.6)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
           onClick={() => setLegalDoc(null)}
           onKeyDown={(e) => { if (e.key === 'Escape') setLegalDoc(null); }}
@@ -2682,16 +2686,17 @@ function AuthModal({ isOpen, onClose, children }: { isOpen: boolean; onClose: ()
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
 
+  // Lock background scrolling completely on mobile and desktop
+  useScrollLock(isOpen);
+
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKeyDown);
-    document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = '';
     };
   }, [isOpen, onClose]);
 
@@ -2699,7 +2704,7 @@ function AuthModal({ isOpen, onClose, children }: { isOpen: boolean; onClose: ()
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4 sm:p-6"
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4 sm:p-6 overscroll-contain modal-backdrop-contain"
       onMouseDown={(e) => {
         mouseDownTargetRef.current = e.target;
         mouseDownPosRef.current = { x: e.clientX, y: e.clientY };

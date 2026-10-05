@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { User, TradingAccount } from '../types';
 import ProFeaturePanel from './ProFeaturePanel';
+import { useScrollLock } from '../lib/useScrollLock';
 
 interface AIInsightsProps {
   user: User;
@@ -266,6 +267,9 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
   const [findScope, setFindScope] = useState<'account' | 'all' | 'today'>('account');
   const [activeModel, setActiveModel] = useState('OpenAI GPT-4o Mini');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Lock background scroll when history modal is open
+  useScrollLock(showHistoryModal);
 
   // Sync sessions when account or user changes
   useEffect(() => {
@@ -838,7 +842,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
         {/* Rich Chat History Modal */}
         {showHistoryModal && (
           <div
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn"
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn overscroll-contain modal-backdrop-contain"
             onClick={() => setShowHistoryModal(false)}
           >
             <div

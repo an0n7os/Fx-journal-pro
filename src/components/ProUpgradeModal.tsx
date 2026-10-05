@@ -5,6 +5,7 @@ import {
   Bot, Layers, BarChart3, Download, Share2, BookOpen, Bell
 } from 'lucide-react';
 import { User } from '../types';
+import { useScrollLock } from '../lib/useScrollLock';
 
 interface ProUpgradeModalProps {
   isOpen: boolean;
@@ -159,6 +160,9 @@ export default function ProUpgradeModal({
   authFetch,
   onSuccess,
 }: ProUpgradeModalProps) {
+  // Prevent background scrolling when modal is open
+  useScrollLock(isOpen);
+
   const [activeTab, setActiveTab] = useState<'gateway' | 'test'>('gateway');
   const [loading, setLoading] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -401,7 +405,7 @@ export default function ProUpgradeModal({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xl animate-fade-in overflow-y-auto"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xl animate-fade-in overflow-y-auto overscroll-contain modal-backdrop-contain"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pro-upgrade-title"
