@@ -59,16 +59,20 @@ ok('anonymous: audit log refused', anonAudit.status === 403 || anonAudit.status 
   `status ${anonAudit.status}`);
 
 // --- webhook signature ----------------------------------------------------
-// Cashfree signs `timestamp + rawBody` with the merchant secret, base64. An
+// Razorpay signs rawBody with the merchant secret, hex. An
 // event this account never issued must not be able to buy Pro for anyone.
 const fakeEvent = JSON.stringify({
-  type: 'PAYMENT_SUCCESS_WEBHOOK',
-  data: {
-    order: { order_id: 'fxj_fake', order_amount: 499, order_tags: { user_id: 'nobody', period_days: '30' } },
-    payment: { cf_payment_id: 'cfpay_fake', payment_status: 'SUCCESS', payment_amount: 499 },
+  event: 'payment.captured',
+  payload: {
+    payment: {
+      entity: {
+        id: 'pay_fake',
+        amount: 49900,
+        notes: { userId: 'nobody' },
+      },
+    },
   },
 });
-const fakeTs = String(Date.now());
 
 const noSig = await api('/api/payments/webhook', { method: 'POST', rawBody: fakeEvent });
 ok('webhook: unsigned rejected', noSig.status !== 200, `status ${noSig.status}`);
@@ -76,8 +80,7 @@ ok('webhook: unsigned rejected', noSig.status !== 200, `status ${noSig.status}`)
 const badSig = await api('/api/payments/webhook', {
   method: 'POST', rawBody: fakeEvent,
   headers: {
-    'x-webhook-timestamp': fakeTs,
-    'x-webhook-signature': crypto.createHmac('sha256', 'wrong-secret').update(`${fakeTs}${fakeEvent}`).digest('base64'),
+    'x-razorpay-signature': crypto.createHmac('sha256', 'wrong-secret').update(fakeEvent).digest('hex'),
   },
 });
 ok('webhook: wrongly-signed rejected', badSig.status !== 200, `status ${badSig.status}`);
@@ -105,7 +108,7 @@ const testTier = await api('/api/payments/toggle-test-tier', {
 });
 ok('toggle-test-tier: unavailable', testTier.status !== 200, `status ${testTier.status}`);
 
-// The self-serve "type a UTR" upgrade is gone entirely: Cashfree handles UPI,
+// The self-serve "type a UTR" upgrade is gone entirely: Razorpay handles UPI,
 // and offline payments are activated by an admin from Billing & Payments.
 const manual = await api('/api/payments/submit-manual', {
   method: 'POST', cookie: userCookie, body: { utr: '999988887777' },

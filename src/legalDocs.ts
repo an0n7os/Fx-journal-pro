@@ -1,4 +1,4 @@
-// Shared legal copy compliant with Indian payment-aggregator (Cashfree / Razorpay) merchant onboarding guidelines.
+// Shared legal copy compliant with Indian payment-aggregator (Razorpay) merchant onboarding guidelines.
 // Rendered by the in-app LegalFooter, public landing page modals, and dedicated standalone /terms, /privacy, etc. routes.
 
 export interface LegalSection {
@@ -283,7 +283,7 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
       '1. Information We Collect: Name, email address, account information, subscription info, trading records and notes, account preferences, technical information, and payment references. We do NOT require or store broker trading passwords.',
       '2. Trading Data: Symbol, entry/exit prices, lot size, timestamps, PnL, and notes entered or synced by the user to provide journaling and performance analytics.',
       '3. MT5 Synchronization: Syncs read-only trade history for journaling; does not execute trades or transfer funds.',
-      '4. Payment Information: Processed securely by our third-party payment provider (Cashfree Payments). We do not store card numbers or CVV codes.',
+      '4. Payment Information: Processed securely by our third-party payment provider (Razorpay). We do not store card numbers or CVV codes.',
       '5. AI Services: Third-party AI infrastructure processes journal data solely to provide requested educational and analytical insights.',
       '6. Service Providers: Secure cloud database, payment processing, email delivery, AI processing, MT5 synchronization, and hosting providers.',
       '7. Data Security: Encrypted communications (SSL), secure authentication, and salted password hashing.',

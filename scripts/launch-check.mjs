@@ -36,15 +36,15 @@ const pay = await get('/api/payments/config');
 if (pay.status !== 200) {
   bad(`/api/payments/config answered ${pay.status} — the API is not responding`);
 } else if (!pay.body?.configured) {
-  bad('Cashfree is not configured. Netlify > Site configuration > Environment variables:');
-  console.log('          CASHFREE_APP_ID, CASHFREE_SECRET_KEY, CASHFREE_ENV=production');
-  console.log('        Then Cashfree > Developers > Webhooks:');
-  console.log(`          ${SITE}/api/payments/webhook   event: PAYMENT_SUCCESS_WEBHOOK`);
-  console.log('        Without the webhook, money arrives and nobody is upgraded.');
+  bad('Razorpay is not configured. Environment variables:');
+  console.log('          RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET');
+  console.log('        Then Razorpay > Settings > Webhooks:');
+  console.log(`          ${SITE}/api/payments/webhook   event: payment.captured, order.paid`);
+  console.log('        Without the webhook, money arrives and nobody is upgraded if browser drops.');
 } else if (pay.body.mode !== 'production') {
-  warn(`Cashfree is configured but in ${pay.body.mode} mode — set CASHFREE_ENV=production for real payments`);
+  warn(`Razorpay is configured in test mode — use rzp_live_ keys for real payments`);
 } else {
-  ok(`Cashfree live (₹${pay.body.amountRupees})`);
+  ok(`Razorpay live (₹${pay.body.amountRupees})`);
 }
 
 // ── MT5 automatic sync ────────────────────────────────────────────────────

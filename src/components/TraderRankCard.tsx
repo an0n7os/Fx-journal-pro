@@ -32,6 +32,9 @@ export interface TradingAccountData {
   startingBalance: number;
   currentBalance: number;
   currency: string;
+  isMt5Sync?: boolean;
+  eaStatus?: string;
+  isDefaultDemo?: boolean;
 }
 
 interface TraderRankCardProps {
@@ -63,8 +66,14 @@ export const TraderRankCard: React.FC<TraderRankCardProps> = ({
   totalTradesCount,
   variant = 'full'
 }) => {
-  const initialBalance = account?.startingBalance ?? 10000;
-  const currentBalance = account?.currentBalance ?? 10000;
+  const isStarterDemoPlaceholder =
+    (account?.startingBalance === 10000 || !account?.startingBalance || account?.startingBalance === 0) &&
+    (!account?.isMt5Sync || account?.broker === 'MT5 Demo Broker' || account?.name === 'Portfolio Account' || account?.name === 'Main Trading Account' || account?.isDefaultDemo);
+
+  const initialBalance = (!isStarterDemoPlaceholder && account?.startingBalance && account.startingBalance > 0)
+    ? account.startingBalance
+    : (!isStarterDemoPlaceholder && account?.currentBalance ? account.currentBalance : 0);
+  const currentBalance = (!isStarterDemoPlaceholder && account?.currentBalance) ? account.currentBalance : 0;
   const currency = account?.currency || 'USD';
 
   const defaultFormatter = (val: number) => {
@@ -472,7 +481,11 @@ export const TraderRankCard: React.FC<TraderRankCardProps> = ({
             key: 'initial',
             label: 'Starting Capital',
             icon: Target,
-            value: fmtTile(initialBalance),
+            value: isStarterDemoPlaceholder
+              ? 'Connect MT5'
+              : (account?.isMt5Sync && (!account?.startingBalance || account.startingBalance === 0))
+                ? 'Auto (MT5)'
+                : (initialBalance > 0 ? fmtTile(initialBalance) : 'Connect MT5'),
             sub: '',
             tone: 'neutral',
           },

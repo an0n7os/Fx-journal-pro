@@ -6,7 +6,7 @@ import {
   Plus, ArrowRight, ArrowLeft,
   LogOut, Star, Compass, Trash2, Check, Download, AlertTriangle,
   Clock, Heart, Edit3, Image as ImageIcon, Eye, EyeOff, RefreshCw,
-  Terminal, Globe, Bell, CreditCard, Info, Activity, Sun, Moon, Brain, Upload,
+  Terminal, Globe, Bell, CreditCard, Info, Activity, Sun, Moon, Upload,
   FileSpreadsheet, FileText, Mail, Wrench, X, Newspaper, Trophy, Lock, MessageSquare, MoreHorizontal, Users,
   Settings, Instagram, Phone, GraduationCap, Share2, Loader2, ShieldCheck, CheckCheck
 } from 'lucide-react';
@@ -91,7 +91,7 @@ const sharedJournalToken = (pathname: string): string | null =>
  * slow connection reads as "loading" rather than as the page having emptied.
  */
 const TabLoading = () => (
-  <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
+  <div className="flex-1 min-h-[60vh] flex items-center justify-center w-full my-auto" role="status" aria-live="polite">
     <div className="h-7 w-7 animate-spin rounded-full border-2 border-violet-500/25 border-t-violet-500" />
     <span className="sr-only">Loading…</span>
   </div>
@@ -114,18 +114,30 @@ interface SymbolSpec {
  * a switch, so it is rendered on its own below these rows.
  */
 const MENTOR_ACCESS_ROWS: { key: string; label: string; icon: any; blurb: string }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: BarChart3,
-    blurb: 'Your balance, win rate, trade counts and activity heatmap.' },
-  { key: 'analysis', label: 'Analysis', icon: LineChart,
-    blurb: 'Win and loss performance, strategy and emotion breakdowns.' },
-  { key: 'calendar', label: 'Calendar', icon: Calendar,
-    blurb: 'Which days you traded, and the profit or loss on each.' },
-  { key: 'liveCharts', label: 'Live charts', icon: Activity,
-    blurb: 'Your trade entries and exits drawn on the price chart.' },
-  { key: 'journal', label: 'Journal', icon: BookOpen,
-    blurb: 'Your trade notes, emotions and tags.' },
-  { key: 'notebook', label: 'Notebook', icon: Edit3,
-    blurb: 'Your written notes and daily reviews. Off by default.' },
+  {
+    key: 'dashboard', label: 'Dashboard', icon: BarChart3,
+    blurb: 'Your balance, win rate, trade counts and activity heatmap.'
+  },
+  {
+    key: 'analysis', label: 'Analysis', icon: LineChart,
+    blurb: 'Win and loss performance, strategy and emotion breakdowns.'
+  },
+  {
+    key: 'calendar', label: 'Calendar', icon: Calendar,
+    blurb: 'Which days you traded, and the profit or loss on each.'
+  },
+  {
+    key: 'liveCharts', label: 'Live charts', icon: Activity,
+    blurb: 'Your trade entries and exits drawn on the price chart.'
+  },
+  {
+    key: 'journal', label: 'Journal', icon: BookOpen,
+    blurb: 'Your trade notes, emotions and tags.'
+  },
+  {
+    key: 'notebook', label: 'Notebook', icon: Edit3,
+    blurb: 'Your written notes and daily reviews. Off by default.'
+  },
 ];
 
 const SYMBOL_SPECS: Record<string, SymbolSpec> = {
@@ -1675,7 +1687,7 @@ export default function App() {
           platform: 'MT5',
           accountType: newAccType,
           currency: newAccCurrency,
-          startingBalance: newAccBalance || '10000',
+          startingBalance: accountCreationMethod === 'mt5' ? '' : (newAccBalance || '10000'),
           isMt5Sync: accountCreationMethod === 'mt5',
           ...(accountCreationMethod === 'mt5' ? {
             institutionType: newAccInstitutionType,
@@ -2999,8 +3011,10 @@ export default function App() {
   }
 
   // Drawdown math
-  const startingBal = activeAccount?.startingBalance || 10000;
-  const currentBal = activeAccount?.currentBalance || 10000;
+  const startingBal = (activeAccount?.startingBalance && activeAccount.startingBalance > 0)
+    ? activeAccount.startingBalance
+    : (activeAccount?.currentBalance ?? 0);
+  const currentBal = activeAccount?.currentBalance ?? 0;
   const netProfit = parseFloat((currentBal - startingBal).toFixed(2));
 
   // High-end stats computation
@@ -3440,7 +3454,9 @@ export default function App() {
 
   // Pro Feature 1: Equity Growth & Underwater Drawdown Curve Data
   const equityDrawdownData = React.useMemo(() => {
-    const startBal = activeAccount?.startingBalance || 10000;
+    const startBal = (activeAccount?.startingBalance && activeAccount.startingBalance > 0)
+      ? activeAccount.startingBalance
+      : (activeAccount?.currentBalance ?? 0);
     let runningBal = startBal;
     let peakBal = runningBal;
     const sortedTrades = [...tradingTrades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -4511,8 +4527,8 @@ export default function App() {
   const MENTOR_VISIBLE_TABS = ['dashboard', 'analytics', 'journal', 'calendar', 'accounts', 'chart'];
   const visibleNavGroups = isMentorReadOnlyMode
     ? NAV_GROUPS
-        .map((group) => ({ ...group, items: group.items.filter((i) => MENTOR_VISIBLE_TABS.includes(i.id)) }))
-        .filter((group) => group.items.length > 0)
+      .map((group) => ({ ...group, items: group.items.filter((i) => MENTOR_VISIBLE_TABS.includes(i.id)) }))
+      .filter((group) => group.items.length > 0)
     : NAV_GROUPS;
 
   // Primary Platform Shell Layout
@@ -4618,22 +4634,20 @@ export default function App() {
                   <div className="flex items-center gap-1 mt-2.5 p-0.5 bg-white/[0.03] rounded-xl border border-white/[0.05]">
                     <button
                       onClick={() => setNotificationFilter('all')}
-                      className={`flex-1 py-1 px-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                        notificationFilter === 'all'
+                      className={`flex-1 py-1 px-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${notificationFilter === 'all'
                           ? 'bg-white/[0.08] text-white shadow-xs font-semibold'
                           : 'text-slate-400 hover:text-slate-200'
-                      }`}
+                        }`}
                     >
                       <span>All</span>
                       <span className="text-[10px] opacity-60">({systemNotifications.length})</span>
                     </button>
                     <button
                       onClick={() => setNotificationFilter('unread')}
-                      className={`flex-1 py-1 px-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                        notificationFilter === 'unread'
+                      className={`flex-1 py-1 px-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${notificationFilter === 'unread'
                           ? 'bg-white/[0.08] text-white shadow-xs font-semibold'
                           : 'text-slate-400 hover:text-slate-200'
-                      }`}
+                        }`}
                     >
                       <span>Unread</span>
                       {unreadNotificationCount > 0 ? (
@@ -4717,11 +4731,10 @@ export default function App() {
                               setShowMobileNavNotifications(false);
                             }
                           }}
-                          className={`pt-2 pb-2 px-2.5 rounded-xl transition-all cursor-pointer flex items-start gap-2.5 relative group ${
-                            isUnread
+                          className={`pt-2 pb-2 px-2.5 rounded-xl transition-all cursor-pointer flex items-start gap-2.5 relative group ${isUnread
                               ? 'bg-white/[0.03] hover:bg-white/[0.05]'
                               : 'hover:bg-white/[0.02] opacity-75 hover:opacity-100'
-                          }`}
+                            }`}
                         >
                           {/* Clean minimal squircle icon */}
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${typeConfig.bg}`}>
@@ -5034,8 +5047,8 @@ export default function App() {
                 aria-current={activeTab === 'partner' ? 'page' : undefined}
                 title={!desktopSidebarOpen ? 'Partner Portal' : undefined}
                 className={`relative flex items-center transition-colors mb-0.5 ${desktopSidebarOpen
-                    ? `flex-row justify-start gap-3 px-3 h-9 rounded-xl w-full ${activeTab === 'partner' ? 'dx-nav-active' : 'dx-nav-idle text-violet-400'}`
-                    : `justify-center h-9 w-9 mx-auto rounded-xl ${activeTab === 'partner' ? 'dx-nav-active shadow-sm' : 'dx-nav-idle text-violet-400'}`
+                  ? `flex-row justify-start gap-3 px-3 h-9 rounded-xl w-full ${activeTab === 'partner' ? 'dx-nav-active' : 'dx-nav-idle text-violet-400'}`
+                  : `justify-center h-9 w-9 mx-auto rounded-xl ${activeTab === 'partner' ? 'dx-nav-active shadow-sm' : 'dx-nav-idle text-violet-400'}`
                   }`}
               >
                 <Users className={`${desktopSidebarOpen ? 'h-4.5 w-4.5' : 'h-[22px] w-[22px]'} shrink-0`} />
@@ -5049,8 +5062,8 @@ export default function App() {
                 aria-current={activeTab === 'admin' ? 'page' : undefined}
                 title={!desktopSidebarOpen ? (adminRole === 'SUB_ADMIN' ? 'Partner Portal' : 'Admin') : undefined}
                 className={`relative flex items-center transition-colors mb-0.5 ${desktopSidebarOpen
-                    ? `flex-row justify-start gap-3 px-3 h-9 rounded-xl w-full ${activeTab === 'admin' ? 'dx-nav-active' : (adminRole === 'SUB_ADMIN' ? 'dx-nav-idle text-violet-400' : 'dx-nav-idle text-red-500')}`
-                    : `justify-center h-9 w-9 mx-auto rounded-xl ${activeTab === 'admin' ? 'dx-nav-active shadow-sm' : (adminRole === 'SUB_ADMIN' ? 'dx-nav-idle text-violet-400' : 'dx-nav-idle text-red-500')}`
+                  ? `flex-row justify-start gap-3 px-3 h-9 rounded-xl w-full ${activeTab === 'admin' ? 'dx-nav-active' : (adminRole === 'SUB_ADMIN' ? 'dx-nav-idle text-violet-400' : 'dx-nav-idle text-red-500')}`
+                  : `justify-center h-9 w-9 mx-auto rounded-xl ${activeTab === 'admin' ? 'dx-nav-active shadow-sm' : (adminRole === 'SUB_ADMIN' ? 'dx-nav-idle text-violet-400' : 'dx-nav-idle text-red-500')}`
                   }`}
               >
                 <Shield className={`${desktopSidebarOpen ? 'h-4.5 w-4.5' : 'h-[22px] w-[22px]'} shrink-0`} />
@@ -5084,8 +5097,8 @@ export default function App() {
                         aria-current={isActive ? 'page' : undefined}
                         title={!desktopSidebarOpen ? item.label : undefined}
                         className={`relative flex items-center transition-colors ${desktopSidebarOpen
-                            ? `flex-row justify-start gap-2.5 px-3 h-9 rounded-xl w-full ${isActive ? 'dx-nav-active' : 'dx-nav-idle'}`
-                            : `justify-center h-9 w-9 mx-auto rounded-xl ${isActive ? 'dx-nav-active shadow-sm' : 'dx-nav-idle'}`
+                          ? `flex-row justify-start gap-2.5 px-3 h-9 rounded-xl w-full ${isActive ? 'dx-nav-active' : 'dx-nav-idle'}`
+                          : `justify-center h-9 w-9 mx-auto rounded-xl ${isActive ? 'dx-nav-active shadow-sm' : 'dx-nav-idle'}`
                           }`}
                       >
                         <item.icon className={`${desktopSidebarOpen ? 'h-4.5 w-4.5' : 'h-[22px] w-[22px]'} shrink-0`} />
@@ -5242,14 +5255,14 @@ export default function App() {
                       activeTab === 'journal' ? 'Inline workspace database to log, filter, and audit trading setups.' :
                         activeTab === 'notebook' ? 'Note down your feelings, plans, and daily reviews with our integrated rich-text templates.' :
                           activeTab === 'accounts' ? 'Manage your MetaTrader or custom brokerage accounts on-the-fly.' :
-                          activeTab === 'analytics' ? 'Explore your strategic edge, session concentrations, and profit distribution.' :
-                            activeTab === 'calendar' ? 'Visualize daily profit allocations and execution frequencies.' :
-                              activeTab === 'chart' ? `View and analyze your trades directly on a live interactive chart · ${trades.filter(t => t.type !== 'Deposit' && t.type !== 'Withdrawal').length} trade markers plotted.` :
-                                activeTab === 'settings' ? 'Configure portfolio guard, import tools, and co-pilot preferences.' :
-                                  activeTab === 'tools' ? 'Precision calculators to plan your trades with confidence.' :
-                                    activeTab === 'fxnews' ? 'Stay updated with the latest market-moving forex news and economic events.' :
-                                      activeTab === 'insights' ? 'Your personal AI trading coach & mindset guide' :
-                                        activeTab === 'partner' ? 'Your referral network, and the users who joined through it.' : (adminRole === 'SUB_ADMIN' ? 'Mentor & partner operations portal, assigned traders inspection and performance analytics.' : 'Administrative system configs.')}
+                            activeTab === 'analytics' ? 'Explore your strategic edge, session concentrations, and profit distribution.' :
+                              activeTab === 'calendar' ? 'Visualize daily profit allocations and execution frequencies.' :
+                                activeTab === 'chart' ? `View and analyze your trades directly on a live interactive chart · ${trades.filter(t => t.type !== 'Deposit' && t.type !== 'Withdrawal').length} trade markers plotted.` :
+                                  activeTab === 'settings' ? 'Configure portfolio guard, import tools, and co-pilot preferences.' :
+                                    activeTab === 'tools' ? 'Precision calculators to plan your trades with confidence.' :
+                                      activeTab === 'fxnews' ? 'Stay updated with the latest market-moving forex news and economic events.' :
+                                        activeTab === 'insights' ? 'Your personal AI trading coach & mindset guide' :
+                                          activeTab === 'partner' ? 'Your referral network, and the users who joined through it.' : (adminRole === 'SUB_ADMIN' ? 'Mentor & partner operations portal, assigned traders inspection and performance analytics.' : 'Administrative system configs.')}
                   </p>
                 </div>
               </div>
@@ -5312,9 +5325,11 @@ export default function App() {
 
                   {/* Balance & Growth — Apple-style inline balance */}
                   {(() => {
-                    const _startBal = activeAccount?.startingBalance || 1;
+                    const _startBal = (activeAccount?.startingBalance && activeAccount.startingBalance > 0)
+                      ? activeAccount.startingBalance
+                      : (activeAccount?.currentBalance ?? 1);
                     const _curBal = activeAccount?.currentBalance ?? _startBal;
-                    const growthPct = parseFloat((((_curBal - _startBal) / _startBal) * 100).toFixed(2));
+                    const growthPct = _startBal > 0 ? parseFloat((((_curBal - _startBal) / _startBal) * 100).toFixed(2)) : 0;
                     const netPnL = parseFloat((_curBal - _startBal).toFixed(2));
                     return (
                       <>
@@ -5324,11 +5339,10 @@ export default function App() {
                             <p className="font-display text-2xl xs:text-[26px] leading-none font-black text-white tracking-tight tabular-nums truncate">
                               {activeAccount ? formatValue(activeAccount.currentBalance ?? activeAccount.startingBalance) : '—'}
                             </p>
-                            <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                              growthPct >= 0
+                            <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${growthPct >= 0
                                 ? 'bg-emerald-400/15 border-emerald-300/30 text-emerald-200'
                                 : 'bg-rose-400/15 border-rose-300/30 text-rose-200'
-                            }`}>
+                              }`}>
                               {growthPct >= 0 ? '↑' : '↓'} {Math.abs(growthPct).toFixed(2)}%
                             </span>
                           </div>
@@ -5666,9 +5680,9 @@ export default function App() {
                       const rating = !hasTrades ? 'No data' : winRate < 40 ? 'Needs Work' : winRate < 50 ? 'Average' : winRate < 65 ? 'Good' : 'Excellent';
                       const badgeStyle = !hasTrades ? 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-white/[0.06] dark:text-slate-400 dark:border-white/10' :
                         winRate < 40 ? 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30' :
-                        winRate < 50 ? 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30' :
-                        winRate < 65 ? 'bg-violet-50 text-violet-600 border-violet-100 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/30' :
-                        'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30';
+                          winRate < 50 ? 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30' :
+                            winRate < 65 ? 'bg-violet-50 text-violet-600 border-violet-100 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/30' :
+                              'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30';
 
                       return (
                         <div className="dx-panel p-4 sm:p-6 shadow-xs flex flex-col justify-between h-72 sm:h-80 relative overflow-hidden">
@@ -5848,8 +5862,8 @@ export default function App() {
                             )}
                           </div>
                           <span className={`font-bold px-2 py-0.5 rounded text-[10px] shrink-0 ${t.type === 'Buy'
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-500/20'
-                              : 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300 border border-rose-200/50 dark:border-rose-500/20'
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-500/20'
+                            : 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300 border border-rose-200/50 dark:border-rose-500/20'
                             }`}>
                             {t.type}
                           </span>
@@ -6305,7 +6319,14 @@ export default function App() {
                   )}
                   {accounts.map((acc, idx) => {
                     const isActive = acc.id === selectedAccountId;
-                    const plReturn = acc.currentBalance - acc.startingBalance;
+                    const isStarterDemoPlaceholder =
+                      (acc.startingBalance === 10000 || !acc.startingBalance || acc.startingBalance === 0) &&
+                      (!acc.isMt5Sync || acc.broker === 'MT5 Demo Broker' || acc.name === 'Portfolio Account' || acc.name === 'Main Trading Account' || (acc as any).isDefaultDemo);
+
+                    const effStart = (!isStarterDemoPlaceholder && acc.startingBalance && acc.startingBalance > 0)
+                      ? acc.startingBalance
+                      : (!isStarterDemoPlaceholder && acc.currentBalance ? acc.currentBalance : 0);
+                    const plReturn = acc.currentBalance - effStart;
 
                     const cur = acc.currency || 'USD';
                     const formatCur = (val: number) => {
@@ -6316,8 +6337,14 @@ export default function App() {
                       }
                     };
 
-                    const startingCapitalStr = formatCur(acc.startingBalance);
-                    const currentBalanceStr = formatCur(acc.currentBalance);
+                    const startingCapitalStr = isStarterDemoPlaceholder
+                      ? 'Connect MT5'
+                      : (acc.isMt5Sync && (!acc.startingBalance || acc.startingBalance === 0))
+                        ? 'Syncing from MT5...'
+                        : formatCur(acc.startingBalance || 0);
+                    const currentBalanceStr = isStarterDemoPlaceholder
+                      ? 'Connect MT5'
+                      : formatCur(acc.currentBalance || 0);
 
                     // Format P/L Return with + or - sign
                     const formattedPlReturn = formatCur(Math.abs(plReturn));
@@ -6938,254 +6965,254 @@ export default function App() {
                   )}
 
                   <div className={`space-y-6 ${!isProActive ? 'filter blur-[3px] opacity-60 pointer-events-none select-none' : ''}`}>
-                <KnowYourTrades
-                  trades={trades}
-                  accounts={accounts}
-                  currency={activeAccount?.currency || 'USD'}
-                />
+                    <KnowYourTrades
+                      trades={trades}
+                      accounts={accounts}
+                      currency={activeAccount?.currency || 'USD'}
+                    />
 
-                <section className="dx-panel p-5 sm:p-6 shadow-xs">
-                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
-                    <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Summary Session</h3>
-                    <div className="relative group cursor-pointer inline-flex items-center">
-                      <Info className="h-4 w-4 text-slate-400 hover:text-slate-200 transition-colors" />
-                      <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-72 p-3 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl text-[11px] text-slate-300 leading-relaxed backdrop-blur-md pointer-events-none">
-                        <p className="font-bold text-white mb-1.5">Operational Trading Windows (UTC)</p>
-                        <div className="space-y-1">
-                          <p><strong className="text-slate-200">London:</strong> 07:00 – 13:00 UTC</p>
-                          <p><strong className="text-slate-200">New York:</strong> 13:00 – 19:00 UTC</p>
-                          <p><strong className="text-slate-200">Asia:</strong> 19:00 – 07:00 UTC (Tokyo & Sydney)</p>
-                          <p><strong className="text-slate-200">Outside of Sessions:</strong> Executions outside primary windows</p>
+                    <section className="dx-panel p-5 sm:p-6 shadow-xs">
+                      <div className="flex items-center gap-2 mb-4 sm:mb-6">
+                        <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Summary Session</h3>
+                        <div className="relative group cursor-pointer inline-flex items-center">
+                          <Info className="h-4 w-4 text-slate-400 hover:text-slate-200 transition-colors" />
+                          <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-72 p-3 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl text-[11px] text-slate-300 leading-relaxed backdrop-blur-md pointer-events-none">
+                            <p className="font-bold text-white mb-1.5">Operational Trading Windows (UTC)</p>
+                            <div className="space-y-1">
+                              <p><strong className="text-slate-200">London:</strong> 07:00 – 13:00 UTC</p>
+                              <p><strong className="text-slate-200">New York:</strong> 13:00 – 19:00 UTC</p>
+                              <p><strong className="text-slate-200">Asia:</strong> 19:00 – 07:00 UTC (Tokyo & Sydney)</p>
+                              <p><strong className="text-slate-200">Outside of Sessions:</strong> Executions outside primary windows</p>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[650px] text-xs sm:text-sm text-left">
-                      <thead>
-                        <tr className="text-slate-400 text-xs select-none border-b border-slate-100 dark:border-slate-800/80">
-                          <th className="py-3 px-4 text-left font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('session')}>
-                            <div className="flex items-center gap-1.5">
-                              <span>Session</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('net')}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span>Net P&L</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('winRate')}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span>Win Rate</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('profit')}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span>Total Profit</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('loss')}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span>Total Loss</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('trades')}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span>Total Trades</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
-                        {tradingTrades.length > 0 ? (
-                          sortedSessionRows.map((row) => (
-                            <tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                              <td className="py-4 px-4 whitespace-nowrap">
-                                <div className="flex items-center gap-3">
-                                  {row.badgeType === 'code' ? (
-                                    <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-200 shrink-0">
-                                      {row.badge}
-                                    </div>
-                                  ) : (
-                                    <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center text-sm shrink-0">
-                                      {row.badge}
-                                    </div>
-                                  )}
-                                  <span className="font-semibold text-slate-900 dark:text-slate-200">{row.name}</span>
-                                  {row.isBest && (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#06331b] border border-[#166534] text-[#4ade80] shadow-xs">
-                                      Best
-                                    </span>
-                                  )}
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[650px] text-xs sm:text-sm text-left">
+                          <thead>
+                            <tr className="text-slate-400 text-xs select-none border-b border-slate-100 dark:border-slate-800/80">
+                              <th className="py-3 px-4 text-left font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('session')}>
+                                <div className="flex items-center gap-1.5">
+                                  <span>Session</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
                                 </div>
-                              </td>
-                              <td className="py-4 px-4 text-center whitespace-nowrap">
-                                <span className={`font-semibold ${row.net < 0 ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
-                                  {row.net > 0 ? `+${formatValue(row.net)}` : row.net < 0 ? `-${formatValue(Math.abs(row.net))}` : formatValue(0)}
-                                </span>
-                              </td>
-                              <td className="py-4 px-4 text-center whitespace-nowrap">
-                                <div className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-800/90 rounded-full mx-auto relative flex items-center justify-center overflow-hidden">
-                                  {row.trades > 0 ? (
-                                    <div
-                                      className="h-full bg-emerald-400 dark:bg-emerald-400 rounded-full transition-all duration-300"
-                                      style={{ width: `${Math.max(row.winRate, 4)}%` }}
-                                    />
-                                  ) : (
-                                    <div className="w-2 h-0.5 bg-slate-400 dark:bg-slate-600 rounded-full" />
-                                  )}
+                              </th>
+                              <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('net')}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Net P&L</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
                                 </div>
-                              </td>
-                              <td className="py-4 px-4 text-center whitespace-nowrap">
-                                <span className="font-semibold text-emerald-500 dark:text-emerald-400">
-                                  {formatValue(row.profit)}
-                                </span>
-                              </td>
-                              <td className="py-4 px-4 text-center whitespace-nowrap">
-                                <span className="font-semibold text-rose-500 dark:text-rose-400">
-                                  {formatValue(row.loss)}
-                                </span>
-                              </td>
-                              <td className="py-4 px-4 text-center whitespace-nowrap">
-                                <span className="font-bold text-slate-800 dark:text-slate-100">
-                                  {row.trades}
-                                </span>
-                              </td>
+                              </th>
+                              <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('winRate')}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Win Rate</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
+                                </div>
+                              </th>
+                              <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('profit')}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Total Profit</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
+                                </div>
+                              </th>
+                              <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('loss')}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Total Loss</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
+                                </div>
+                              </th>
+                              <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleToggleSessionSort('trades')}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Total Trades</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
+                                </div>
+                              </th>
                             </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
-                              No session trade metrics recorded yet. Trades will automatically populate here once logged or synced.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-
-                {/* Summary Pairs Section */}
-                <section className="dx-panel p-5 sm:p-6 shadow-xs">
-                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
-                    <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Summary Pairs</h3>
-                    <div className="relative group cursor-pointer inline-flex items-center">
-                      <Info className="h-4 w-4 text-slate-400 hover:text-slate-200 transition-colors" />
-                      <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-72 p-3 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl text-[11px] text-slate-300 leading-relaxed backdrop-blur-md pointer-events-none">
-                        <p className="font-bold text-white mb-1.5">Asset & Currency Pair Performance</p>
-                        <p>Aggregated trade analytics, return percentage, and win metrics categorized by traded instrument.</p>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
+                            {tradingTrades.length > 0 ? (
+                              sortedSessionRows.map((row) => (
+                                <tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                                  <td className="py-4 px-4 whitespace-nowrap">
+                                    <div className="flex items-center gap-3">
+                                      {row.badgeType === 'code' ? (
+                                        <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-200 shrink-0">
+                                          {row.badge}
+                                        </div>
+                                      ) : (
+                                        <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center text-sm shrink-0">
+                                          {row.badge}
+                                        </div>
+                                      )}
+                                      <span className="font-semibold text-slate-900 dark:text-slate-200">{row.name}</span>
+                                      {row.isBest && (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#06331b] border border-[#166534] text-[#4ade80] shadow-xs">
+                                          Best
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    <span className={`font-semibold ${row.net < 0 ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
+                                      {row.net > 0 ? `+${formatValue(row.net)}` : row.net < 0 ? `-${formatValue(Math.abs(row.net))}` : formatValue(0)}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    <div className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-800/90 rounded-full mx-auto relative flex items-center justify-center overflow-hidden">
+                                      {row.trades > 0 ? (
+                                        <div
+                                          className="h-full bg-emerald-400 dark:bg-emerald-400 rounded-full transition-all duration-300"
+                                          style={{ width: `${Math.max(row.winRate, 4)}%` }}
+                                        />
+                                      ) : (
+                                        <div className="w-2 h-0.5 bg-slate-400 dark:bg-slate-600 rounded-full" />
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    <span className="font-semibold text-emerald-500 dark:text-emerald-400">
+                                      {formatValue(row.profit)}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    <span className="font-semibold text-rose-500 dark:text-rose-400">
+                                      {formatValue(row.loss)}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    <span className="font-bold text-slate-800 dark:text-slate-100">
+                                      {row.trades}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
+                                  No session trade metrics recorded yet. Trades will automatically populate here once logged or synced.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
                       </div>
-                    </div>
-                  </div>
+                    </section>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[650px] text-xs sm:text-sm text-left">
-                      <thead>
-                        <tr className="text-slate-400 text-xs select-none border-b border-slate-100 dark:border-slate-800/80">
-                          <th className="py-3 px-4 text-left font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('pair')}>
-                            <div className="flex items-center gap-1.5">
-                              <span>Pair</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('net')}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span>Net P&L</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('winRate')}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span>Winning %</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('profit')}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span>Total Profit</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('loss')}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span>Total Loss</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                          <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('trades')}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span>Total Trades</span>
-                              <span className="text-[11px] text-slate-400">↕</span>
-                            </div>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
-                        {sortedPairRows.length > 0 ? (
-                          sortedPairRows.map((row) => (
-                            <tr key={row.symbol} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                              <td className="py-4 px-4 whitespace-nowrap">
-                                <div className="flex items-center gap-2.5">
-                                  <span className="font-bold text-slate-900 dark:text-slate-100 tracking-wide">{row.symbol}</span>
-                                  {row.isBest && (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#06331b] border border-[#166534] text-[#4ade80] shadow-xs">
-                                      Best
-                                    </span>
-                                  )}
+                    {/* Summary Pairs Section */}
+                    <section className="dx-panel p-5 sm:p-6 shadow-xs">
+                      <div className="flex items-center gap-2 mb-4 sm:mb-6">
+                        <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Summary Pairs</h3>
+                        <div className="relative group cursor-pointer inline-flex items-center">
+                          <Info className="h-4 w-4 text-slate-400 hover:text-slate-200 transition-colors" />
+                          <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-72 p-3 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl text-[11px] text-slate-300 leading-relaxed backdrop-blur-md pointer-events-none">
+                            <p className="font-bold text-white mb-1.5">Asset & Currency Pair Performance</p>
+                            <p>Aggregated trade analytics, return percentage, and win metrics categorized by traded instrument.</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[650px] text-xs sm:text-sm text-left">
+                          <thead>
+                            <tr className="text-slate-400 text-xs select-none border-b border-slate-100 dark:border-slate-800/80">
+                              <th className="py-3 px-4 text-left font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('pair')}>
+                                <div className="flex items-center gap-1.5">
+                                  <span>Pair</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
                                 </div>
-                              </td>
-                              <td className="py-4 px-4 text-center whitespace-nowrap">
-                                <span className={`font-semibold ${row.netPercent < 0 ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
-                                  {row.netPercent > 0 ? `+${row.netPercent.toFixed(2)}%` : row.netPercent < 0 ? `${row.netPercent.toFixed(2)}%` : '+0.00%'}
-                                </span>
-                              </td>
-                              <td className="py-4 px-4 text-center whitespace-nowrap">
-                                <div className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-800/90 rounded-full mx-auto relative flex items-center justify-center overflow-hidden">
-                                  {row.trades > 0 ? (
-                                    <div
-                                      className="h-full bg-emerald-400 dark:bg-emerald-400 rounded-full transition-all duration-300"
-                                      style={{ width: `${Math.max(row.winRate, 4)}%` }}
-                                    />
-                                  ) : (
-                                    <div className="w-2 h-0.5 bg-slate-400 dark:bg-slate-600 rounded-full" />
-                                  )}
+                              </th>
+                              <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('net')}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Net P&L</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
                                 </div>
-                              </td>
-                              <td className="py-4 px-4 text-center whitespace-nowrap">
-                                <span className="font-semibold text-emerald-500 dark:text-emerald-400">
-                                  {formatValue(row.profit)}
-                                </span>
-                              </td>
-                              <td className="py-4 px-4 text-center whitespace-nowrap">
-                                <span className="font-semibold text-rose-500 dark:text-rose-400">
-                                  {formatValue(row.loss)}
-                                </span>
-                              </td>
-                              <td className="py-4 px-4 text-center whitespace-nowrap">
-                                <span className="font-bold text-slate-800 dark:text-slate-100">
-                                  {row.trades}
-                                </span>
-                              </td>
+                              </th>
+                              <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('winRate')}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Winning %</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
+                                </div>
+                              </th>
+                              <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('profit')}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Total Profit</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
+                                </div>
+                              </th>
+                              <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('loss')}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Total Loss</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
+                                </div>
+                              </th>
+                              <th className="py-3 px-4 text-center font-semibold cursor-pointer hover:text-slate-200 transition" onClick={() => handleTogglePairSort('trades')}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Total Trades</span>
+                                  <span className="text-[11px] text-slate-400">↕</span>
+                                </div>
+                              </th>
                             </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={6} className="py-6 text-center text-xs text-slate-400">
-                              No pair metrics recorded yet.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
+                            {sortedPairRows.length > 0 ? (
+                              sortedPairRows.map((row) => (
+                                <tr key={row.symbol} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                                  <td className="py-4 px-4 whitespace-nowrap">
+                                    <div className="flex items-center gap-2.5">
+                                      <span className="font-bold text-slate-900 dark:text-slate-100 tracking-wide">{row.symbol}</span>
+                                      {row.isBest && (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#06331b] border border-[#166534] text-[#4ade80] shadow-xs">
+                                          Best
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    <span className={`font-semibold ${row.netPercent < 0 ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
+                                      {row.netPercent > 0 ? `+${row.netPercent.toFixed(2)}%` : row.netPercent < 0 ? `${row.netPercent.toFixed(2)}%` : '+0.00%'}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    <div className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-800/90 rounded-full mx-auto relative flex items-center justify-center overflow-hidden">
+                                      {row.trades > 0 ? (
+                                        <div
+                                          className="h-full bg-emerald-400 dark:bg-emerald-400 rounded-full transition-all duration-300"
+                                          style={{ width: `${Math.max(row.winRate, 4)}%` }}
+                                        />
+                                      ) : (
+                                        <div className="w-2 h-0.5 bg-slate-400 dark:bg-slate-600 rounded-full" />
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    <span className="font-semibold text-emerald-500 dark:text-emerald-400">
+                                      {formatValue(row.profit)}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    <span className="font-semibold text-rose-500 dark:text-rose-400">
+                                      {formatValue(row.loss)}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    <span className="font-bold text-slate-800 dark:text-slate-100">
+                                      {row.trades}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={6} className="py-6 text-center text-xs text-slate-400">
+                                  No pair metrics recorded yet.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
                   </div>
                 </div>
 
@@ -7193,182 +7220,182 @@ export default function App() {
                     Blurred, but no second lock card: the one above covers it. */}
                 <div className="relative">
                   <div className={!isProActive ? 'filter blur-[3px] opacity-60 pointer-events-none select-none' : ''}>
-                <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Win Performance Card */}
-                  <div className="dx-panel p-5 sm:p-6 shadow-xs flex flex-col justify-between">
-                    <div>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                        <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Win Performance</h3>
-                        <div className="flex items-center gap-3">
-                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
-                            <span>Active days</span>
-                            <button
-                              type="button"
-                              onClick={() => setWinActiveDays(!winActiveDays)}
-                              className={`w-7 h-3.5 rounded-full transition-colors relative ${winActiveDays ? 'bg-emerald-500' : 'bg-slate-700'}`}
-                            >
-                              <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${winActiveDays ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
-                            </button>
-                          </label>
-                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
-                            <span>Volume</span>
-                            <button
-                              type="button"
-                              onClick={() => setWinShowVolume(!winShowVolume)}
-                              className={`w-7 h-3.5 rounded-full transition-colors relative ${winShowVolume ? 'bg-emerald-500' : 'bg-slate-700'}`}
-                            >
-                              <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${winShowVolume ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
-                            </button>
-                          </label>
-                          {/* Light variants: bg-emerald-950/60 composites to
+                    <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Win Performance Card */}
+                      <div className="dx-panel p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                            <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Win Performance</h3>
+                            <div className="flex items-center gap-3">
+                              <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
+                                <span>Active days</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setWinActiveDays(!winActiveDays)}
+                                  className={`w-7 h-3.5 rounded-full transition-colors relative ${winActiveDays ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                                >
+                                  <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${winActiveDays ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                                </button>
+                              </label>
+                              <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
+                                <span>Volume</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setWinShowVolume(!winShowVolume)}
+                                  className={`w-7 h-3.5 rounded-full transition-colors relative ${winShowVolume ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                                >
+                                  <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${winShowVolume ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                                </button>
+                              </label>
+                              {/* Light variants: bg-emerald-950/60 composites to
                               near-white on a light page, leaving emerald-400
                               text at 2.17:1 — the chip read as a faint smudge. */}
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-600/30 dark:bg-emerald-950/60 dark:border-emerald-500/40 dark:text-emerald-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400"></span>
-                            Wins
-                          </span>
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-600/30 dark:bg-emerald-950/60 dark:border-emerald-500/40 dark:text-emerald-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400"></span>
+                                Wins
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="h-48 sm:h-52 w-full my-2">
+                            {winPerformanceChartData.length > 0 ? (
+                              <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={winPerformanceChartData}>
+                                  <defs>
+                                    <linearGradient id="winGradient" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                                    </linearGradient>
+                                  </defs>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#1e293b' : '#f1f5f9'} />
+                                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                                  <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(val) => winShowVolume ? `${val}` : `$${val}`} />
+                                  <Tooltip formatter={(value: any) => [winShowVolume ? `${value} Lots` : formatValue(Number(value)), winShowVolume ? 'Volume' : 'Cumulative Profit']} />
+                                  <Area type="monotone" dataKey="val" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#winGradient)" />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            ) : (
+                              <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                                No winning performance recorded.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Total P&L</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{formatValue(winTotalPnl)}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Winning Trades</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{winningTradesList.length}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Avg Daily Volume</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{winAvgDailyVolume}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Avg. Winning Trade</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{avgWinningTrade}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Total Commissions</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{formatValue(winTotalCommissions)}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Max Consecutive Wins</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{maxWinStreak}</span>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="h-48 sm:h-52 w-full my-2">
-                        {winPerformanceChartData.length > 0 ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={winPerformanceChartData}>
-                              <defs>
-                                <linearGradient id="winGradient" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
-                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                                </linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#1e293b' : '#f1f5f9'} />
-                              <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                              <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(val) => winShowVolume ? `${val}` : `$${val}`} />
-                              <Tooltip formatter={(value: any) => [winShowVolume ? `${value} Lots` : formatValue(Number(value)), winShowVolume ? 'Volume' : 'Cumulative Profit']} />
-                              <Area type="monotone" dataKey="val" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#winGradient)" />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                            No winning performance recorded.
+                      {/* Loss Performance Card */}
+                      <div className="dx-panel p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                            <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Loss Performance</h3>
+                            <div className="flex items-center gap-3">
+                              <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
+                                <span>Active days</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setLossActiveDays(!lossActiveDays)}
+                                  className={`w-7 h-3.5 rounded-full transition-colors relative ${lossActiveDays ? 'bg-rose-500' : 'bg-slate-700'}`}
+                                >
+                                  <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${lossActiveDays ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                                </button>
+                              </label>
+                              <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
+                                <span>Volume</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setLossShowVolume(!lossShowVolume)}
+                                  className={`w-7 h-3.5 rounded-full transition-colors relative ${lossShowVolume ? 'bg-rose-500' : 'bg-slate-700'}`}
+                                >
+                                  <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${lossShowVolume ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                                </button>
+                              </label>
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-600/30 dark:bg-rose-950/60 dark:border-rose-500/40 dark:text-rose-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-600 dark:bg-rose-400"></span>
+                                Losses
+                              </span>
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Total P&L</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{formatValue(winTotalPnl)}</span>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Winning Trades</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{winningTradesList.length}</span>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Avg Daily Volume</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{winAvgDailyVolume}</span>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Avg. Winning Trade</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{avgWinningTrade}</span>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Total Commissions</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{formatValue(winTotalCommissions)}</span>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Max Consecutive Wins</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{maxWinStreak}</span>
-                      </div>
-                    </div>
-                  </div>
+                          <div className="h-48 sm:h-52 w-full my-2">
+                            {lossPerformanceChartData.length > 0 ? (
+                              <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={lossPerformanceChartData}>
+                                  <defs>
+                                    <linearGradient id="lossGradient" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.35} />
+                                      <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
+                                    </linearGradient>
+                                  </defs>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#1e293b' : '#f1f5f9'} />
+                                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                                  <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(val) => lossShowVolume ? `${val}` : `-$${Math.abs(val)}`} />
+                                  <Tooltip formatter={(value: any) => [lossShowVolume ? `${value} Lots` : `-${formatValue(Math.abs(Number(value)))}`, lossShowVolume ? 'Volume' : 'Cumulative Loss']} />
+                                  <Area type="monotone" dataKey="val" stroke="#f43f5e" strokeWidth={2.5} fillOpacity={1} fill="url(#lossGradient)" />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            ) : (
+                              <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                                No loss performance recorded.
+                              </div>
+                            )}
+                          </div>
+                        </div>
 
-                  {/* Loss Performance Card */}
-                  <div className="dx-panel p-5 sm:p-6 shadow-xs flex flex-col justify-between">
-                    <div>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                        <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Loss Performance</h3>
-                        <div className="flex items-center gap-3">
-                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
-                            <span>Active days</span>
-                            <button
-                              type="button"
-                              onClick={() => setLossActiveDays(!lossActiveDays)}
-                              className={`w-7 h-3.5 rounded-full transition-colors relative ${lossActiveDays ? 'bg-rose-500' : 'bg-slate-700'}`}
-                            >
-                              <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${lossActiveDays ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
-                            </button>
-                          </label>
-                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 select-none">
-                            <span>Volume</span>
-                            <button
-                              type="button"
-                              onClick={() => setLossShowVolume(!lossShowVolume)}
-                              className={`w-7 h-3.5 rounded-full transition-colors relative ${lossShowVolume ? 'bg-rose-500' : 'bg-slate-700'}`}
-                            >
-                              <span className={`block w-2.5 h-2.5 rounded-full bg-white transition-transform ${lossShowVolume ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
-                            </button>
-                          </label>
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-600/30 dark:bg-rose-950/60 dark:border-rose-500/40 dark:text-rose-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-600 dark:bg-rose-400"></span>
-                            Losses
-                          </span>
+                        <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Total P&L</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{lossTotalPnl !== 0 ? `-${formatValue(Math.abs(lossTotalPnl))}` : formatValue(0)}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Losing Trades</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{losingTradesList.length}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Avg Daily Volume</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{lossAvgDailyVolume}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Avg. Losing Trade</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{avgLosingTrade}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Total Commissions</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{formatValue(lossTotalCommissions)}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
+                            <span className="text-[11px] font-medium text-slate-400 block">Max Consecutive Loss</span>
+                            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{maxLossStreak}</span>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="h-48 sm:h-52 w-full my-2">
-                        {lossPerformanceChartData.length > 0 ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={lossPerformanceChartData}>
-                              <defs>
-                                <linearGradient id="lossGradient" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.35} />
-                                  <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
-                                </linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#1e293b' : '#f1f5f9'} />
-                              <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                              <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(val) => lossShowVolume ? `${val}` : `-$${Math.abs(val)}`} />
-                              <Tooltip formatter={(value: any) => [lossShowVolume ? `${value} Lots` : `-${formatValue(Math.abs(Number(value)))}`, lossShowVolume ? 'Volume' : 'Cumulative Loss']} />
-                              <Area type="monotone" dataKey="val" stroke="#f43f5e" strokeWidth={2.5} fillOpacity={1} fill="url(#lossGradient)" />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                            No loss performance recorded.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Total P&L</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{lossTotalPnl !== 0 ? `-${formatValue(Math.abs(lossTotalPnl))}` : formatValue(0)}</span>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Losing Trades</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{losingTradesList.length}</span>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Avg Daily Volume</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{lossAvgDailyVolume}</span>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Avg. Losing Trade</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{avgLosingTrade}</span>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Total Commissions</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{formatValue(lossTotalCommissions)}</span>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 sm:p-3.5">
-                        <span className="text-[11px] font-medium text-slate-400 block">Max Consecutive Loss</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 font-mono mt-0.5 block">{maxLossStreak}</span>
-                      </div>
-                    </div>
-                  </div>
-                </section>
+                    </section>
                   </div>
                 </div>
 
@@ -7647,11 +7674,10 @@ export default function App() {
                               key={tab.id}
                               type="button"
                               onClick={() => setSettingsTab(tab.id as any)}
-                              className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                                isActive
+                              className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${isActive
                                   ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30 ring-1 ring-violet-400/40'
                                   : 'bg-slate-900/60 dark:bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-slate-200'
-                              }`}
+                                }`}
                             >
                               <TabIcon className="h-3.5 w-3.5 shrink-0" />
                               <span>{tab.label}</span>
@@ -7713,14 +7739,14 @@ export default function App() {
                                     type="button"
                                     onClick={() => setSettingsTab(item.id as any)}
                                     className={`w-full text-left px-2.5 py-2 rounded-xl transition-all duration-150 flex items-center gap-2.5 group relative ${isActive
-                                        ? 'settings-nav-active font-semibold'
-                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/80 dark:hover:bg-white/[0.05]'
+                                      ? 'settings-nav-active font-semibold'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/80 dark:hover:bg-white/[0.05]'
                                       }`}
                                   >
                                     <div
                                       className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${isActive
-                                          ? 'bg-white/20 text-white'
-                                          : 'bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-slate-400 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:bg-violet-50 dark:group-hover:bg-violet-500/10'
+                                        ? 'bg-white/20 text-white'
+                                        : 'bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-slate-400 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:bg-violet-50 dark:group-hover:bg-violet-500/10'
                                         }`}
                                     >
                                       <ItemIcon className="h-3.5 w-3.5" />
@@ -7957,11 +7983,10 @@ export default function App() {
 
                               <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between gap-1 border-t sm:border-t-0 border-slate-800 pt-3 sm:pt-0">
                                 <span className="text-[11px] text-slate-400 font-medium">Mentor Access:</span>
-                                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-md ${
-                                  partnerLink.allowPartnerTradeView || (mentorAccess && (mentorAccess.dashboard || mentorAccess.analysis || mentorAccess.journal || mentorAccess.calendar || mentorAccess.liveCharts))
+                                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-md ${partnerLink.allowPartnerTradeView || (mentorAccess && (mentorAccess.dashboard || mentorAccess.analysis || mentorAccess.journal || mentorAccess.calendar || mentorAccess.liveCharts))
                                     ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
                                     : 'bg-amber-500/15 text-amber-300 border border-amber-500/25'
-                                }`}>
+                                  }`}>
                                   {partnerLink.allowPartnerTradeView || (mentorAccess && (mentorAccess.dashboard || mentorAccess.analysis || mentorAccess.journal || mentorAccess.calendar || mentorAccess.liveCharts)) ? 'Trade Details Enabled' : 'Name & Plan Only'}
                                 </span>
                               </div>
@@ -9047,22 +9072,22 @@ export default function App() {
                           key={item.id}
                           onClick={() => { setActiveTab(item.id as any); setShowMobileMore(false); setIsScrolled(false); }}
                           className={`w-full flex items-center gap-3.5 px-3 py-3 rounded-2xl transition-colors active:scale-[0.99] ${isActive
-                              ? 'bg-violet-50 dark:bg-violet-500/[0.14]'
-                              : 'hover:bg-slate-50 dark:hover:bg-white/[0.04]'
+                            ? 'bg-violet-50 dark:bg-violet-500/[0.14]'
+                            : 'hover:bg-slate-50 dark:hover:bg-white/[0.04]'
                             }`}
                         >
                           <span
                             className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${isActive
-                                ? 'bg-violet-500/20 text-violet-600 dark:bg-violet-500/25 dark:text-violet-300'
-                                : 'bg-slate-100 text-slate-500 dark:bg-white/[0.06] dark:text-slate-400'
+                              ? 'bg-violet-500/20 text-violet-600 dark:bg-violet-500/25 dark:text-violet-300'
+                              : 'bg-slate-100 text-slate-500 dark:bg-white/[0.06] dark:text-slate-400'
                               }`}
                           >
                             <item.icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.4 : 1.9} />
                           </span>
 
                           <span className={`flex-1 text-left text-sm font-bold ${isActive
-                              ? 'text-violet-700 dark:text-violet-200'
-                              : 'text-slate-700 dark:text-slate-200'
+                            ? 'text-violet-700 dark:text-violet-200'
+                            : 'text-slate-700 dark:text-slate-200'
                             }`}>
                             {item.label}
                           </span>
@@ -9124,14 +9149,14 @@ export default function App() {
                             current section real weight. */}
                         <span
                           className={`relative flex items-center justify-center h-7 w-[52px] rounded-full transition-all duration-300 ${isActive
-                              ? 'bg-violet-100 dark:bg-violet-500/20 shadow-[0_0_18px_-6px_rgba(139,92,246,0.9)]'
-                              : 'bg-transparent'
+                            ? 'bg-violet-100 dark:bg-violet-500/20 shadow-[0_0_18px_-6px_rgba(139,92,246,0.9)]'
+                            : 'bg-transparent'
                             }`}
                         >
                           <item.icon
                             className={`h-[21px] w-[21px] transition-colors duration-200 ${isActive
-                                ? 'text-violet-700 dark:text-violet-300'
-                                : 'text-slate-600 dark:text-slate-400'
+                              ? 'text-violet-700 dark:text-violet-300'
+                              : 'text-slate-600 dark:text-slate-400'
                               }`}
                             strokeWidth={isActive ? 2.4 : 1.8}
                           />
@@ -9147,8 +9172,8 @@ export default function App() {
                             under the 4.5 minimum, and the icon beside it failed
                             even the 3:1 needed for a non-text graphic. */}
                         <span className={`text-[10px] leading-none transition-colors duration-200 ${isActive
-                            ? 'font-bold text-violet-700 dark:text-violet-300'
-                            : 'font-semibold text-slate-600 dark:text-slate-400'
+                          ? 'font-bold text-violet-700 dark:text-violet-300'
+                          : 'font-semibold text-slate-600 dark:text-slate-400'
                           }`}>
                           {item.label}
                         </span>
@@ -9479,22 +9504,20 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setNewAccInstitutionType('Broker')}
-                      className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
-                        newAccInstitutionType === 'Broker'
+                      className={`py-1.5 text-xs font-semibold rounded-md transition-all ${newAccInstitutionType === 'Broker'
                           ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-300 shadow-xs'
                           : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                      }`}
+                        }`}
                     >
                       Broker
                     </button>
                     <button
                       type="button"
                       onClick={() => setNewAccInstitutionType('Prop Firm')}
-                      className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
-                        newAccInstitutionType === 'Prop Firm'
+                      className={`py-1.5 text-xs font-semibold rounded-md transition-all ${newAccInstitutionType === 'Prop Firm'
                           ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-300 shadow-xs'
                           : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                      }`}
+                        }`}
                     >
                       Prop Firm
                     </button>
@@ -10625,7 +10648,7 @@ export default function App() {
       {/* Sign-out confirmation modal */}
       {showSignOutModal && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-fade-in"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in"
           onClick={() => !isLoggingOut && setShowSignOutModal(false)}
           onKeyDown={(e) => { if (e.key === 'Escape' && !isLoggingOut) setShowSignOutModal(false); }}
         >
@@ -10635,75 +10658,62 @@ export default function App() {
             aria-labelledby="signout-title"
             aria-describedby="signout-desc"
             onClick={(e) => e.stopPropagation()}
-            className="relative max-w-sm sm:max-w-md w-full bg-[#090b12]/95 border border-white/[0.08] shadow-[0_32px_80px_-20px_rgba(0,0,0,0.95),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_0_rgba(255,255,255,0.12)] rounded-3xl p-6 sm:p-7 overflow-hidden text-left animate-in fade-in zoom-in-95 duration-200"
+            className="relative max-w-[390px] w-full bg-[#0d111c]/95 border border-white/[0.09] shadow-[0_28px_64px_-16px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.04),inset_0_1px_0_rgba(255,255,255,0.08)] rounded-2xl p-6 overflow-hidden text-left animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
           >
-            {/* Top ambient highlight hairline & glow */}
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-rose-500/50 to-transparent" />
-            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-36 bg-gradient-to-b from-rose-500/20 via-violet-600/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+            {/* Ambient specular highlight & subtle top glow */}
+            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-rose-500/35 to-transparent pointer-events-none" />
+            <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-48 h-20 bg-rose-500/10 rounded-full blur-2xl pointer-events-none" />
 
-            {/* Close button */}
-            <button
-              onClick={() => setShowSignOutModal(false)}
-              disabled={isLoggingOut}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white w-8 h-8 rounded-xl flex items-center justify-center bg-white/[0.04] hover:bg-red-600 hover:border-red-600 dark:hover:bg-red-600 dark:hover:border-red-600 transition-all duration-150 active:scale-95 disabled:opacity-50 shadow-xs cursor-pointer"
-              aria-label="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            {/* Header with dual-layer glowing icon badge */}
-            <div className="flex items-start gap-4 mb-5">
-              <div className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] border border-white/[0.1] shadow-[0_8px_16px_-4px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.2)] flex-shrink-0">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-500/25 via-rose-600/10 to-transparent border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-[0_0_16px_rgba(244,63,94,0.35)]">
-                  <LogOut className="w-4.5 h-4.5 stroke-[2.2]" />
-                </div>
+            {/* Top row: Icon badge & close button */}
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-rose-500/15 to-rose-500/5 border border-rose-500/25 flex items-center justify-center text-rose-400 shadow-[0_0_16px_-2px_rgba(244,63,94,0.25)]">
+                <LogOut className="w-4.5 h-4.5 stroke-[2.2]" />
               </div>
-              <div className="pr-6">
-                <h3 id="signout-title" className="text-base sm:text-lg font-semibold text-white tracking-tight">
-                  Sign out of FX Journal Pro?
-                </h3>
-                <p id="signout-desc" className="text-xs sm:text-sm text-slate-400/90 mt-1 leading-relaxed">
-                  Your journal data and MT5 sync settings are safely saved. You can sign back in anytime.
-                </p>
-              </div>
+              <button
+                onClick={() => setShowSignOutModal(false)}
+                disabled={isLoggingOut}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-50 cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* Active Session & Security card */}
-            <div className="mb-5 space-y-2">
-              {user?.email && (
-                <div className="p-3 rounded-2xl bg-gradient-to-r from-white/[0.04] to-white/[0.015] border border-white/[0.07] flex items-center justify-between gap-3 shadow-inner">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600/40 to-rose-500/25 border border-white/10 flex items-center justify-center text-xs font-bold text-slate-100 uppercase shrink-0 shadow-sm">
-                      {user.email.charAt(0)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] uppercase font-semibold tracking-wider text-slate-400">Current Session</div>
-                      <div className="text-xs font-medium text-slate-200 truncate">{user.email}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-semibold text-emerald-400 shrink-0">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
-                    </span>
-                    Active
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 px-1 text-[11px] text-slate-400/80">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400/90 shrink-0" />
-                <span>All trading history and MT5 credentials remain safely backed up</span>
-              </div>
+            {/* Header Content */}
+            <div className="mt-4">
+              <h3 id="signout-title" className="text-base font-semibold text-white tracking-tight">
+                Sign out of FX Journal Pro?
+              </h3>
+              <p id="signout-desc" className="text-xs text-slate-400/90 mt-1 leading-relaxed">
+                Are you sure you want to end your session? Your journal data and settings remain safely saved.
+              </p>
             </div>
+
+            {/* Compact Account Pill */}
+            {user?.email && (
+              <div className="mt-4 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-between gap-3 shadow-inner">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-violet-600 to-rose-500 text-[10px] font-bold text-white flex items-center justify-center uppercase shrink-0 shadow-xs">
+                    {user.email.charAt(0)}
+                  </div>
+                  <span className="text-xs text-slate-300 font-medium truncate">
+                    {user.email}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-400/90 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+                  <span>Synced</span>
+                </div>
+              </div>
+            )}
 
             {/* Actions */}
-            <div className="flex items-center gap-2.5 justify-end pt-4 border-t border-white/[0.07]">
+            <div className="flex items-center justify-end gap-2.5 mt-5 pt-4 border-t border-white/[0.06]">
               <button
                 type="button"
                 disabled={isLoggingOut}
                 onClick={() => setShowSignOutModal(false)}
-                className="h-10 px-4 rounded-xl font-medium text-xs text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.02] border border-white/[0.08] hover:border-white/[0.15] shadow-sm transition-all duration-150 active:scale-[0.98] disabled:opacity-50"
+                className="h-9 px-4 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.02] border border-white/[0.08] hover:border-white/[0.14] transition-all disabled:opacity-50 cursor-pointer shadow-xs active:scale-[0.98]"
               >
                 Cancel
               </button>
@@ -10720,7 +10730,7 @@ export default function App() {
                     setShowSignOutModal(false);
                   }
                 }}
-                className="h-10 px-5 rounded-xl font-semibold text-xs text-white bg-gradient-to-b from-rose-500 via-rose-600 to-rose-700 hover:from-rose-400 hover:via-rose-500 hover:to-rose-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_16px_rgba(225,29,72,0.35)] border border-rose-400/40 transition-all duration-150 flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50"
+                className="h-9 px-4.5 rounded-xl text-xs font-semibold text-white bg-gradient-to-b from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 active:from-rose-600 active:to-rose-700 border border-rose-400/30 shadow-[0_4px_16px_-2px_rgba(244,63,94,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-[0.98]"
               >
                 {isLoggingOut ? (
                   <>
@@ -10729,7 +10739,7 @@ export default function App() {
                   </>
                 ) : (
                   <>
-                    <LogOut className="w-3.5 h-3.5" />
+                    <LogOut className="w-3.5 h-3.5 stroke-[2.2]" />
                     <span>Sign out</span>
                   </>
                 )}

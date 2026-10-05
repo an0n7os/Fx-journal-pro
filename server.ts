@@ -464,9 +464,9 @@ function createEmptyUserDb(userId?: string, email?: string, injectDummyUser = fa
         platform: 'MT5',
         accountType: 'Demo',
         currency: 'USD',
-        startingBalance: 10000,
-        currentBalance: 10000,
-        equity: 10000,
+        startingBalance: 0,
+        currentBalance: 0,
+        equity: 0,
         status: 'Active',
         eaToken: `ea_demo_${cleanUserId.slice(-8)}`,
         eaStatus: 'Not Connected',
@@ -1219,9 +1219,10 @@ const cloudJobLocks = new Set<string>();
  * to CommonJS for Netlify and to ESM for Vercel, and a static specifier would
  * fail the build when the package is absent.
  */
+let sdkUnavailable = false;
 async function getCloudApi(): Promise<any> {
   const token = process.env.META_API_TOKEN?.trim();
-  if (!token) return null;
+  if (!token || sdkUnavailable) return null;
   if (cloudApi) return cloudApi;
 
   let MetaApi: any = null;
@@ -1231,7 +1232,10 @@ async function getCloudApi(): Promise<any> {
     const mod = await import(/* @vite-ignore */ 'metaapi.cloud-sdk/dist/index' as string);
     MetaApi = (mod as any).default?.default || (mod as any).default || mod;
   } catch {
-    console.warn('[Cloud] metaapi.cloud-sdk is not installed — cloud sync is unavailable. `npm i metaapi.cloud-sdk` to enable it.');
+    if (!sdkUnavailable) {
+      console.warn('[Cloud] metaapi.cloud-sdk is not installed — cloud sync is unavailable. `npm i metaapi.cloud-sdk` to enable it.');
+      sdkUnavailable = true;
+    }
     return null;
   }
 
@@ -2502,7 +2506,7 @@ async function saveDatabase(
         id: j.id,
         account_id: j.accountId,
         user_id: j.userId || uid,
-        action: j.action,
+        action: j.action === 'SYNC_NOW' ? 'RESYNC' : j.action,
         payload: j.payload || null,
         status: j.status || 'PENDING',
         attempts: j.attempts || 0,
@@ -2541,9 +2545,9 @@ async function ensureDefaultPortfolioAccount(
       platform: 'MT5',
       accountType: 'Demo',
       currency: 'USD',
-      startingBalance: 10000,
-      currentBalance: 10000,
-      equity: 10000,
+      startingBalance: 0,
+      currentBalance: 0,
+      equity: 0,
       status: 'Active',
       eaToken: generateEaToken(),
       eaStatus: 'Not Connected',
@@ -4138,6 +4142,45 @@ app.get('/api/accounts', async (req, res) => {
           }
         }
 
+        // Auto-calibrate starting balance for MT5 synced accounts, and clear 10000 placeholder on starter demo
+        for (const acc of accounts) {
+          if (acc.isMt5Sync && (acc.startingBalance === 10000 || !acc.startingBalance || acc.startingBalance === 0)) {
+            try {
+              const { data: dealRows } = await supabase
+                .from('mt5_deals')
+                .select('*')
+                .eq('account_id', acc.id);
+              const accountDeals = dealRows || [];
+              const deposits = accountDeals
+                .filter((d: any) => d.type === DEAL_TYPE_BALANCE && (d.profit || 0) > 0)
+                .sort((a: any, b: any) => a.time - b.time);
+              if (deposits.length > 0) {
+                acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
+                await supabase.from('trading_accounts').update({ starting_balance: acc.startingBalance }).eq('id', acc.id);
+              } else if (acc.currentBalance > 0 && acc.currentBalance !== 10000) {
+                const { data: tradeRows } = await supabase
+                  .from('trades')
+                  .select('*')
+                  .eq('account_id', acc.id);
+                const closedPnl = (tradeRows || [])
+                  .filter((t: any) => t.type !== 'Deposit' && t.type !== 'Withdrawal')
+                  .reduce((sum: number, t: any) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
+                acc.startingBalance = parseFloat(Math.max(0, acc.currentBalance - closedPnl).toFixed(2));
+                await supabase.from('trading_accounts').update({ starting_balance: acc.startingBalance }).eq('id', acc.id);
+              }
+            } catch (calibErr) {
+              console.error('[GET /api/accounts] Calibration error:', calibErr);
+            }
+          } else if (isDefaultDemoAccount(acc) && acc.startingBalance === 10000) {
+            acc.startingBalance = 0;
+            acc.currentBalance = 0;
+            acc.equity = 0;
+            try {
+              await supabase.from('trading_accounts').update({ starting_balance: 0, current_balance: 0, equity: 0 }).eq('id', acc.id);
+            } catch { }
+          }
+        }
+
         if (accounts.length > 0) {
           return res.json({ accounts });
         }
@@ -4171,6 +4214,26 @@ app.get('/api/accounts', async (req, res) => {
       }
     } catch (err) {
       console.error('[GET /api/accounts] Starter account creation error:', err);
+    }
+  }
+
+  // Auto-calibrate starting balance for MT5 synced accounts from actual MT5 deposits or trades if still at 10000 placeholder
+  for (const acc of userAccounts) {
+    if (acc.isMt5Sync && (acc.startingBalance === 10000 || !acc.startingBalance || acc.startingBalance === 0)) {
+      const accountDeals = (db.mt5Deals || []).filter((d: any) => d.accountId === acc.id);
+      const deposits = accountDeals
+        .filter((d: any) => d.type === DEAL_TYPE_BALANCE && (d.profit || 0) > 0)
+        .sort((a: any, b: any) => a.time - b.time);
+      if (deposits.length > 0) {
+        acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
+        acc.startingBalanceLocked = true;
+      } else if (acc.currentBalance > 0 && acc.currentBalance !== 10000) {
+        const closedPnl = (db.trades || [])
+          .filter((t: any) => t.accountId === acc.id && t.type !== 'Deposit' && t.type !== 'Withdrawal')
+          .reduce((sum: number, t: any) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
+        acc.startingBalance = parseFloat(Math.max(0, acc.currentBalance - closedPnl).toFixed(2));
+        acc.startingBalanceLocked = true;
+      }
     }
   }
 
@@ -5398,19 +5461,21 @@ function applyEaSyncPayload(db: any, acc: any, deals: any[], moneyFlows: any[], 
   // 2. Recompute journal trades from the full deal stream and upsert
   const accountDeals = db.mt5Deals.filter((d: any) => d.accountId === accountId);
 
-  // 2a. MT5 sync accounts: the FIRST deposit recorded in the account history is
-  //     the Initial Balance. It is set once (while starting balance is still 0) so
-  //     manually entered balances are preserved, and it is excluded from the journal
-  //     trades because it is already represented by the starting balance.
+  // 2a. MT5 sync accounts: determine authentic initial/starting capital from MT5.
+  // The first deposit in the MT5 history represents the authentic starting capital.
   let skipBalanceTicket: number | undefined;
   if (acc.isMt5Sync) {
     const deposits = accountDeals
       .filter((d: any) => d.type === DEAL_TYPE_BALANCE && (d.profit || 0) > 0)
       .sort((a: any, b: any) => a.time - b.time);
+
+    const isPlaceholderOrUnset = !acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000 || acc.isDefaultDemo;
+
     if (deposits.length > 0) {
       skipBalanceTicket = deposits[0].ticket;
-      if (!acc.startingBalance || acc.startingBalance === 0) {
+      if (isPlaceholderOrUnset || !acc.startingBalanceLocked) {
         acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
+        acc.startingBalanceLocked = true;
       }
     }
   }
@@ -5448,6 +5513,19 @@ function applyEaSyncPayload(db: any, acc: any, deals: any[], moneyFlows: any[], 
     if (account.currency !== undefined && account.currency) acc.currency = String(account.currency);
   }
 
+  // 3b. If no initial deposit deal was in the MT5 history (e.g. broker history limits),
+  // deduce starting capital from live balance minus closed trades net PnL:
+  if (acc.isMt5Sync && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000 || acc.isDefaultDemo || !acc.startingBalanceLocked)) {
+    const netTradingProfit = recomputed
+      .filter((t: any) => t.type !== 'Deposit' && t.type !== 'Withdrawal')
+      .reduce((sum: number, t: any) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
+    const effCurBalance = acc.currentBalance || (account?.balance ? parseFloat(account.balance) : 0);
+    if (effCurBalance > 0) {
+      acc.startingBalance = parseFloat(Math.max(0, effCurBalance - netTradingProfit).toFixed(2));
+      acc.startingBalanceLocked = true;
+    }
+  }
+
   acc.eaStatus = 'Connected';
   acc.connectionStatus = 'Connected';
   acc.eaConnectedAt = acc.eaConnectedAt || new Date().toISOString();
@@ -5476,6 +5554,7 @@ app.post('/api/mt5/ea/sync', ...eaProtection, async (req, res) => {
   if (targetUserId) {
     await cleanupDefaultDemoAccounts(db, targetUserId, acc.id);
   }
+  const summary = applyEaSyncPayload(db, acc, deals, moneyFlows, account);
 
   logEaEvent(db, acc, 'EA_SYNC', 'info', `Deals: ${summary.added} new / ${deals.length} received; money flows: ${summary.moneyFlowAdded} new`);
   await saveDatabase(db, db.users?.[0]?.email);
@@ -7050,20 +7129,18 @@ app.get('/api/announcements', async (req, res) => {
 });
 
 // ==========================================
-// BILLING — CASHFREE PAYMENT GATEWAY
+// BILLING — RAZORPAY PAYMENT GATEWAY
 //
-// Pro is sold as a 30-day pass: one Cashfree order, one payment, 30 days of
-// access added to whatever is left of the current period. There is no mandate
-// and no auto-renewal, so lapsing is the default and nothing has to be
-// cancelled at the provider.
+// Pro is sold as a 30-day pass: one Razorpay order, one payment, 30 days of
+// access added to whatever is left of the current period.
 //
 // Three rules here matter more than the rest:
 //   1. The WEBHOOK is the source of truth, not the browser callback. A client
-//      can close the tab or lose connection; the webhook is signed by Cashfree
+//      can close the tab or lose connection; the webhook is signed by Razorpay
 //      and arrives regardless.
-//   2. Nothing the browser sends is evidence of payment. /verify takes an
-//      order id and asks Cashfree whether it was paid — Cashfree's checkout
-//      hands the browser no signature, and inventing one would be theatre.
+//   2. Nothing the browser sends is evidence of payment without verified signature.
+//      /verify checks the HMAC signature computed from order_id|payment_id
+//      with RAZORPAY_KEY_SECRET, and verifies against Razorpay's API.
 //   3. Pro access is derived from `pro_until`, not a boolean. A boolean with
 //      no expiry cannot represent a lapsed plan.
 // ==========================================
@@ -7072,132 +7149,49 @@ const PRO_PLAN_AMOUNT_PAISE = 49900; // ₹499/month
 
 /**
  * What the platform keeps from every referred subscription, in rupees.
- *
- * A partner sets a student offer price between this floor and the standard
- * ₹499, and earns the difference — the rule the Partner Portal states as
- * "Student Pays − ₹199". It was written as a bare 199 in four places,
- * including the admin income report, so a change would have had to be found
- * in all of them.
  */
 const PARTNER_PLATFORM_FLOOR_INR = 199;
 
 /**
  * Whether the shortcuts that hand out Pro without a real payment may run.
- *
- * These exist so the upgrade flow can be exercised before Cashfree keys are
- * issued, but each of them is a one-POST "make me Pro" button for any logged-in
- * account, so they are off unless explicitly switched on, and can never be on
- * in production.
  */
 const allowTestBilling = () =>
   IS_DEV && process.env.ALLOW_TEST_BILLING === 'true';
 
-/**
- * Which Cashfree environment the keys belong to.
- *
- * Cashfree issues a separate App ID / Secret pair per environment and the two
- * are not interchangeable, so the base URL is derived from the same setting
- * rather than configured twice. Anything other than an explicit "production"
- * is treated as sandbox: a typo must not send a live charge.
- */
-const cashfreeMode = (): 'sandbox' | 'production' =>
-  process.env.CASHFREE_ENV?.trim().toLowerCase() === 'production' ? 'production' : 'sandbox';
+const RAZORPAY_API = 'https://api.razorpay.com/v1';
 
-const CASHFREE_BASE = {
-  sandbox: 'https://sandbox.cashfree.com/pg',
-  production: 'https://api.cashfree.com/pg',
-} as const;
-
-/**
- * Cashfree pins behaviour to a dated API version sent on every request. It is
- * an env var so the account can be moved to a newer one without a deploy, but
- * the field names this file reads are the ones documented for this default.
- */
-const CASHFREE_API_VERSION = process.env.CASHFREE_API_VERSION?.trim() || '2026-01-01';
-
-/**
- * Cashfree requires customer_phone on every order and this product never asks
- * for one. A single well-known placeholder keeps checkout working; a real
- * number can be supplied later without touching this code.
- */
-const CASHFREE_FALLBACK_PHONE = (process.env.CASHFREE_FALLBACK_PHONE?.trim() || '9999999999')
-  .replace(/\D/g, '')
-  .slice(-10);
-
-const cashfreeAuth = () => {
-  const appId = process.env.CASHFREE_APP_ID?.trim();
-  const secretKey = process.env.CASHFREE_SECRET_KEY?.trim();
-  if (!appId || !secretKey) return null;
-  const mode = cashfreeMode();
-  return { appId, secretKey, mode, baseUrl: CASHFREE_BASE[mode] };
+const razorpayAuth = () => {
+  const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+  if (!keyId || !keySecret) return null;
+  return {
+    keyId,
+    keySecret,
+    header: 'Basic ' + Buffer.from(`${keyId}:${keySecret}`).toString('base64'),
+    mode: keyId.startsWith('rzp_live_') ? 'production' : 'test',
+  };
 };
 
-/**
- * The secret the webhook signature is checked against.
- *
- * Cashfree signs webhooks with the same secret key as the API, so that is the
- * default; CASHFREE_WEBHOOK_SECRET exists only for an account where the two
- * have been separated.
- */
-const cashfreeWebhookSecret = () =>
-  process.env.CASHFREE_WEBHOOK_SECRET?.trim() || process.env.CASHFREE_SECRET_KEY?.trim() || '';
-
-const cashfreeFetch = async (path: string, init: any = {}) => {
-  const auth = cashfreeAuth();
-  if (!auth) throw new Error('CASHFREE_NOT_CONFIGURED');
-  const res = await fetch(auth.baseUrl + path, {
+const razorpayFetch = async (path: string, init: any = {}) => {
+  const auth = razorpayAuth();
+  if (!auth) throw new Error('RAZORPAY_NOT_CONFIGURED');
+  const res = await fetch(RAZORPAY_API + path, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      'x-api-version': CASHFREE_API_VERSION,
-      'x-client-id': auth.appId,
-      'x-client-secret': auth.secretKey,
+      Authorization: auth.header,
       ...(init.headers || {}),
     },
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    console.error(`[cashfree] ${path} failed (${res.status}):`, body);
-    throw new Error(body?.message || body?.error_description || 'Cashfree request failed');
+    console.error(`[razorpay] ${path} failed (${res.status}):`, body);
+    throw new Error(body?.error?.description || body?.message || 'Razorpay request failed');
   }
   return body;
 };
 
-/**
- * Cashfree accepts order ids of 3–45 characters from [A-Za-z0-9_-], and the id
- * is how /verify and the webhook find the order again, so it is generated here
- * rather than left to Cashfree.
- */
-const newCashfreeOrderId = (userId: string) =>
-  `fxj_${userId.replace(/[^A-Za-z0-9]/g, '').slice(0, 12)}_${Date.now().toString(36)}_${crypto
-    .randomBytes(3)
-    .toString('hex')}`.slice(0, 45);
-
-/**
- * order_tags is the only thing that travels with a Cashfree order and comes
- * back on both the order lookup and the webhook, so it carries everything the
- * grant needs. Values must be strings.
- */
-type CashfreeOrderTags = {
-  user_id?: string;
-  plan?: string;
-  period_days?: string;
-  coupon_code?: string;
-  partner_id?: string;
-  offer_price?: string;
-  mentor_commission?: string;
-};
-
-const readOrderTags = (raw: any): CashfreeOrderTags => (raw && typeof raw === 'object' ? raw : {});
-
 /** Grants or revokes Pro by writing an expiry, and mirrors it to the fast flag. */
-/**
- * Current pro_until for a user, in epoch ms, or null.
- *
- * Used when extending a plan from a webhook, where there is no session to
- * read it off: topping up a still-active plan must add to the existing
- * expiry rather than reset it to 30 days from now.
- */
 const readProUntil = async (userId: string): Promise<number | null> => {
   try {
     if (useSupabase) {
@@ -7215,20 +7209,6 @@ const readProUntil = async (userId: string): Promise<number | null> => {
 
 /**
  * Claims a provider payment id, so one payment can be credited exactly once.
- *
- * An earlier /api/payments/verify checked a signature and then extended Pro by
- * 30 days from the current expiry, with nothing recording that the payment had
- * already been credited — so replaying one successful confirmation granted
- * another 30 days each time. Pay ₹499 once, resend the same request
- * twenty-four times, hold Pro for two years. The payments upsert deduped the
- * row but ran after the grant.
- *
- * The insert is the claim, not a check-then-act: payments.provider_payment_id
- * is UNIQUE, so two concurrent replays cannot both succeed. A duplicate-key
- * error means somebody already credited this payment and the caller must not
- * grant anything further.
- *
- * Returns true when this call owns the payment.
  */
 const claimPayment = async (opts: {
   providerPaymentId: string;
@@ -7244,7 +7224,7 @@ const claimPayment = async (opts: {
     const { error } = await supabase.from('payments').insert({
       id: `pay_${crypto.randomUUID()}`,
       user_id: userId,
-      provider: 'cashfree',
+      provider: 'razorpay',
       provider_payment_id: providerPaymentId,
       amount: amountRupees,
       currency: 'INR',
@@ -7277,7 +7257,7 @@ const claimPayment = async (opts: {
       id: `pay_${crypto.randomUUID()}`,
       userId,
       userEmail: userEmail || null,
-      provider: 'cashfree',
+      provider: 'razorpay',
       providerPaymentId,
       amount: amountRupees,
       currency: 'INR',
@@ -7305,10 +7285,7 @@ const applyProState = async (userId: string, proUntil: Date | null) => {
     return;
   }
 
-  // Local mode has no reload to force: a user's data lives in the in-memory
-  // cache (and, for seeded accounts, db.json). Dropping the cache would throw
-  // away their accounts and trades, so update every copy in place instead.
-  // Without this an admin's grant only ever touched the admin's own copy.
+  // Local mode: in-memory cache and db.json
   const patch = (row: any) => {
     row.isPro = isPro;
     row.proUntil = proUntil ? proUntil.toISOString() : null;
@@ -7333,17 +7310,13 @@ const applyProState = async (userId: string, proUntil: Date | null) => {
 };
 
 app.get('/api/payments/config', (req, res) => {
-  const auth = cashfreeAuth();
+  const auth = razorpayAuth();
   const configured = !!auth;
   res.json({
     configured,
-    provider: 'cashfree',
-    // Which Cashfree environment the browser SDK must be initialised with.
-    // Cashfree({ mode }) has to match the keys the session id was minted with
-    // or the checkout refuses to open.
-    mode: auth?.mode || 'sandbox',
-    // Only true on a dev box with ALLOW_TEST_BILLING=true. The client uses it
-    // to decide whether to show the test-tier switch at all.
+    provider: 'razorpay',
+    keyId: auth?.keyId || 'rzp_test_sandbox_mode',
+    mode: auth?.mode || 'test',
     testBilling: allowTestBilling(),
     sandboxMode: !configured && allowTestBilling(),
     amount: PRO_PLAN_AMOUNT_PAISE,
@@ -7353,7 +7326,7 @@ app.get('/api/payments/config', (req, res) => {
   });
 });
 
-/** Creates a Cashfree Order for one-time Pro payment (30 days access). */
+/** Creates a Razorpay Order for one-time Pro payment (30 days access). */
 app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res) => {
   const currentUser = (req as any).currentUser;
   if (!currentUser) return res.status(401).json({ error: 'Not authenticated' });
@@ -7365,7 +7338,6 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
   if (couponCode) {
     partner = await findPartnerByCode(couponCode);
     if (partner && partner.isActive !== false) {
-      // Clamped between 199 and 499
       appliedOfferPrice = Math.min(499, Math.max(PARTNER_PLATFORM_FLOOR_INR, Number(partner.offerPrice) || 499));
       orderAmountPaise = appliedOfferPrice * 100;
       await linkReferral(req, currentUser.id, couponCode);
@@ -7374,10 +7346,10 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
 
   const mentorCommission = partner ? Math.max(0, appliedOfferPrice - PARTNER_PLATFORM_FLOOR_INR) : 0;
 
-  const auth = cashfreeAuth();
+  const auth = razorpayAuth();
   if (!auth) {
     if (!allowTestBilling()) {
-      console.error('[payments/order] CASHFREE_APP_ID / CASHFREE_SECRET_KEY are not set.');
+      console.error('[payments/order] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set.');
       return res.status(503).json({
         error: 'Payments are not configured yet. Please try again shortly.',
       });
@@ -7385,10 +7357,10 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
     // Sandbox fallback only with ALLOW_TEST_BILLING=true
     return res.json({
       sandboxMode: true,
-      provider: 'cashfree',
+      provider: 'razorpay',
       mode: 'sandbox',
+      keyId: 'rzp_test_sandbox',
       orderId: `order_test_${currentUser.id.slice(-6)}_${crypto.randomUUID()}`,
-      paymentSessionId: null,
       amount: orderAmountPaise,
       amountRupees: appliedOfferPrice,
       originalPrice: 499,
@@ -7396,100 +7368,52 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
       discountApplied: !!partner && appliedOfferPrice < 499,
       couponCode: partner?.code || null,
       currency: 'INR',
-      message: partner ? `Mentor offer applied: ₹${appliedOfferPrice} (Regular ₹499)` : 'Cashfree running in test/sandbox mode.',
+      message: partner ? `Mentor offer applied: ₹${appliedOfferPrice} (Regular ₹499)` : 'Razorpay running in test/sandbox mode.',
     });
   }
 
   try {
-    const origin = publicOrigin(req);
-    let returnOrigin = origin;
-    if (auth.mode === 'production' && !returnOrigin.startsWith('https://')) {
-      const publicHttps = process.env.PUBLIC_SITE_URL?.trim() || process.env.PUBLIC_APP_URL?.trim() || 'https://www.fxjournalpro.com';
-      returnOrigin = publicHttps.replace(/\/+$/, '');
-    }
-    const orderId = newCashfreeOrderId(currentUser.id);
-    const tags: CashfreeOrderTags = {
-      user_id: currentUser.id,
-      plan: 'pro',
-      period_days: '30',
-      coupon_code: partner?.code || '',
-      partner_id: partner?.userId || '',
-      offer_price: String(appliedOfferPrice),
-      mentor_commission: String(mentorCommission),
-    };
-
-    // Cashfree takes the amount in rupees, not paise — passing 49900 here
-    // would charge ₹49,900.
-    const order = await cashfreeFetch('/orders', {
+    const order = await razorpayFetch('/orders', {
       method: 'POST',
       body: JSON.stringify({
-        order_id: orderId,
-        order_amount: orderAmountPaise / 100,
-        order_currency: 'INR',
-        customer_details: {
-          // 3–50 chars, so the raw uuid is stripped of its dashes.
-          customer_id: `u_${currentUser.id.replace(/[^A-Za-z0-9]/g, '')}`.slice(0, 50),
-          customer_email: currentUser.email || undefined,
-          customer_name: currentUser.name || undefined,
-          customer_phone: CASHFREE_FALLBACK_PHONE,
+        amount: orderAmountPaise,
+        currency: 'INR',
+        receipt: `rcpt_${currentUser.id.replace(/[^A-Za-z0-9]/g, '').slice(0, 8)}_${Date.now().toString(36)}`,
+        notes: {
+          userId: currentUser.id,
+          email: currentUser.email || '',
+          plan: 'pro',
+          periodDays: '30',
+          couponCode: partner?.code || '',
+          partnerId: partner?.userId || '',
+          offerPrice: String(appliedOfferPrice),
+          mentorCommission: String(mentorCommission),
         },
-        order_meta: {
-          // Where the customer lands if Cashfree has to leave the modal (UPI
-          // apps, bank pages). The query placeholder is filled in by Cashfree.
-          return_url: `${returnOrigin}/?cf_order_id={order_id}`,
-          notify_url: `${returnOrigin}/api/payments/webhook`,
-        },
-        order_note: 'FX Journal Pro — 30 days',
-        order_tags: tags,
       }),
     });
 
-    if (!order?.payment_session_id) {
-      console.error('[payments/order] Cashfree returned no payment_session_id:', order);
-      if (allowTestBilling()) {
-        return res.json({
-          sandboxMode: true,
-          provider: 'cashfree',
-          mode: 'sandbox',
-          orderId: `order_test_${currentUser.id.slice(-6)}_${crypto.randomUUID()}`,
-          paymentSessionId: null,
-          amount: orderAmountPaise,
-          amountRupees: appliedOfferPrice,
-          originalPrice: 499,
-          mentorCommission,
-          discountApplied: !!partner && appliedOfferPrice < 499,
-          couponCode: partner?.code || null,
-          currency: 'INR',
-          message: 'Cashfree test billing: simulated Pro upgrade.',
-        });
-      }
-      const rawMsg = order?.message || order?.error_description || 'Could not initiate the payment.';
-      return res.status(502).json({ error: rawMsg });
-    }
-
     res.json({
-      provider: 'cashfree',
-      mode: auth.mode,
-      orderId: order.order_id || orderId,
-      paymentSessionId: order.payment_session_id,
-      amount: orderAmountPaise,
+      provider: 'razorpay',
+      keyId: auth.keyId,
+      orderId: order.id,
+      amount: order.amount,
       amountRupees: appliedOfferPrice,
       originalPrice: 499,
       mentorCommission,
       discountApplied: !!partner && appliedOfferPrice < 499,
       couponCode: partner?.code || null,
-      currency: order.order_currency || 'INR',
+      currency: order.currency || 'INR',
     });
   } catch (err: any) {
     console.error('[payments/order]', err?.message || err);
     if (allowTestBilling()) {
-      console.log('[payments/order] Cashfree live API unavailable/disabled; falling back to simulated test billing.');
+      console.log('[payments/order] Razorpay live API unavailable; falling back to simulated test billing.');
       return res.json({
         sandboxMode: true,
-        provider: 'cashfree',
+        provider: 'razorpay',
         mode: 'sandbox',
+        keyId: 'rzp_test_sandbox',
         orderId: `order_test_${currentUser.id.slice(-6)}_${crypto.randomUUID()}`,
-        paymentSessionId: null,
         amount: orderAmountPaise,
         amountRupees: appliedOfferPrice,
         originalPrice: 499,
@@ -7497,27 +7421,16 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
         discountApplied: !!partner && appliedOfferPrice < 499,
         couponCode: partner?.code || null,
         currency: 'INR',
-        message: 'Cashfree test billing: simulated Pro upgrade.',
+        message: 'Razorpay test billing: simulated Pro upgrade.',
       });
     }
-    const cleanError = err?.message?.includes('transactions are not enabled')
-      ? 'Cashfree account notice: Transactions are not enabled yet for your Cashfree merchant account. Please complete KYC and activate Payment Methods in your Cashfree dashboard.'
-      : (err?.message || 'Could not initiate the payment. Please try again.');
-    res.status(502).json({ error: cleanError });
+    res.status(502).json({ error: err?.message || 'Could not initiate Razorpay order. Please try again.' });
   }
 });
 
 /**
- * Recurring billing, which this product does not have.
- *
- * Checkout has always created a one-time order for 30 days of Pro — the
- * Razorpay Subscriptions path this route used to drive was never reachable
- * from the UI, and Cashfree's recurring product (Subscriptions) is a separate
- * API with its own onboarding. Rather than leave a route that looks like it
- * starts a subscription and does not, it says so.
- *
- * Existing subscription rows are still read by /api/payments/subscription and
- * honoured by the webhook, so nobody who was on the old path loses access.
+ * Recurring billing route placeholder.
+ * Pro is sold as a 30-day pass: use /api/payments/order.
  */
 app.post('/api/payments/subscribe', async (req, res) => {
   const currentUser = (req as any).currentUser;
@@ -7561,32 +7474,24 @@ app.post('/api/payments/toggle-test-tier', async (req, res) => {
 
 /**
  * Extends Pro for one captured payment, exactly once.
- *
- * Both the webhook and /api/payments/verify can see the same successful
- * payment — whichever arrives first grants it — so the claim on the provider
- * payment id lives here rather than in either caller. A payment that has
- * already been credited returns `false` and nothing is extended, which is what
- * stops one ₹499 charge being replayed into years of Pro.
  */
 const grantProForPayment = async (opts: {
   userId: string;
-  cfPaymentId: string;
+  providerPaymentId: string;
   amountRupees: number;
   userEmail?: string;
   periodDays?: number;
 }): Promise<{ granted: boolean; proUntil: Date | null }> => {
-  const { userId, cfPaymentId, amountRupees, userEmail, periodDays = 30 } = opts;
+  const { userId, providerPaymentId, amountRupees, userEmail, periodDays = 30 } = opts;
 
   const claimed = await claimPayment({
-    providerPaymentId: cfPaymentId,
+    providerPaymentId,
     userId,
     userEmail,
     amountRupees,
   });
   if (!claimed) return { granted: false, proUntil: null };
 
-  // Topping up a plan that is still running adds to the existing expiry; one
-  // that has lapsed starts from now.
   const existingUntil = await readProUntil(userId);
   const base = existingUntil && existingUntil > Date.now() ? existingUntil : Date.now();
   const proUntil = new Date(base + periodDays * 86400000);
@@ -7595,62 +7500,23 @@ const grantProForPayment = async (opts: {
 };
 
 /**
- * Asks Cashfree whether an order was actually paid.
- *
- * This is the whole verification. Razorpay handed the browser a signature that
- * the server checked offline; Cashfree's browser callback carries no proof at
- * all, so the only trustworthy answer comes from Cashfree's own API. That is
- * also stricter: a customer cannot replay, forge or alter anything here,
- * because nothing they send is treated as evidence beyond the order id — and
- * the order id is checked to belong to them before anything is granted.
- */
-const fetchCashfreeOrderPayment = async (orderId: string) => {
-  const order = await cashfreeFetch(`/orders/${encodeURIComponent(orderId)}`);
-  const payments = await cashfreeFetch(`/orders/${encodeURIComponent(orderId)}/payments`);
-  const list: any[] = Array.isArray(payments) ? payments : [];
-  const paid = list.find((p) => String(p?.payment_status).toUpperCase() === 'SUCCESS') || null;
-  return { order, paid };
-};
-
-/**
- * Cashfree webhook.
- *
- * Verified against req.rawBody — the exact bytes Cashfree sent — because the
- * signature is computed over those bytes, and re-serialising the parsed JSON
- * would change them. Cashfree signs `timestamp + rawBody` with the merchant
- * secret and sends the result base64-encoded, so both the header timestamp and
- * the raw body are required to reproduce it.
- *
- * The webhook is the source of truth, not the browser: it arrives whether or
- * not the customer's tab survives checkout. Without it, a customer whose phone
- * loses signal on the UPI screen is charged and left on Free.
+ * Razorpay webhook.
  */
 app.post('/api/payments/webhook', async (req: any, res) => {
-  const secret = cashfreeWebhookSecret();
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || process.env.RAZORPAY_KEY_SECRET?.trim();
   if (!secret) {
-    console.error('[webhook] CASHFREE_SECRET_KEY / CASHFREE_WEBHOOK_SECRET is not set — rejecting.');
+    console.error('[webhook] RAZORPAY_WEBHOOK_SECRET / RAZORPAY_KEY_SECRET is not set — rejecting.');
     return res.status(503).end();
   }
 
-  // The global express.json() middleware already consumed the stream, but its
-  // verify hook stashed the exact bytes on req.rawBody. Re-serialising the
-  // parsed object would reorder keys and the signature would never match.
-  const signature = req.headers['x-webhook-signature'];
-  const timestamp = req.headers['x-webhook-timestamp'];
+  const signature = req.headers['x-razorpay-signature'];
   const raw: string = typeof req.rawBody === 'string' ? req.rawBody : '';
   if (!raw) {
     console.error('[webhook] raw body unavailable — cannot verify signature.');
     return res.status(400).end();
   }
-  if (!signature || !timestamp) {
-    console.warn('[webhook] missing x-webhook-signature or x-webhook-timestamp — ignoring.');
-    return res.status(400).end();
-  }
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(`${timestamp}${raw}`, 'utf8')
-    .digest('base64');
-  if (!safeTokenEqual(expected, String(signature))) {
+  const expected = crypto.createHmac('sha256', secret).update(raw, 'utf8').digest('hex');
+  if (!signature || !safeTokenEqual(expected, String(signature))) {
     console.warn('[webhook] signature mismatch — ignoring.');
     return res.status(400).end();
   }
@@ -7662,61 +7528,77 @@ app.post('/api/payments/webhook', async (req: any, res) => {
     return res.status(400).end();
   }
 
-  // Acknowledge fast. Cashfree retries on non-2xx, and a slow handler causes
-  // duplicate deliveries.
   res.status(200).json({ received: true });
 
   try {
-    const type = String(event?.type || '');
-    if (type !== 'PAYMENT_SUCCESS_WEBHOOK') {
-      // Failed and dropped payments change nothing: the customer stays on the
-      // plan they already had, and the log is enough to explain a support
-      // question later.
-      if (type) console.log(`[webhook] ${type} — no change`);
+    const type = String(event.event || '');
+    const payment = event.payload?.payment?.entity;
+    const order = event.payload?.order?.entity;
+    const sub = event.payload?.subscription?.entity;
+
+    if (type === 'payment.captured' || type === 'order.paid') {
+      const payUserId = payment?.notes?.userId || order?.notes?.userId;
+      const payId = payment?.id || order?.id;
+      if (!payUserId || !payId) {
+        console.warn('[webhook] payment with no userId in notes:', payId);
+        return;
+      }
+
+      const amountRupees = Number((payment?.amount || order?.amount || PRO_PLAN_AMOUNT_PAISE) / 100);
+      const periodDays = Number(order?.notes?.periodDays || payment?.notes?.periodDays || 30);
+
+      const { granted, proUntil } = await grantProForPayment({
+        userId: payUserId,
+        providerPaymentId: String(payId),
+        amountRupees,
+        userEmail: payment?.email || payment?.notes?.email,
+        periodDays,
+      });
+
+      if (!granted) {
+        console.log('[webhook] payment already credited, skipping:', payId);
+        return;
+      }
+      console.log(`[webhook] ${type} — Pro until ${proUntil?.toISOString()} for ${payUserId}`);
+
+      if (useSupabase && proUntil) {
+        await supabase.from('subscriptions').update({
+          status: 'active',
+          current_period_end: proUntil.toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq('user_id', payUserId).in('status', ['created', 'authenticated', 'active', 'pending', 'halted']);
+      }
       return;
     }
 
-    const order = event?.data?.order || {};
-    const payment = event?.data?.payment || {};
-    const tags = readOrderTags(order.order_tags);
-    const userId = tags.user_id;
-    const cfPaymentId = payment.cf_payment_id ? String(payment.cf_payment_id) : '';
+    const providerSubId = sub?.id || payment?.subscription_id;
+    if (providerSubId && useSupabase) {
+      const { data: row } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('provider_subscription_id', providerSubId)
+        .maybeSingle();
+      if (!row) return;
 
-    if (!userId || !cfPaymentId) {
-      console.warn('[webhook] success event without user_id tag or cf_payment_id:', order.order_id);
-      return;
-    }
-    if (String(payment.payment_status).toUpperCase() !== 'SUCCESS') {
-      console.warn('[webhook] PAYMENT_SUCCESS_WEBHOOK whose payment is not SUCCESS:', payment.payment_status);
-      return;
-    }
+      const periodEnd = sub?.current_end ? new Date(sub.current_end * 1000) : null;
+      if (type === 'subscription.activated' || type === 'subscription.charged') {
+        const until = periodEnd || new Date(Date.now() + 31 * 86400000);
+        await supabase.from('subscriptions').update({
+          status: 'active',
+          current_period_end: until.toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq('id', row.id);
+        await applyProState(row.user_id, until);
 
-    const amountRupees = Number(payment.payment_amount) || Number(order.order_amount) || PRO_PLAN_AMOUNT_PAISE / 100;
-    const periodDays = Number(tags.period_days) || 30;
-
-    const { granted, proUntil } = await grantProForPayment({
-      userId,
-      cfPaymentId,
-      amountRupees,
-      userEmail: event?.data?.customer_details?.customer_email,
-      periodDays,
-    });
-
-    if (!granted) {
-      console.log('[webhook] payment already credited, skipping:', cfPaymentId);
-      return;
-    }
-    console.log(`[webhook] ${type} — Pro until ${proUntil?.toISOString()} for ${userId}`);
-
-    // Keep any legacy subscription row in step, so the billing panel of a
-    // customer who came through the old Razorpay subscription path does not
-    // contradict their new expiry.
-    if (useSupabase && proUntil) {
-      await supabase.from('subscriptions').update({
-        status: 'active',
-        current_period_end: proUntil.toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('user_id', userId).in('status', ['created', 'authenticated', 'active', 'pending', 'halted']);
+        if (payment?.id) {
+          await claimPayment({
+            providerPaymentId: String(payment.id),
+            userId: row.user_id,
+            userEmail: payment?.email,
+            amountRupees: (payment.amount || PRO_PLAN_AMOUNT_PAISE) / 100,
+          });
+        }
+      }
     }
   } catch (err: any) {
     console.error('[webhook] handler error:', err?.message || err);
@@ -7725,20 +7607,12 @@ app.post('/api/payments/webhook', async (req: any, res) => {
 
 /**
  * Called by the browser after checkout closes.
- *
- * The browser sends only the order id. Nothing it says is treated as evidence:
- * the order is looked up at Cashfree, must belong to the signed-in user, and
- * must carry a payment Cashfree itself reports as SUCCESS. This exists so a
- * customer who completes payment does not have to wait for the webhook to see
- * Pro unlock — the webhook remains the authority, and whichever of the two
- * arrives first is the one that credits the payment.
  */
 app.post('/api/payments/verify', async (req, res) => {
   const currentUser = (req as any).currentUser;
   if (!currentUser) return res.status(401).json({ error: 'Not authenticated' });
 
   if (req.body?.isSandbox) {
-    // The browser asking for Pro is not evidence of payment.
     if (!allowTestBilling()) {
       return res.status(400).json({ error: 'Payment verification failed.' });
     }
@@ -7758,52 +7632,61 @@ app.post('/api/payments/verify', async (req, res) => {
     });
   }
 
-  const orderId = String(req.body?.orderId || req.body?.order_id || '').trim();
-  if (!cashfreeAuth()) return res.status(503).json({ error: 'Payments are not configured yet.' });
-  if (!orderId) return res.status(400).json({ error: 'Incomplete payment confirmation.' });
+  const razorpay_order_id = String(req.body?.razorpay_order_id || req.body?.orderId || req.body?.order_id || '').trim();
+  const razorpay_payment_id = String(req.body?.razorpay_payment_id || req.body?.paymentId || req.body?.payment_id || '').trim();
+  const razorpay_signature = String(req.body?.razorpay_signature || req.body?.signature || '').trim();
+  const razorpay_subscription_id = String(req.body?.razorpay_subscription_id || req.body?.subscriptionId || '').trim();
 
-  let order: any;
-  let paid: any;
-  try {
-    ({ order, paid } = await fetchCashfreeOrderPayment(orderId));
-  } catch (err: any) {
-    console.error('[payments/verify] Cashfree lookup failed:', err?.message || err);
-    return res.status(502).json({ error: 'Could not confirm the payment yet. It will be applied automatically.' });
+  const auth = razorpayAuth();
+  if (!auth) return res.status(503).json({ error: 'Payments are not configured yet.' });
+  if (!razorpay_payment_id || !razorpay_signature || (!razorpay_order_id && !razorpay_subscription_id)) {
+    return res.status(400).json({ error: 'Incomplete payment confirmation.' });
   }
 
-  // An order id belonging to somebody else must never credit this account.
-  // The tag is written by /api/payments/order and cannot be set by the client.
-  const tags = readOrderTags(order?.order_tags);
-  if (tags.user_id !== currentUser.id) {
-    console.warn(`[payments/verify] order ${orderId} does not belong to user ${currentUser.id}`);
+  const textToSign = razorpay_order_id
+    ? `${razorpay_order_id}|${razorpay_payment_id}`
+    : `${razorpay_payment_id}|${razorpay_subscription_id}`;
+  const expected = crypto
+    .createHmac('sha256', auth.keySecret)
+    .update(textToSign)
+    .digest('hex');
+
+  if (!safeTokenEqual(expected, razorpay_signature)) {
+    console.warn(`[payments/verify] signature mismatch for user ${currentUser.id}`);
     return res.status(400).json({ error: 'Payment verification failed.' });
   }
 
-  if (!paid) {
-    // Not an error: the customer may have closed the modal, or the bank may
-    // still be settling an UPI collect request. The webhook will pick it up.
-    return res.status(202).json({
-      success: false,
-      active: !!currentUser.isPro,
-      pending: true,
-      orderStatus: order?.order_status || 'ACTIVE',
-      message: 'Payment not completed yet. If you have paid, Pro unlocks within a minute.',
-    });
-  }
+  let periodDays = 30;
+  let amountRupees = PRO_PLAN_AMOUNT_PAISE / 100;
 
-  const amountRupees = Number(paid.payment_amount) || Number(order?.order_amount) || PRO_PLAN_AMOUNT_PAISE / 100;
-  const periodDays = Number(tags.period_days) || 30;
+  // If order_id is present, look up the order from Razorpay to verify user ownership and exact amount
+  if (razorpay_order_id) {
+    try {
+      const order = await razorpayFetch(`/orders/${encodeURIComponent(razorpay_order_id)}`);
+      if (order?.notes?.userId && order.notes.userId !== currentUser.id) {
+        console.warn(`[payments/verify] order ${razorpay_order_id} belongs to ${order.notes.userId}, not ${currentUser.id}`);
+        return res.status(400).json({ error: 'Payment verification failed.' });
+      }
+      if (order?.amount) {
+        amountRupees = order.amount / 100;
+      }
+      if (order?.notes?.periodDays) {
+        periodDays = Number(order.notes.periodDays) || 30;
+      }
+    } catch (e) {
+      console.warn('[payments/verify] order fetch warning (offline fallback allowed if signature valid):', e);
+    }
+  }
 
   const { granted, proUntil } = await grantProForPayment({
     userId: currentUser.id,
-    cfPaymentId: String(paid.cf_payment_id),
+    providerPaymentId: razorpay_payment_id,
     amountRupees,
     userEmail: currentUser.email,
     periodDays,
   });
 
   if (!granted) {
-    // The webhook, or an earlier call with the same order, already credited it.
     return res.json({
       success: true,
       active: !!currentUser.isPro,
@@ -7813,8 +7696,6 @@ app.post('/api/payments/verify', async (req, res) => {
     });
   }
 
-  // The payment row was written by claimPayment; only the cached user needs
-  // updating here.
   const db = (req as any).userDb;
   if (db && Array.isArray(db.users)) {
     const u = db.users.find((x: any) => x.id === currentUser.id);

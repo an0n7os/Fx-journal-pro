@@ -820,9 +820,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                   {phase === 'Syncing' || phase === 'Validating' ? 'Syncing...' : 'Sync Now'}
                 </button>
               )}
-              <button onClick={pollStatus} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:underline">
-                <RefreshCw className={`h-3.5 w-3.5 ${phase === 'Syncing' ? 'animate-spin' : ''}`} /> Refresh
-              </button>
+
             </div>
           </div>
 

@@ -28,11 +28,9 @@ without them means silent data loss or a signup flow nobody can complete.
 | `SENDGRID_API_KEY` or `RESEND_API_KEY` | yes | Verification codes; without one, nobody can finish signing up |
 | `SENDGRID_FROM_EMAIL` | with SendGrid | A verified sender |
 | `PUBLIC_APP_URL` | yes | The site's own URL, used for referral and reset links |
-| `CASHFREE_APP_ID` | for Pro | Dashboard > Developers > API Keys. Sandbox and production keys are separate and not interchangeable |
-| `CASHFREE_SECRET_KEY` | for Pro | Authenticates every API call and verifies the webhook signature; never exposed to the browser |
-| `CASHFREE_ENV` | for Pro | `production` for real payments. Anything else, including a typo or an unset value, is treated as `sandbox`, so a mistake cannot take live money |
-| `CASHFREE_WEBHOOK_SECRET` | rarely | Only on an account where the webhook secret differs from `CASHFREE_SECRET_KEY`, which Cashfree does not do by default |
-| `PUBLIC_SITE_URL` | optional | The origin handed to Cashfree for its return and notify URLs. Derived from the request when unset |
+| `RAZORPAY_KEY_ID` | for Pro | Dashboard > Settings > API Keys. Starts with `rzp_live_` in production |
+| `RAZORPAY_KEY_SECRET` | for Pro | Authenticates every API call and verifies HMAC signatures; never exposed to the browser |
+| `RAZORPAY_WEBHOOK_SECRET` | optional | Webhook secret configured in Razorpay Dashboard > Settings > Webhooks |
 | `RESEND_FROM_EMAIL` | with Resend | A verified sender, the counterpart to `SENDGRID_FROM_EMAIL` |
 | `MT5_CREDENTIAL_MASTER_KEY` | for MT5 cloud sync | 64 hex characters. There is a built-in development key, but it is a literal in this public repository, so the server refuses to use it in production: without this variable the cloud-sync route answers `CLOUD_NOT_CONFIGURED` and no investor password is stored |
 | `GEMINI_API_KEY` | for the AI mentor | A headline Pro feature. Without it the mentor endpoints report that it is unavailable, so Pro subscribers pay for something that does not answer |

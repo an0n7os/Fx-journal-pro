@@ -399,7 +399,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           if (d?.valid) {
             setReferralPartner(d.partnerName || 'Mentor');
             setReferralValidationMsg(null);
-            try { sessionStorage.setItem('fx_referral_code', trimmed); } catch {}
+            try { sessionStorage.setItem('fx_referral_code', trimmed); } catch { }
           } else {
             setReferralPartner(null);
             setReferralValidationMsg(d?.error || 'Referral code not recognised.');
@@ -957,8 +957,8 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     finally { setActionLoading(false); }
   };
 
-  const inputClass = "cyber-input w-full";
-  const buttonPrimary = "cyber-btn-cta w-full font-semibold text-base py-3.5 rounded-2xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+  const inputClass = "cyber-input !py-2.5 !px-3.5 !rounded-xl text-sm w-full";
+  const buttonPrimary = "cyber-btn-cta w-full font-semibold text-sm py-2.5 rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-violet-500/25";
 
 
   const isNavLinkActive = (linkId: string, current: string) => {
@@ -1026,21 +1026,21 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
         every link below them was clipped by overflow-y-auto. The dimming
         backdrop was the same size, which is why the page behind never dimmed.
       */}
-        {/* Dedicated Mobile Menu Overlay */}
-        {mobileMenuOpen && (
-          <>
-            {/* Full-screen dimming backdrop */}
-            <div
-              className="lg:hidden fixed inset-0 top-[58px] sm:top-[68px] z-[54] bg-black/60 backdrop-blur-sm"
-              onClick={() => setMobileMenuOpen(false)}
-            />
-            {/* Drawer panel */}
-            <div className="lg:hidden fixed inset-x-0 top-[58px] sm:top-[68px] bottom-0 z-[55] bg-[#070913] px-5 py-6 flex flex-col justify-between overflow-y-auto animate-in fade-in slide-in-from-top-3 duration-200 border-t border-white/[0.08]">
-              {/* iOS-style drag handle */}
-              <div className="flex justify-center -mt-3 mb-4">
-                <span className="h-1 w-10 rounded-full bg-white/20" />
-              </div>
-              <div className="space-y-1.5">
+      {/* Dedicated Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <>
+          {/* Full-screen dimming backdrop */}
+          <div
+            className="lg:hidden fixed inset-0 top-[58px] sm:top-[68px] z-[54] bg-black/60 backdrop-blur-sm"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          {/* Drawer panel */}
+          <div className="lg:hidden fixed inset-x-0 top-[58px] sm:top-[68px] bottom-0 z-[55] bg-[#070913] px-5 py-6 flex flex-col justify-between overflow-y-auto animate-in fade-in slide-in-from-top-3 duration-200 border-t border-white/[0.08]">
+            {/* iOS-style drag handle */}
+            <div className="flex justify-center -mt-3 mb-4">
+              <span className="h-1 w-10 rounded-full bg-white/20" />
+            </div>
+            <div className="space-y-1.5">
               <p className="text-[11px] font-mono uppercase tracking-wider text-slate-400 px-3 pb-2 font-bold">
                 Platform Navigation
               </p>
@@ -1054,11 +1054,10 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                       setMobileMenuOpen(false);
                       handleNavClick(e, l.path, l.id);
                     }}
-                    className={`flex items-center justify-between px-4 py-3.5 rounded-2xl text-[15px] font-medium transition active:scale-[0.98] min-h-[48px] ${
-                      isActive
+                    className={`flex items-center justify-between px-4 py-3.5 rounded-2xl text-[15px] font-medium transition active:scale-[0.98] min-h-[48px] ${isActive
                         ? 'bg-violet-600/20 text-violet-300 border border-violet-500/30 font-semibold'
                         : 'text-slate-300 hover:text-white hover:bg-white/[0.06] border border-transparent'
-                    }`}
+                      }`}
                   >
                     <span>{l.label}</span>
                     <ArrowRight className={`h-4 w-4 ${isActive ? 'text-violet-400' : 'text-slate-500'}`} />
@@ -1093,8 +1092,8 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               </div>
             </div>
           </div>
-          </>
-        )}
+        </>
+      )}
 
       {/* ── Hero ── */}
       <section id="top" className="relative pt-20 sm:pt-28 md:pt-32 pb-10 sm:pb-14 md:pb-20 overflow-hidden">
@@ -1661,7 +1660,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               {/*
                 "/month ... Cancel anytime" described a subscription that does
                 not exist. Checkout calls /api/payments/order — a one-time
-                Cashfree order that grants exactly 30 days — and never
+                Razorpay order that grants exactly 30 days — and never
                 /api/payments/subscribe, so there is nothing recurring and
                 nothing to cancel. A customer reading "cancel anytime" would
                 expect auto-renewal and a cancel button; access simply lapses
@@ -1927,7 +1926,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-slate-400">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
-                    <span className="text-[11px] font-medium text-slate-300">Secured by Cashfree</span>
+                    <span className="text-[11px] font-medium text-slate-300">Secured by Razorpay</span>
                   </div>
                   <span className="text-[10px] text-slate-500 font-mono">Encrypted Dispatch</span>
                 </div>
@@ -2066,7 +2065,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-violet-600/[0.07] blur-[100px] pointer-events-none" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8 sm:pt-16 sm:pb-12">
-          
+
           {/* Trust Guarantee Strip */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 pb-7 mb-7 sm:pb-12 sm:mb-12 border-b border-white/[0.06]">
             <div className="flex items-center gap-3">
@@ -2104,7 +2103,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 <Globe className="h-4 w-4 text-sky-400" />
               </div>
               <div>
-                <p className="text-xs font-bold text-white leading-tight">Cashfree Protected</p>
+                <p className="text-xs font-bold text-white leading-tight">Razorpay Protected</p>
                 <p className="text-[11px] text-slate-400">Verified Payment Gateway</p>
               </div>
             </div>
@@ -2112,7 +2111,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
           {/* Main Footer Links Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-7 sm:gap-10 lg:gap-8 mb-8 sm:mb-14">
-            
+
             {/*
               Column 1 on a desktop. On a phone the whole footer stacks, which
               measured 1803px — more than two full screens of it. The three
@@ -2201,7 +2200,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                     the last link in the two-column phone layout. */}
                 <li className="col-span-2 sm:col-span-1">
                   <span className="text-[11px] font-mono text-slate-400 block pt-1">
-                    Payments secured by Cashfree
+                    Payments secured by Razorpay
                   </span>
                 </li>
               </ul>
@@ -2354,18 +2353,18 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
       )}
 
       <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal}>
-        {/* Glowing Brand Icon Badge */}
-        <div className="mb-5 flex items-center justify-center">
-          <div className="h-14 w-14 rounded-2xl flex items-center justify-center bg-slate-900/90 border border-violet-500/35 shadow-[0_0_30px_rgba(125,51,255,0.5)]">
-            <Logo iconOnly size={28} />
+        {/* Brand Icon Badge */}
+        <div className="mb-3 flex items-center justify-center">
+          <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-slate-900/90 border border-violet-500/30 shadow-[0_0_20px_rgba(125,51,255,0.35)]">
+            <Logo iconOnly size={20} />
           </div>
         </div>
 
-        <div className="mb-6 text-center">
-          <h3 className="text-2xl font-bold text-white tracking-tight">
+        <div className="mb-4 text-center">
+          <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">
             {isRegistering ? 'Activate your account' : isForgotPassword ? 'Reset password' : 'Sign in to your account'}
           </h3>
-          <p className="text-[13px] text-slate-400 mt-1.5 leading-relaxed">
+          <p className="text-xs text-slate-400 mt-1 leading-relaxed max-w-xs mx-auto">
             {isRegistering
               ? 'Join FX Journal Pro to automate MT5 sync and unlock AI insights.'
               : isForgotPassword
@@ -2376,12 +2375,12 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
         {isForgotPassword ? (
           resetSuccess ? (
-            <div className="bg-emerald-500/10 text-emerald-300 text-sm rounded-xl p-4 border border-emerald-500/20 text-center font-medium">
+            <div className="bg-emerald-500/10 text-emerald-300 text-xs sm:text-sm rounded-xl p-3.5 border border-emerald-500/20 text-center font-medium">
               Password updated successfully!
             </div>
           ) : isResetOtpMode ? (
-            <form onSubmit={handleResetPassword} className="space-y-3">
-              <p className="text-sm text-slate-400 text-center">Code sent to <strong className="text-white">{resetEmail}</strong></p>
+            <form onSubmit={handleResetPassword} className="space-y-2.5">
+              <p className="text-xs text-slate-400 text-center">Code sent to <strong className="text-white">{resetEmail}</strong></p>
               {/* aria-label, because these two have no visible label and a
                   placeholder of "------" names nothing. */}
               <input type="text" required maxLength={6} value={resetOtpCode}
@@ -2392,71 +2391,69 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 aria-label="New password"
                 onChange={(e) => setNewPassword(e.target.value)}
                 className={inputClass} placeholder="New password" />
-              {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
+              {authError && <div className="bg-red-500/10 text-red-300 text-xs rounded-xl p-2.5 border border-red-500/20">{authError}</div>}
               <button type="submit" disabled={actionLoading || resetOtpCode.length !== 6 || !newPassword} className={buttonPrimary}>
                 {actionLoading ? 'Resetting...' : 'Reset password'}
               </button>
               <button type="button" onClick={() => { setIsForgotPassword(false); setAuthError(null); }}
-                className="w-full text-center text-sm text-slate-400 hover:text-white font-medium transition-colors">Back to sign in</button>
+                className="w-full text-center text-xs text-slate-400 hover:text-white font-medium transition-colors">Back to sign in</button>
             </form>
           ) : (
-            <form onSubmit={handleForgotPassword} className="space-y-3">
+            <form onSubmit={handleForgotPassword} className="space-y-2.5">
               <div>
-                <label htmlFor="reset-email" className="block text-sm font-medium text-slate-300 mb-1.5">Email address</label>
+                <label htmlFor="reset-email" className="block text-xs font-medium text-slate-300 mb-1">Email address</label>
                 <input id="reset-email" type="email" required value={resetEmail} onChange={(e) => setResetEmail(e.target.value)}
                   className={inputClass} placeholder="Email address" />
               </div>
-              {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
+              {authError && <div className="bg-red-500/10 text-red-300 text-xs rounded-xl p-2.5 border border-red-500/20">{authError}</div>}
               <button type="submit" disabled={actionLoading} className={buttonPrimary}>
                 {actionLoading ? 'Sending...' : 'Send reset code'}
               </button>
               <button type="button" onClick={() => { setIsForgotPassword(false); setAuthError(null); }}
-                className="w-full text-center text-sm text-slate-400 hover:text-white font-medium transition-colors">Back to sign in</button>
+                className="w-full text-center text-xs text-slate-400 hover:text-white font-medium transition-colors">Back to sign in</button>
             </form>
           )
         ) : isOtpMode ? (
-          <form onSubmit={handleVerifyOtp} className="space-y-3">
-            <p className="text-sm text-slate-400 text-center">Code sent to <strong className="text-white">{authEmail}</strong></p>
+          <form onSubmit={handleVerifyOtp} className="space-y-2.5">
+            <p className="text-xs text-slate-400 text-center">Code sent to <strong className="text-white">{authEmail}</strong></p>
             <input type="text" required maxLength={6} value={otpCode}
               aria-label="6-digit verification code"
               onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-              className={inputClass + ' text-center tracking-[0.5em] font-mono text-lg'} placeholder="------" />
-            {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
+              className={inputClass + ' text-center tracking-[0.5em] font-mono text-base'} placeholder="------" />
+            {authError && <div className="bg-red-500/10 text-red-300 text-xs rounded-xl p-2.5 border border-red-500/20">{authError}</div>}
             <button type="submit" disabled={actionLoading || otpCode.length !== 6} className={buttonPrimary}>
               {actionLoading ? 'Verifying...' : 'Verify & sign in'}
             </button>
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center justify-between text-xs">
               <button type="button" onClick={handleResendOtp} disabled={actionLoading} className="text-violet-300 hover:text-violet-200 font-medium transition-colors">Resend code</button>
               <button type="button" onClick={() => { setIsOtpMode(false); setOtpCode(''); setAuthError(null); }} className="text-slate-400 hover:text-white font-medium transition-colors">Change email</button>
             </div>
           </form>
         ) : isRegistering ? (
-          <form onSubmit={handleRegister} className="space-y-3">
+          <form onSubmit={handleRegister} className="space-y-2.5">
             <div>
-              <label htmlFor="register-name" className="block text-sm font-medium text-slate-300 mb-1.5">Full name</label>
+              <label htmlFor="register-name" className="block text-xs font-medium text-slate-300 mb-1">Full name</label>
               <input id="register-name" type="text" required value={authName} onChange={(e) => setAuthName(e.target.value)} className={inputClass} placeholder="Full name" />
             </div>
             <div>
-              <label htmlFor="register-email" className="block text-sm font-medium text-slate-300 mb-1.5">Email address</label>
+              <label htmlFor="register-email" className="block text-xs font-medium text-slate-300 mb-1">Email address</label>
               <input id="register-email" type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className={inputClass} placeholder="Email address" />
             </div>
             <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label htmlFor="register-password" className="block text-sm font-medium text-slate-300">Password</label>
-                <span className="text-[11px] text-slate-400">Minimum 8 characters</span>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="register-password" className="block text-xs font-medium text-slate-300">Password</label>
+                <span className="text-[10px] text-slate-400">Minimum 8 characters</span>
               </div>
               <div className="relative">
                 <input id="register-password" type={showPassword ? "text" : "password"} required minLength={8} value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-11'} placeholder="At least 8 characters" />
+                  onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-10'} placeholder="At least 8 characters" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  /* p-2 keeps the icon where it looks right while giving the hit
-                     area the 24px WCAG 2.2 minimum; the bare icon was 16x16. */
-                  className="absolute right-2 top-1.5 p-2 text-slate-400 hover:text-white transition-colors"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-white transition-colors"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
               </div>
               {authPassword && (() => {
@@ -2467,32 +2464,32 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                   ? '✓ Password accepted (minimum 8 characters met)'
                   : `${remaining} more character${remaining === 1 ? '' : 's'} needed (minimum 8)`;
                 return (
-                  <div className="mt-2">
+                  <div className="mt-1.5">
                     <div className="flex gap-1.5">
                       {[1, 2, 3, 4].map((i) => (
                         <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= score ? color : 'bg-white/10'}`}></div>
                       ))}
                     </div>
-                    <p className={`text-xs mt-1.5 font-medium ${textColor}`}>{message}</p>
+                    <p className={`text-[11px] mt-1 font-medium ${textColor}`}>{message}</p>
                   </div>
                 );
               })()}
             </div>
 
             {/* Referral / Mentor Code Input (Optional) */}
-            <div className="pt-0.5">
+            <div>
               {!showReferralInput ? (
                 <button
                   type="button"
                   onClick={() => setShowReferralInput(true)}
-                  className="inline-flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 font-medium transition py-1 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 font-medium transition py-0.5 cursor-pointer"
                 >
                   <Gift className="h-3.5 w-3.5 text-violet-400" />
                   <span>Have a referral code?</span>
                   <ChevronDown className="h-3 w-3" />
                 </button>
               ) : (
-                <div className="space-y-1.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                <div className="space-y-1.5 p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
                   <div className="flex items-center justify-between">
                     <label htmlFor="register-referral" className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                       <Gift className="h-3.5 w-3.5 text-violet-400" />
@@ -2505,7 +2502,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                         setReferralCode('');
                         setReferralPartner(null);
                         setReferralValidationMsg(null);
-                        try { sessionStorage.removeItem('fx_referral_code'); } catch {}
+                        try { sessionStorage.removeItem('fx_referral_code'); } catch { }
                       }}
                       className="text-[11px] text-slate-500 hover:text-slate-300 transition cursor-pointer"
                     >
@@ -2522,7 +2519,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                         const val = e.target.value.toUpperCase().trim();
                         setReferralCode(val);
                       }}
-                      className={inputClass + ' pr-20 uppercase font-mono tracking-wider text-xs py-2'}
+                      className={inputClass + ' pr-20 uppercase font-mono tracking-wider text-xs !py-2'}
                       placeholder="e.g. AXYRJNV43"
                     />
                     {validatingReferral ? (
@@ -2557,14 +2554,14 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 </div>
               )}
             </div>
-            {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
+            {authError && <div className="bg-red-500/10 text-red-300 text-xs rounded-xl p-2.5 border border-red-500/20">{authError}</div>}
             <TurnstileBox onToken={setTurnstileToken} />
             <button type="submit" disabled={actionLoading} className={buttonPrimary}>
               {actionLoading ? 'Creating account...' : 'Create Account'}
             </button>
-            <div className="relative my-3">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
-              <div className="relative flex justify-center text-xs"><span className="bg-[#0b0d13] px-3 text-slate-400 font-medium">or continue with</span></div>
+            <div className="relative my-2">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/[0.08]"></div></div>
+              <div className="relative flex justify-center text-[11px]"><span className="bg-[#0b0d13] px-2.5 text-slate-400 font-medium">or continue with</span></div>
             </div>
 
             <button type="button" disabled={actionLoading}
@@ -2587,8 +2584,8 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                   });
                 } catch (err: any) { setAuthError(`Google error: ${err?.message || err}`); setActionLoading(false); }
               }}
-              className="w-full bg-[#0e111a] hover:bg-[#131724] border border-white/10 hover:border-white/20 text-white rounded-2xl py-3.5 text-sm font-semibold flex items-center justify-center gap-2.5 transition shadow-sm disabled:opacity-50 cursor-pointer">
-              <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+              className="w-full bg-[#0e111a] hover:bg-[#131724] border border-white/10 hover:border-white/20 text-white rounded-xl py-2.5 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2.5 transition shadow-sm disabled:opacity-50 cursor-pointer">
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
                 <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
                 <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
@@ -2597,44 +2594,44 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               Google
             </button>
 
-            <p className="text-center text-sm text-slate-400 pt-1">
+            <p className="text-center text-xs text-slate-400 pt-0.5">
               Already have an account?{' '}
               <button type="button" onClick={() => { setIsRegistering(false); setAuthError(null); }} className="text-violet-300 hover:text-violet-200 font-semibold transition-colors cursor-pointer">Sign in</button>
             </p>
           </form>
         ) : (
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-3">
             <div>
-              <label htmlFor="login-email" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Email address</label>
+              <label htmlFor="login-email" className="block text-xs font-medium text-slate-300 mb-1">Email address</label>
               <input id="login-email" type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className={inputClass} placeholder="trader@example.com" />
             </div>
             <div>
-              <div className="flex justify-between items-center mb-2">
-                <label htmlFor="login-password" className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Password</label>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="login-password" className="text-xs font-medium text-slate-300">Password</label>
                 <button type="button" onClick={() => setIsForgotPassword(true)} className="text-xs text-violet-300 hover:text-violet-200 font-medium transition-colors cursor-pointer">Forgot password?</button>
               </div>
               <div className="relative">
                 <input id="login-password" type={showPassword ? "text" : "password"} required value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-11'} placeholder="Enter your password" />
+                  onChange={(e) => setAuthPassword(e.target.value)} className={inputClass + ' pr-10'} placeholder="Enter your password" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-2 top-2 p-2 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
               </div>
             </div>
-            {authError && <div className="bg-red-500/10 text-red-300 text-sm rounded-xl p-3 border border-red-500/20">{authError}</div>}
+            {authError && <div className="bg-red-500/10 text-red-300 text-xs rounded-xl p-2.5 border border-red-500/20">{authError}</div>}
             <TurnstileBox onToken={setTurnstileToken} />
             <button type="submit" disabled={actionLoading} className={buttonPrimary}>
               {actionLoading ? 'Signing in...' : 'Sign In'}
             </button>
 
-            <div className="relative my-3">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
-              <div className="relative flex justify-center text-xs"><span className="bg-[#0b0d13] px-3 text-slate-400 font-medium">or continue with</span></div>
+            <div className="relative my-2">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/[0.08]"></div></div>
+              <div className="relative flex justify-center text-[11px]"><span className="bg-[#0b0d13] px-2.5 text-slate-400 font-medium">or continue with</span></div>
             </div>
 
             <button type="button" disabled={actionLoading}
@@ -2657,8 +2654,8 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                   });
                 } catch (err: any) { setAuthError(`Google error: ${err?.message || err}`); setActionLoading(false); }
               }}
-              className="w-full bg-[#0e111a] hover:bg-[#131724] border border-white/10 hover:border-white/20 text-white rounded-2xl py-3.5 text-sm font-semibold flex items-center justify-center gap-2.5 transition shadow-sm disabled:opacity-50 cursor-pointer">
-              <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+              className="w-full bg-[#0e111a] hover:bg-[#131724] border border-white/10 hover:border-white/20 text-white rounded-xl py-2.5 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2.5 transition shadow-sm disabled:opacity-50 cursor-pointer">
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
                 <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
                 <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
@@ -2667,7 +2664,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               Google
             </button>
 
-            <p className="text-center text-sm text-slate-400 pt-1">
+            <p className="text-center text-xs text-slate-400 pt-0.5">
               New to FX Journal Pro?{' '}
               <button type="button" onClick={() => { setIsRegistering(true); setAuthError(null); }} className="text-violet-300 hover:text-violet-200 font-semibold transition-colors cursor-pointer">Get started</button>
             </p>
@@ -2746,16 +2743,16 @@ function AuthModal({ isOpen, onClose, children }: { isOpen: boolean; onClose: ()
       }}
     >
       <div className="cyber-matrix-backdrop fixed inset-0 backdrop-blur-md pointer-events-none" aria-hidden="true"></div>
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-[420px] my-auto animate-fade-up z-10" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-[390px] my-auto animate-fade-up z-10" onClick={(e) => e.stopPropagation()}>
         <div className="cyber-card-glow-wrap">
-          <div className="cyber-card-surface !rounded-[28px] p-6 sm:p-8 pb-8">
+          <div className="cyber-card-surface !rounded-2xl p-5 sm:p-6">
             <button
               type="button"
               onClick={onClose}
               aria-label="Close dialog"
-              className="absolute right-4 top-4 sm:right-5 sm:top-5 z-20 text-slate-400 hover:text-white h-10 w-10 rounded-full bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center cursor-pointer active:scale-90"
+              className="absolute right-3.5 top-3.5 sm:right-4 sm:top-4 z-20 text-slate-400 hover:text-white h-7 w-7 rounded-lg bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center cursor-pointer active:scale-90"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
             {children}
           </div>

@@ -1572,7 +1572,7 @@ Their referral link stops working and ` +
                 <h3 className="text-base font-extrabold text-white tracking-tight">Payment Gateway Integration</h3>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Cashfree PG API Active
+                  Razorpay PG API Active
                 </span>
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
                   Monthly Pro ₹499/mo
@@ -1580,7 +1580,7 @@ Their referral link stops working and ` +
               </div>
 
               <p className="text-xs text-slate-300">
-                Live billing powered by Cashfree. Pro is sold as a 30-day pass: UPI (Google Pay, PhonePe, Paytm), Credit/Debit Cards and NetBanking, with every payment confirmed against Cashfree and a signed webhook.
+                Live billing powered by Razorpay. Pro is sold as a 30-day pass: UPI (Google Pay, PhonePe, Paytm), Credit/Debit Cards and NetBanking, with every payment confirmed against Razorpay and a signed webhook.
               </p>
 
               {/* Webhook Endpoint Strip */}

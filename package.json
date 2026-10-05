@@ -8,7 +8,7 @@
     "auth:migrate": "node --input-type=module -e \"import { autoMigrateBetterAuth } from './auth.ts'; await autoMigrateBetterAuth();\"",
     "dev:testbilling": "tsx --env-file=.env.testbilling server.ts",
     "dev:localdb": "node --env-file-if-exists=.env.test --max-old-space-size=4096 ./node_modules/tsx/dist/cli.mjs server.ts",
-    "cashfree:check": "node scripts/cashfree-check.mjs",
+    "razorpay:check": "node scripts/razorpay-check.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "launch:check": "node scripts/launch-check.mjs",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",

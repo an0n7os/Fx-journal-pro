@@ -8,11 +8,9 @@ import {
   Clock,
   KeyRound,
   AlertTriangle,
-  CheckCircle2,
   ShieldCheck,
   Plus,
   Copy,
-  FileCode2,
   Loader2,
   Unplug,
   ArrowRight,
@@ -21,11 +19,7 @@ import {
   XCircle,
   TrendingUp,
   Landmark,
-  Play,
   X,
-  Crown,
-  Eye,
-  Bot,
   Info
 } from 'lucide-react';
 import {
@@ -973,13 +967,6 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                 </button>
               </div>
 
-              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 text-[11px] text-emerald-700 dark:text-emerald-300 flex items-start gap-2">
-                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
-                <span>
-                  <strong>Investor password only.</strong> We use read-only Investor password access — we cannot
-                  place, modify, or close trades. The MT5 session is opened only for the sync duration, then closed immediately.
-                </span>
-              </div>
             </div>
           ) : (
             /* ── Not yet connected: show the connect form ── */
@@ -1090,16 +1077,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="dx-section-title">Live Sync Status</h3>
             <div className="flex items-center gap-3">
-              {status?.syncMethod === 'VPS' && status.cloudConnected && (
-                <button
-                  onClick={handleVpsSync}
-                  disabled={vpsSyncing || phase === 'Queued'}
-                  className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${vpsSyncing || phase === 'Queued' ? 'animate-spin' : ''}`} />
-                  {vpsSyncing ? 'Connecting…' : phase === 'Queued' ? 'Connecting…' : 'Sync Now'}
-                </button>
-              )}
+
               {status?.syncMethod === 'CLOUD' && (
                 <button
                   onClick={handleCloudSync}
@@ -1110,9 +1088,6 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                   {phase === 'Syncing' || phase === 'Validating' ? 'Syncing...' : 'Sync Now'}
                 </button>
               )}
-              <button onClick={pollStatus} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:underline">
-                <RefreshCw className={`h-3.5 w-3.5 ${phase === 'Syncing' ? 'animate-spin' : ''}`} /> Refresh
-              </button>
             </div>
           </div>
 

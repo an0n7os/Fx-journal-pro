@@ -45,8 +45,8 @@ flowchart TB
     
     %% Pro Upgrade & Payments
     User --> ProTrigger{💎 8. Pro Upgrade}
-    ProTrigger --> Cashfree[💳 Cashfree Payment Gateway]
-    Cashfree --> ProAccess[✨ Pro ഫീച്ചറുകൾ Unlock ആകുന്നു]
+    ProTrigger --> Razorpay[💳 Razorpay Payment Gateway]
+    Razorpay --> ProAccess[✨ Pro ഫീച്ചറുകൾ Unlock ആകുന്നു]
     
     %% Mentorship & Admin
     User --> Mentor[👨‍🏫 9. Read-Only Mentor Access]
@@ -177,20 +177,19 @@ sequenceDiagram
     actor User as കസ്റ്റമർ (User)
     participant UI as വെബ്സൈറ്റ് (Frontend)
     participant Server as ആപ്പ് സെർവർ (Backend)
-    participant CF as Cashfree Gateway
+    participant RZP as Razorpay Gateway
     participant DB as ഡാറ്റാബേസ്
 
     User->>UI: Upgrade to Pro ക്ലിക്ക് ചെയ്യുന്നു
     UI->>Server: POST /api/payments/order
-    Server->>CF: Cashfree ഓർഡർ ഉണ്ടാക്കുന്നു
-    CF-->>Server: payment_session_id നൽകുന്നു
-    Server-->>UI: Order ID & Session ID തിരിച്ചയക്കുന്നു
-    UI->>User: Cashfree Popup കാണിക്കുന്നു (UPI / Card / NetBanking)
-    User->>CF: പണം അടയ്ക്കുന്നു
-    CF-->>Server: PAYMENT_SUCCESS_WEBHOOK (signed) അയക്കുന്നു
-    UI->>Server: POST /api/payments/verify (order id മാത്രം)
-    Server->>CF: ഈ ഓർഡർ അടച്ചോ എന്ന് ചോദിക്കുന്നു
-    CF-->>Server: payment_status: SUCCESS
+    Server->>RZP: Razorpay ഓർഡർ ഉണ്ടാക്കുന്നു (₹499/മാസം)
+    RZP-->>Server: order_id & keyId നൽകുന്നു
+    Server-->>UI: Order ID തിരിച്ചയക്കുന്നു
+    UI->>User: Razorpay Checkout Popup കാണിക്കുന്നു (UPI / Card / NetBanking)
+    User->>RZP: പണം അടയ്ക്കുന്നു
+    RZP-->>Server: payment.captured webhook (signed) അയക്കുന്നു
+    UI->>Server: POST /api/payments/verify (order_id, payment_id, signature)
+    Server->>Server: HMAC ഒപ്പ് പരിശോധിക്കുന്നു
     Server->>DB: pro_until + 30 ദിവസം എഴുതുന്നു
     Server-->>UI: Account Upgraded!
     UI->>User: എല്ലാ പ്രോ ഫീച്ചറുകളും അൺലോക്ക് ആകുന്നു 🎉

@@ -124,7 +124,7 @@ export interface PaymentHistory {
   plan: 'Pro';
   status: 'Success' | 'Failed' | 'Pending';
   date: string;
-  /** The gateway's own id for the payment (Cashfree cf_payment_id). */
+  /** The gateway's own id for the payment (Razorpay payment_id). */
   providerPaymentId: string;
 }
 
