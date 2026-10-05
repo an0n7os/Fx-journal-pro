@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Sparkles,
-  MoreHorizontal,
   Clock,
   X,
   Search,
@@ -15,6 +14,9 @@ import {
   Brain,
   Shield,
   Zap,
+  Plus,
+  Trash2,
+  MessageSquare,
 } from 'lucide-react';
 import { User, TradingAccount } from '../types';
 import ProFeaturePanel from './ProFeaturePanel';
@@ -29,6 +31,61 @@ interface Message {
   role: 'user' | 'mentor';
   content: string;
   time: string;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: Message[];
+}
+
+const getStorageKey = (userId?: string, accountId?: string) =>
+  `fx_ai_sessions_${userId || 'guest'}_${accountId || 'default'}`;
+
+const getActiveKey = (userId?: string, accountId?: string) =>
+  `fx_ai_active_session_${userId || 'guest'}_${accountId || 'default'}`;
+
+function loadStoredSessions(userId?: string, accountId?: string): ChatSession[] {
+  try {
+    const raw = localStorage.getItem(getStorageKey(userId, accountId));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to parse stored chat sessions:', e);
+  }
+  return [];
+}
+
+function saveStoredSessions(userId?: string, accountId?: string, sessions?: ChatSession[]) {
+  try {
+    if (!sessions) return;
+    localStorage.setItem(getStorageKey(userId, accountId), JSON.stringify(sessions));
+  } catch (e) {
+    console.warn('Failed to save chat sessions to localStorage:', e);
+  }
+}
+
+function formatSessionDate(timestamp: number): string {
+  if (!timestamp) return 'Recently';
+  const date = new Date(timestamp);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (isToday) {
+    return `Today at ${timeStr}`;
+  }
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) {
+    return `Yesterday at ${timeStr}`;
+  }
+  return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${timeStr}`;
 }
 
 function getTime() {
@@ -166,7 +223,41 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
     content: `Hello ${firstName}! I'm **Heyza**, your personal AI trading mentor on **${account.name}**. How can I assist your trading today?`,
   };
 
-  const [messages, setMessages] = useState<Message[]>([initialGreeting]);
+  // Persistent chat sessions state
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    const loaded = loadStoredSessions(user?.id, account.id);
+    if (loaded.length > 0) return loaded;
+    return [{
+      id: `session_${Date.now()}`,
+      title: 'New Conversation',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      messages: [initialGreeting],
+    }];
+  });
+
+  const [currentSessionId, setCurrentSessionId] = useState<string>(() => {
+    const activeId = localStorage.getItem(getActiveKey(user?.id, account.id));
+    const loaded = loadStoredSessions(user?.id, account.id);
+    if (activeId && loaded.some(s => s.id === activeId)) {
+      return activeId;
+    }
+    if (loaded.length > 0) {
+      return loaded[0].id;
+    }
+    return `session_${Date.now()}`;
+  });
+
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const activeId = localStorage.getItem(getActiveKey(user?.id, account.id));
+    const loaded = loadStoredSessions(user?.id, account.id);
+    const active = loaded.find(s => s.id === activeId) || loaded[0];
+    if (active && active.messages && active.messages.length > 0) {
+      return active.messages;
+    }
+    return [initialGreeting];
+  });
+
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [showFindInModal, setShowFindInModal] = useState(false);
@@ -176,31 +267,154 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
   const [activeModel, setActiveModel] = useState('OpenAI GPT-4o Mini');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Sync sessions when account or user changes
+  useEffect(() => {
+    const loaded = loadStoredSessions(user?.id, account.id);
+    const activeId = localStorage.getItem(getActiveKey(user?.id, account.id));
+    if (loaded.length > 0) {
+      const active = loaded.find(s => s.id === activeId) || loaded[0];
+      setSessions(loaded);
+      setCurrentSessionId(active.id);
+      setMessages(active.messages?.length > 0 ? active.messages : [initialGreeting]);
+    } else {
+      const fresh: ChatSession = {
+        id: `session_${Date.now()}`,
+        title: 'New Conversation',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messages: [initialGreeting],
+      };
+      setSessions([fresh]);
+      setCurrentSessionId(fresh.id);
+      setMessages([initialGreeting]);
+      saveStoredSessions(user?.id, account.id, [fresh]);
+      localStorage.setItem(getActiveKey(user?.id, account.id), fresh.id);
+    }
+  }, [account.id, user?.id]);
+
+  // Persist current session messages whenever messages change
+  useEffect(() => {
+    if (!currentSessionId) return;
+
+    setSessions(prevSessions => {
+      const exists = prevSessions.some(s => s.id === currentSessionId);
+      const firstUserMsg = messages.find(m => m.role === 'user');
+      const dynamicTitle = firstUserMsg
+        ? (firstUserMsg.content.length > 36 ? firstUserMsg.content.slice(0, 36) + '...' : firstUserMsg.content)
+        : 'New Conversation';
+
+      let updated: ChatSession[];
+      if (exists) {
+        updated = prevSessions.map(s => {
+          if (s.id === currentSessionId) {
+            return {
+              ...s,
+              messages,
+              updatedAt: Date.now(),
+              title: s.title === 'New Conversation' ? dynamicTitle : s.title,
+            };
+          }
+          return s;
+        });
+      } else {
+        updated = [
+          {
+            id: currentSessionId,
+            title: dynamicTitle,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            messages,
+          },
+          ...prevSessions,
+        ];
+      }
+
+      saveStoredSessions(user?.id, account.id, updated);
+      localStorage.setItem(getActiveKey(user?.id, account.id), currentSessionId);
+      return updated;
+    });
+  }, [messages, currentSessionId, user?.id, account.id]);
+
+  // Start a fresh new chat session
+  const handleNewChat = () => {
+    const freshId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const newSession: ChatSession = {
+      id: freshId,
+      title: 'New Conversation',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      messages: [initialGreeting],
+    };
+
+    setSessions(prev => {
+      // Retain only meaningful past sessions (those with user questions) plus the new session
+      const meaningful = prev.filter(s => s.messages.some(m => m.role === 'user'));
+      const nextSessions = [newSession, ...meaningful];
+      saveStoredSessions(user?.id, account.id, nextSessions);
+      return nextSessions;
+    });
+
+    setCurrentSessionId(freshId);
+    setMessages([initialGreeting]);
+    setInput('');
+    setShowHistoryModal(false);
+    localStorage.setItem(getActiveKey(user?.id, account.id), freshId);
+  };
+
+  // Switch to an existing past session
+  const handleSelectSession = (session: ChatSession) => {
+    setCurrentSessionId(session.id);
+    setMessages(session.messages && session.messages.length > 0 ? session.messages : [initialGreeting]);
+    setInput('');
+    setShowHistoryModal(false);
+    localStorage.setItem(getActiveKey(user?.id, account.id), session.id);
+  };
+
+  // Delete an existing session
+  const handleDeleteSession = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    const nextSessions = sessions.filter(s => s.id !== sessionId);
+    setSessions(nextSessions);
+    saveStoredSessions(user?.id, account.id, nextSessions);
+
+    if (currentSessionId === sessionId) {
+      if (nextSessions.length > 0) {
+        handleSelectSession(nextSessions[0]);
+      } else {
+        handleNewChat();
+      }
+    }
+  };
+
+  const handleResetChat = () => {
+    handleNewChat();
+  };
+
   // Suggested Prompts matching FX Journal Pro design language
   const suggestedPrompts = [
     {
-      title: "Trade & Win Rate Review",
+      title: "Win Rate & Setups",
       icon: TrendingUp,
       iconColor: "text-emerald-400 bg-emerald-500/10 border-emerald-500/25",
-      text: "Review my recent trades and win rate. How is my discipline holding up?",
+      text: "Review recent trades, win rate, and setup discipline.",
     },
     {
-      title: "Psychology & Emotional Audit",
+      title: "Psychology Audit",
       icon: Brain,
       iconColor: "text-violet-400 bg-violet-500/10 border-violet-500/25",
-      text: "Analyze my trading psychology and detect emotional triggers behind losing trades.",
+      text: "Detect emotional triggers and revenge trading patterns.",
     },
     {
-      title: "Risk & Drawdown Audit",
+      title: "Risk & Drawdown",
       icon: Shield,
       iconColor: "text-amber-400 bg-amber-500/10 border-amber-500/25",
-      text: "Audit my risk-to-reward ratio, lot sizing, and drawdown rules.",
+      text: "Audit risk-to-reward ratio, lot sizing, and drawdown rules.",
     },
     {
-      title: "Session Preparation",
+      title: "Session Prep",
       icon: Zap,
       iconColor: "text-sky-400 bg-sky-500/10 border-sky-500/25",
-      text: "Help me set up a disciplined checklist before my next trading session.",
+      text: "Set up a disciplined checklist before the next session.",
     },
   ];
 
@@ -259,11 +473,6 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
     }
   };
 
-  const handleResetChat = () => {
-    setMessages([initialGreeting]);
-    setInput('');
-    setShowHistoryModal(false);
-  };
 
   if (!user.isPro) {
     return (
@@ -278,83 +487,79 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
   const isHeroMode = messages.length <= 1;
 
   return (
-    <div className="w-full flex justify-center py-0 sm:py-3 px-0 sm:px-4">
-      {/* ── Main Chat Window Matching FX Journal Pro Signature Design ── */}
+    <div className="w-full h-full flex-1 flex flex-col overflow-hidden bg-white dark:bg-[#090b14]">
+      {/* ── Main Chat Window Full Width & Fixed on PC ── */}
       <div
         id="ai-assistant-card"
-        className="relative w-full max-w-full sm:max-w-[440px] md:max-w-4xl lg:max-w-5xl rounded-2xl sm:rounded-[24px] md:rounded-[32px] overflow-hidden border border-slate-200/80 dark:border-white/[0.08] flex flex-col justify-between transition-all duration-300 shadow-2xl bg-white dark:bg-[#090b14] h-[calc(100dvh-150px)] sm:h-[680px] max-h-[760px] min-h-[440px]"
-        style={{
-          boxShadow: '0 30px 80px -20px rgba(0, 0, 0, 0.9), 0 0 50px -15px rgba(139, 92, 246, 0.18)',
-        }}
+        className="relative w-full h-full flex-1 flex flex-col justify-between overflow-hidden border-0 rounded-none bg-white dark:bg-[#090b14] transition-all duration-300"
       >
         {/* Subtle Ambient Violet Glow on Top */}
-        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-gradient-to-b from-violet-600/20 via-purple-600/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[300px] bg-gradient-to-b from-violet-600/15 via-purple-600/5 to-transparent rounded-full blur-3xl pointer-events-none" />
 
         {/* ── Top Header Bar ── */}
-        <div className="flex items-center justify-between px-3.5 sm:px-6 md:px-7 py-2.5 sm:py-3.5 shrink-0 bg-transparent border-b border-slate-100 dark:border-white/[0.05] relative z-10">
-          {/* Left: Sparkle Badge + Title + Active Account Pill */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-violet-400 shadow-sm shadow-violet-500/20 shrink-0">
-              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-              <span className="text-slate-900 dark:text-white font-bold text-sm sm:text-[15px] tracking-tight">Heyza AI</span>
-              <span className="px-1.5 py-0.5 rounded-md bg-violet-500/15 border border-violet-500/25 text-[8.5px] sm:text-[9px] font-extrabold uppercase tracking-wider text-violet-600 dark:text-violet-300">
-                Coach
+        <div className="flex items-center justify-between px-4 sm:px-8 md:px-12 py-3 sm:py-3.5 shrink-0 bg-white/70 dark:bg-[#090b14]/70 backdrop-blur-xl border-b border-slate-200/60 dark:border-white/[0.06] relative z-10">
+          <div className="w-full max-w-5xl mx-auto flex items-center justify-between">
+            {/* Left: Sparkle Badge + Title + Active Account Pill */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-violet-400 shadow-sm shadow-violet-500/20 shrink-0">
+                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </div>
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                <span className="text-slate-900 dark:text-white font-bold text-sm sm:text-[15px] tracking-tight">Heyza AI</span>
+              </div>
+              <span className="inline-flex items-center gap-1 sm:gap-1.5 ml-1 sm:ml-2 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-slate-100 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] text-[10px] sm:text-[11px] text-slate-600 dark:text-slate-300 truncate max-w-[110px] sm:max-w-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399] shrink-0" />
+                <span className="font-medium truncate">{account.name}</span>
               </span>
             </div>
-            <span className="inline-flex items-center gap-1 sm:gap-1.5 ml-1 sm:ml-2 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-slate-100 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] text-[10px] sm:text-[11px] text-slate-600 dark:text-slate-300 truncate max-w-[110px] sm:max-w-none">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399] shrink-0" />
-              <span className="font-medium truncate">{account.name}</span>
-            </span>
-          </div>
 
-          {/* Right: Actions */}
-          <div className="flex items-center gap-1 sm:gap-2 text-slate-400 dark:text-slate-400 shrink-0">
-            <button
-              onClick={() => setShowModelModal(prev => !prev)}
-              className="hover:text-slate-800 dark:hover:text-white p-1.5 sm:p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/[0.06] transition cursor-pointer"
-              title="Model Settings"
-            >
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setShowHistoryModal(prev => !prev)}
-              className="hover:text-slate-800 dark:hover:text-white p-1.5 sm:p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/[0.06] transition cursor-pointer"
-              title="Chat History"
-            >
-              <Clock className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleResetChat}
-              className="hover:text-slate-800 dark:hover:text-white p-1.5 sm:p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/[0.06] transition cursor-pointer"
-              title="Reset Chat"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            {/* Right: Actions */}
+            <div className="flex items-center gap-1.5 sm:gap-2 text-slate-400 dark:text-slate-400 shrink-0">
+              {/* New Chat Button */}
+              <button
+                onClick={handleNewChat}
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-violet-600/10 dark:bg-violet-500/15 border border-violet-500/25 hover:bg-violet-600 hover:text-white text-violet-600 dark:text-violet-300 text-xs font-semibold transition cursor-pointer active:scale-95 shadow-sm"
+                title="Start a fresh conversation"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="text-xs">New Chat</span>
+              </button>
+
+              {/* Chat History Button */}
+              <button
+                onClick={() => setShowHistoryModal(prev => !prev)}
+                className="relative hover:text-slate-800 dark:hover:text-white p-1.5 sm:p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/[0.06] transition cursor-pointer text-slate-500 dark:text-slate-400"
+                title="Chat History"
+              >
+                <Clock className="w-4 h-4" />
+                {sessions.filter(s => s.messages.some(m => m.role === 'user')).length > 1 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-violet-500 ring-2 ring-white dark:ring-[#090b14]" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
         {/* ── Middle Body: Hero Mesh or Chat Stream ── */}
-        <div className="flex-1 overflow-y-auto px-3 sm:px-6 md:px-7 py-2 custom-scrollbar flex flex-col min-h-0 relative z-10">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 md:px-8 py-2 custom-scrollbar flex flex-col min-h-0 relative z-10">
           {isHeroMode ? (
             /* HERO MODE: Symmetrically Centered on Desktop & Mobile */
-            <div className="flex flex-col items-center justify-center min-h-full py-2 sm:py-4 text-center animate-fadeIn w-full max-w-4xl mx-auto space-y-2.5 sm:space-y-4">
+            <div className="flex flex-col items-center justify-center my-auto py-3 sm:py-5 text-center animate-fadeIn w-full max-w-4xl mx-auto space-y-3 sm:space-y-4">
               {/* Centered Holographic Mesh Orb */}
               <div className="relative flex items-center justify-center">
                 <HolographicMeshSphere />
               </div>
 
               {/* Centered Greetings */}
-              <div className="space-y-0.5 sm:space-y-1 text-center px-2">
+              <div className="space-y-1 text-center px-2">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/25 text-[11px] font-semibold text-violet-400 mb-0.5">
                   <Sparkles className="w-3 h-3 text-violet-400" />
                   <span>AI Trading Mentor</span>
                 </div>
-                <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-r dark:from-white dark:via-slate-100 dark:to-slate-300 tracking-tight">
                   Hello, {firstName}!
                 </h2>
-                <p className="text-[11.5px] sm:text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium max-w-md mx-auto">
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium max-w-md mx-auto">
                   How can Heyza assist your trading discipline today?
                 </p>
               </div>
@@ -363,7 +568,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
               <div className="flex md:hidden flex-col gap-2 w-full max-w-[340px] px-1 pt-1">
                 <button
                   type="button"
-                  onClick={() => sendQuery("Review my recent trades and win rate. How is my discipline holding up?")}
+                  onClick={() => sendQuery("Review recent trades, win rate, and setup discipline.")}
                   className="group flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50/90 dark:bg-white/[0.03] hover:bg-slate-100 dark:hover:bg-white/[0.06] active:scale-[0.98] border border-slate-200/80 dark:border-white/[0.08] text-left transition-all duration-150 shadow-sm cursor-pointer"
                 >
                   <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 flex items-center justify-center shrink-0">
@@ -371,7 +576,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-[11.5px] font-bold text-slate-800 dark:text-slate-200 group-hover:text-emerald-400 transition-colors">
-                      Trade & Win Rate Review
+                      Win Rate & Setups
                     </div>
                     <div className="text-[10.5px] text-slate-500 dark:text-slate-400 line-clamp-1 leading-snug">
                       Audit recent win rate, setups & discipline
@@ -382,7 +587,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
 
                 <button
                   type="button"
-                  onClick={() => sendQuery("Analyze my trading psychology and detect emotional triggers behind losing trades.")}
+                  onClick={() => sendQuery("Detect emotional triggers and revenge trading patterns.")}
                   className="group flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50/90 dark:bg-white/[0.03] hover:bg-slate-100 dark:hover:bg-white/[0.06] active:scale-[0.98] border border-slate-200/80 dark:border-white/[0.08] text-left transition-all duration-150 shadow-sm cursor-pointer"
                 >
                   <div className="w-7 h-7 rounded-lg bg-violet-500/15 border border-violet-500/25 text-violet-400 flex items-center justify-center shrink-0">
@@ -390,7 +595,7 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-[11.5px] font-bold text-slate-800 dark:text-slate-200 group-hover:text-violet-400 transition-colors">
-                      Psychology & Emotion Audit
+                      Psychology Audit
                     </div>
                     <div className="text-[10.5px] text-slate-500 dark:text-slate-400 line-clamp-1 leading-snug">
                       Detect revenge trading & emotional triggers
@@ -406,20 +611,22 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
                   <button
                     key={idx}
                     onClick={() => sendQuery(prompt.text)}
-                    className="text-left p-4 rounded-2xl bg-slate-50/80 dark:bg-[#0e111d]/90 hover:bg-slate-100 dark:hover:bg-[#141828] border border-slate-200/80 dark:border-white/[0.08] hover:border-violet-500/40 hover:shadow-[0_10px_30px_-8px_rgba(139,92,246,0.25)] transition-all duration-200 cursor-pointer group flex flex-col justify-between active:scale-[0.98]"
-                    style={{ minHeight: '105px' }}
+                    className="text-left p-3.5 rounded-2xl bg-slate-50/80 dark:bg-[#0e111d]/90 hover:bg-slate-100 dark:hover:bg-[#141828] border border-slate-200/80 dark:border-white/[0.08] hover:border-violet-500/40 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-8px_rgba(139,92,246,0.25)] transition-all duration-200 cursor-pointer group flex flex-col justify-between active:scale-[0.98]"
+                    style={{ minHeight: '108px' }}
                   >
-                    <div className="flex items-center gap-2.5 mb-2">
-                      <span className={`w-7 h-7 rounded-xl flex items-center justify-center border transition shrink-0 group-hover:scale-105 ${prompt.iconColor}`}>
-                        <prompt.icon className="w-4 h-4" />
-                      </span>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-violet-600 dark:group-hover:text-violet-300 transition line-clamp-1">
-                        {prompt.title}
-                      </span>
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`w-7 h-7 rounded-xl flex items-center justify-center border transition shrink-0 group-hover:scale-105 ${prompt.iconColor}`}>
+                          <prompt.icon className="w-4 h-4" />
+                        </span>
+                        <span className="text-[12.5px] font-bold text-slate-800 dark:text-slate-200 group-hover:text-violet-600 dark:group-hover:text-violet-300 transition truncate">
+                          {prompt.title}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed line-clamp-2">
+                        {prompt.text}
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed line-clamp-2">
-                      {prompt.text}
-                    </p>
                   </button>
                 ))}
               </div>
@@ -482,170 +689,267 @@ export default function AIInsights({ user, account, onUpgradeToPro }: AIInsights
           )}
         </div>
 
-        {/* ── Bottom Section: Action Pills + Pill Input Bar ── */}
-        <div className="shrink-0 px-3 sm:px-6 md:px-7 pb-3 sm:pb-4 pt-2 bg-white/95 dark:bg-[#090b14]/95 backdrop-blur-md space-y-2 sm:space-y-2.5 relative z-10 border-t border-slate-100 dark:border-white/[0.06]">
-          {/* Action Pills Row */}
-          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
-            {/* Pill 1: Find in ⌵ */}
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowFindInModal(prev => !prev);
-                  setShowModelModal(false);
-                }}
-                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-slate-100 dark:bg-white/[0.05] hover:bg-slate-200 dark:hover:bg-white/[0.09] border border-slate-200 dark:border-white/10 text-[11px] sm:text-xs text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition cursor-pointer font-medium"
-              >
-                <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />
-                <span>Find in</span>
-                <ChevronDown className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-400" />
-              </button>
+        {/* ── Bottom Section: Modern Unified Prompt Console ── */}
+        <div className="shrink-0 px-4 sm:px-8 md:px-12 pb-3.5 sm:pb-4 pt-2 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-[#090b14] dark:via-[#090b14]/95 dark:to-transparent relative z-20">
+          <div className="w-full max-w-4xl mx-auto space-y-2">
+            {/* Single Inline Pill Bar */}
+            <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 dark:bg-[#0c0e18] border border-slate-200/90 dark:border-white/10 focus-within:border-violet-500 focus-within:ring-2 focus-within:ring-violet-500/20 rounded-full pl-2 sm:pl-3 pr-1.5 py-1.5 transition-all shadow-sm">
+              
+              {/* Left Inline Tool 1: Scope Selector */}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFindInModal(prev => !prev);
+                    setShowModelModal(false);
+                  }}
+                  className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full bg-slate-200/70 dark:bg-white/[0.06] hover:bg-slate-300/70 dark:hover:bg-white/10 text-[11px] sm:text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+                  title="Search scope"
+                >
+                  <Search className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span className="truncate max-w-[70px] sm:max-w-[110px]">
+                    {findScope === 'account' ? account.name : findScope === 'today' ? "Today" : "All"}
+                  </span>
+                  <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                </button>
 
-              {showFindInModal && (
-                <div className="absolute bottom-9 left-0 w-44 rounded-xl bg-white dark:bg-[#131625] border border-slate-200 dark:border-white/10 p-1.5 shadow-2xl z-30 text-xs animate-fadeIn space-y-1">
-                  <button
-                    onClick={() => { setFindScope('account'); setShowFindInModal(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${findScope === 'account' ? 'bg-violet-600/15 text-violet-600 dark:text-violet-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}`}
-                  >
-                    Current: {account.name}
-                  </button>
-                  <button
-                    onClick={() => { setFindScope('today'); setShowFindInModal(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${findScope === 'today' ? 'bg-violet-600/15 text-violet-600 dark:text-violet-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}`}
-                  >
-                    Today's Trades
-                  </button>
-                  <button
-                    onClick={() => { setFindScope('all'); setShowFindInModal(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${findScope === 'all' ? 'bg-violet-600/15 text-violet-600 dark:text-violet-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}`}
-                  >
-                    All Accounts
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Pill 2: Model select */}
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowModelModal(prev => !prev);
-                  setShowFindInModal(false);
-                }}
-                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-slate-100 dark:bg-white/[0.05] hover:bg-slate-200 dark:hover:bg-white/[0.09] border border-slate-200 dark:border-white/10 text-[11px] sm:text-xs text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition cursor-pointer font-medium"
-              >
-                <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-gradient-to-tr from-violet-500 to-indigo-500 shrink-0" />
-                <span className="font-semibold">{activeModel.includes('GPT') ? 'GPT-4o Mini' : 'Gemma 4'}</span>
-                <ChevronDown className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-400" />
-              </button>
-
-              {showModelModal && (
-                <div className="absolute bottom-9 left-0 w-56 rounded-xl bg-white dark:bg-[#131625] border border-slate-200 dark:border-white/10 p-1.5 shadow-2xl z-30 text-xs animate-fadeIn space-y-1">
-                  <div className="px-2.5 py-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                    Select AI Engine
+                {showFindInModal && (
+                  <div className="absolute bottom-full mb-3 left-0 w-48 rounded-xl bg-white dark:bg-[#131625] border border-slate-200 dark:border-white/10 p-1.5 shadow-2xl z-50 text-xs animate-fadeIn space-y-1">
+                    <button
+                      onClick={() => { setFindScope('account'); setShowFindInModal(false); }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${findScope === 'account' ? 'bg-violet-600/15 text-violet-600 dark:text-violet-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}`}
+                    >
+                      Current: {account.name}
+                    </button>
+                    <button
+                      onClick={() => { setFindScope('today'); setShowFindInModal(false); }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${findScope === 'today' ? 'bg-violet-600/15 text-violet-600 dark:text-violet-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}`}
+                    >
+                      Today's Trades
+                    </button>
+                    <button
+                      onClick={() => { setFindScope('all'); setShowFindInModal(false); }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${findScope === 'all' ? 'bg-violet-600/15 text-violet-600 dark:text-violet-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}`}
+                    >
+                      All Accounts
+                    </button>
                   </div>
-                  <button
-                    onClick={() => { setActiveModel('OpenAI GPT-4o Mini'); setShowModelModal(false); }}
-                    className={`w-full text-left px-2.5 py-2 rounded-lg transition ${activeModel.includes('GPT') ? 'bg-violet-600/15 text-violet-600 dark:text-violet-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}`}
-                  >
-                    <div className="font-medium">OpenAI GPT-4o Mini</div>
-                    <div className="text-[10px] text-slate-400">Fast, smart trading analysis</div>
-                  </button>
-                  <button
-                    onClick={() => { setActiveModel('Google Gemma 4'); setShowModelModal(false); }}
-                    className={`w-full text-left px-2.5 py-2 rounded-lg transition ${activeModel.includes('Gemma') ? 'bg-violet-600/15 text-violet-600 dark:text-violet-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}`}
-                  >
-                    <div className="font-medium">Google Gemma 4</div>
-                    <div className="text-[10px] text-slate-400">Free open-source model</div>
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
+
+              {/* Left Inline Tool 2: Model Selector */}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowModelModal(prev => !prev);
+                    setShowFindInModal(false);
+                  }}
+                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-full bg-slate-200/70 dark:bg-white/[0.06] hover:bg-slate-300/70 dark:hover:bg-white/10 text-[11px] sm:text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+                  title="Select AI Model"
+                >
+                  <div className="w-2 h-2 rounded-full bg-gradient-to-tr from-violet-500 to-indigo-500 shrink-0" />
+                  <span className="truncate max-w-[80px] sm:max-w-none">
+                    {activeModel.includes('GPT') ? 'GPT-4o Mini' : 'Gemma 4'}
+                  </span>
+                  <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                </button>
+
+                {showModelModal && (
+                  <div className="absolute bottom-full mb-3 left-0 w-56 rounded-xl bg-white dark:bg-[#131625] border border-slate-200 dark:border-white/10 p-1.5 shadow-2xl z-50 text-xs animate-fadeIn space-y-1">
+                    <div className="px-2.5 py-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      Select AI Engine
+                    </div>
+                    <button
+                      onClick={() => { setActiveModel('OpenAI GPT-4o Mini'); setShowModelModal(false); }}
+                      className={`w-full text-left px-2.5 py-2 rounded-lg transition ${activeModel.includes('GPT') ? 'bg-violet-600/15 text-violet-600 dark:text-violet-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}`}
+                    >
+                      <div className="font-medium">OpenAI GPT-4o Mini</div>
+                      <div className="text-[10px] text-slate-400">Fast, smart trading analysis</div>
+                    </button>
+                    <button
+                      onClick={() => { setActiveModel('Google Gemma 4'); setShowModelModal(false); }}
+                      className={`w-full text-left px-2.5 py-2 rounded-lg transition ${activeModel.includes('Gemma') ? 'bg-violet-600/15 text-violet-600 dark:text-violet-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}`}
+                    >
+                      <div className="font-medium">Google Gemma 4</div>
+                      <div className="text-[10px] text-slate-400">Free open-source model</div>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Subtle Vertical Divider */}
+              <div className="h-4 w-px bg-slate-300 dark:bg-white/10 shrink-0 hidden sm:block" />
+
+              {/* Flexible Input Field with bright, clearly visible caret */}
+              <input
+                type="text"
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask Heyza anything about your trades or strategy..."
+                disabled={loading}
+                className="chat-clean-input flex-1 min-w-[80px] text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 bg-transparent border-0 outline-none caret-violet-500 dark:caret-violet-400 px-1 py-1"
+              />
+
+              {/* Right Action Buttons */}
+              <div className="flex items-center gap-1 shrink-0 pr-0.5">
+                {/* Tag Account Button */}
+                <button
+                  type="button"
+                  onClick={() => setInput(prev => `${prev}@${account.name} `)}
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 flex items-center justify-center transition cursor-pointer"
+                  title={`Tag ${account.name}`}
+                >
+                  <AtSign className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+
+                {/* Reset / New Chat Button */}
+                <button
+                  type="button"
+                  onClick={handleNewChat}
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 flex items-center justify-center transition cursor-pointer"
+                  title="New Chat / Reset"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 sm:w-3.5 sm:h-3.5" />
+                </button>
+
+                {/* Up Arrow Send Button */}
+                <button
+                  type="button"
+                  onClick={() => { if (input.trim()) sendQuery(input); }}
+                  disabled={!input.trim() || loading}
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer shrink-0 active:scale-95 ${input.trim() ? "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-md shadow-violet-600/40" : "bg-violet-700/60 hover:bg-violet-600 text-white/70"}`}
+                  aria-label="Send"
+                >
+                  <ArrowUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.8]" />
+                </button>
+              </div>
             </div>
-
-            {/* Pill 3: Reset */}
-            <button
-              type="button"
-              onClick={handleResetChat}
-              className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-100 dark:bg-white/[0.05] hover:bg-slate-200 dark:hover:bg-white/[0.09] border border-slate-200 dark:border-white/10 text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition cursor-pointer shrink-0"
-              title="Reset Chat"
-            >
-              <RotateCcw className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            </button>
-          </div>
-
-          {/* Pill Input Bar */}
-          <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 dark:bg-[#0c0e18] border border-slate-200/90 dark:border-white/10 focus-within:border-violet-500 focus-within:ring-2 focus-within:ring-violet-500/20 rounded-full pl-3.5 sm:pl-4 pr-1 sm:pr-1.5 py-1 sm:py-1.5 transition-all duration-200 shadow-sm">
-            <input
-              type="text"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask Heyza anything about your trades or strategy..."
-              disabled={loading}
-              className="chat-clean-input flex-1 text-[12.5px] sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 leading-relaxed min-w-0 bg-transparent border-0 outline-none"
-            />
-
-            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 pr-0.5">
-              {/* @ mention button */}
-              <button
-                type="button"
-                onClick={() => setInput(prev => `${prev}@${account.name} `)}
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 active:scale-95 flex items-center justify-center transition cursor-pointer"
-                title="Tag account"
-              >
-                <AtSign className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-
-              {/* Up arrow send button with signature violet theme */}
-              <button
-                type="button"
-                onClick={() => { if (input.trim()) sendQuery(input); }}
-                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white transition-all duration-200 cursor-pointer shrink-0 active:scale-95 ${
-                  input.trim()
-                    ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-md shadow-violet-600/40'
-                    : 'bg-violet-700/60 hover:bg-violet-600 text-white/70'
-                }`}
-                aria-label="Send"
-              >
-                <ArrowUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.8]" />
-              </button>
+            {/* Micro Caption */}
+            <div className="flex items-center justify-center gap-1.5 text-[10.5px] sm:text-[11px] text-slate-400 dark:text-slate-500">
+              <Sparkles className="w-3 h-3 text-violet-400/70" />
+              <span>Heyza AI analyzes live MT5 journal data to strengthen discipline and risk rules</span>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* History Modal */}
+        {/* Rich Chat History Modal */}
         {showHistoryModal && (
-          <div className="absolute inset-0 bg-white/95 dark:bg-[#0c0d16]/95 backdrop-blur-md p-6 z-40 flex flex-col justify-between animate-fadeIn">
-            <div>
-              <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/10">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Chat Sessions</h3>
+          <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn"
+            onClick={() => setShowHistoryModal(false)}
+          >
+            <div
+              className="relative w-full max-w-lg bg-white dark:bg-[#0e111e] border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scaleUp"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/25 flex items-center justify-center text-violet-400">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">Chat History</h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Saved conversations on <span className="font-semibold text-slate-700 dark:text-slate-300">{account.name}</span>
+                    </p>
+                  </div>
+                </div>
                 <button
                   onClick={() => setShowHistoryModal(false)}
-                  className="text-slate-400 hover:text-slate-900 dark:hover:text-white p-1 rounded-lg"
+                  className="text-slate-400 hover:text-slate-800 dark:hover:text-white p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition cursor-pointer"
+                  title="Close"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="py-4 space-y-2">
-                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#131625] border border-slate-200 dark:border-white/5 text-xs text-slate-700 dark:text-slate-300">
-                  <div className="font-semibold text-slate-900 dark:text-white mb-1">Active Session</div>
-                  <div className="text-slate-500 dark:text-slate-400 line-clamp-1">{messages[messages.length - 1]?.content || 'Started'}</div>
-                </div>
+              {/* Action: Start New Chat */}
+              <div className="p-4 border-b border-slate-200/80 dark:border-white/[0.06]">
+                <button
+                  onClick={handleNewChat}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-lg shadow-violet-600/20 active:scale-95 transition cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Start New Conversation</span>
+                </button>
+              </div>
+
+              {/* Sessions List */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
+                {sessions.length === 0 || (sessions.length === 1 && !sessions[0].messages.some(m => m.role === 'user')) ? (
+                  <div className="text-center py-10 px-4">
+                    <div className="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center mx-auto mb-3">
+                      <MessageSquare className="w-6 h-6 opacity-70" />
+                    </div>
+                    <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">No Past Conversations Yet</div>
+                    <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                      Any questions you ask Heyza will be automatically saved here so you can revisit them anytime.
+                    </p>
+                  </div>
+                ) : (
+                  sessions.map((s) => {
+                    const isActive = s.id === currentSessionId;
+                    const userMsgCount = s.messages.filter(m => m.role === 'user').length;
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => handleSelectSession(s)}
+                        className={`group relative flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-violet-500/10 dark:bg-violet-600/15 border-violet-500/50 shadow-sm'
+                            : 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/5 hover:border-violet-500/30 hover:bg-slate-100 dark:hover:bg-white/[0.05]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                            isActive
+                              ? 'bg-violet-600 text-white'
+                              : 'bg-slate-200 dark:bg-white/5 text-slate-400 group-hover:text-violet-400'
+                          }`}>
+                            <MessageSquare className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-medium truncate ${
+                                isActive ? 'text-violet-600 dark:text-violet-300 font-semibold' : 'text-slate-800 dark:text-slate-200'
+                              }`}>
+                                {s.title || 'Conversation'}
+                              </span>
+                              {isActive && (
+                                <span className="px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-500 dark:text-violet-400 text-[9px] font-bold uppercase tracking-wider shrink-0">
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                              <span>{formatSessionDate(s.updatedAt || s.createdAt)}</span>
+                              <span>•</span>
+                              <span>{userMsgCount} {userMsgCount === 1 ? 'question' : 'questions'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Delete Session Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteSession(e, s.id)}
+                          className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition shrink-0 cursor-pointer"
+                          title="Delete session"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
-
-            <button
-              onClick={handleResetChat}
-              className="w-full py-3 rounded-xl bg-slate-900 dark:bg-violet-600 hover:bg-slate-800 dark:hover:bg-violet-500 text-xs font-semibold text-white transition flex items-center justify-center gap-2 shadow-md shadow-violet-600/20 active:scale-95"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Start New Session</span>
-            </button>
           </div>
         )}
       </div>
-    </div>
   );
 }

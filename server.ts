@@ -20,6 +20,7 @@ import { EA_TEMPLATE } from './src/eaTemplate.js';
 import { createMt5Router } from './src/mt5-integration-kit/backend/mt5Router.js';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+import Razorpay from 'razorpay';
 // metaapi.cloud-sdk is NOT a dependency any more — see getCloudApi() for why
 // and for how to put it back.
 import { toNodeHandler, fromNodeHeaders } from 'better-auth/node';
@@ -2836,7 +2837,6 @@ app.use((req, res, next) => {
   const isAllowedOrigin = (orig: string) => {
     if (!orig) return true;
     if (allowedOrigins.includes(orig)) return true;
-    if (orig.endsWith('.netlify.app')) return true;
     if (orig.endsWith('.vercel.app')) return true;
     if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(orig)) return true;
     return false;
@@ -6638,14 +6638,27 @@ app.post('/api/ai/mentor', async (req, res) => {
   const targetAcc = db.accounts?.find((a: any) => a.id === accountId);
   const accountName = targetAcc ? targetAcc.name : 'Primary Portfolio';
 
-  // Fetch trades
-  const accountTrades = db.trades.filter((t: any) =>
-    t.accountId === accountId &&
-    t.type !== 'Deposit' &&
-    t.type !== 'Withdrawal'
-  );
+  // Fetch trades respecting search scope
+  const scope = req.body?.scope || 'account';
+  const accountTrades = (db.trades || []).filter((t: any) => {
+    if (t.type === 'Deposit' || t.type === 'Withdrawal') return false;
+    if (scope === 'all') return true;
+    if (scope === 'today') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      return t.accountId === accountId && (t.date || '').startsWith(todayStr);
+    }
+    return t.accountId === accountId;
+  });
 
-  // Prepare a concise trading digest for Gemini API (latest 50 trades)
+  const startingBal = parseFloat(targetAcc?.startingBalance || targetAcc?.starting_balance || 0);
+  const currentBal = parseFloat(targetAcc?.currentBalance || targetAcc?.current_balance || targetAcc?.balance || startingBal);
+  const equityBal = parseFloat(targetAcc?.equity || currentBal);
+  const netPnLVal = (currentBal - startingBal).toFixed(2);
+  const drawdownPctVal = startingBal > 0 && currentBal < startingBal
+    ? (((startingBal - currentBal) / startingBal) * 100).toFixed(2)
+    : '0';
+
+  // Prepare a concise trading digest for AI (latest 50 trades)
   const recentTrades = accountTrades.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 50);
   const digest = recentTrades.map((t: any) => ({
     date: t.date.split('T')[0],
@@ -6862,31 +6875,49 @@ app.post('/api/ai/mentor', async (req, res) => {
 
   const openRouterKey = process.env.OPENROUTER_API_KEY || '';
 
-  const systemInstruction = `You are ${traderName}'s personal trading mentor, coach, and companion on FX Journal Pro. Your name is "AI Mentor".
+  const systemInstruction = `You are ${traderName}'s personal AI trading mentor, coach, and companion on FX Journal Pro. Your name is "Heyza AI" (also known as AI Mentor).
 
-Personality & Vibe:
-- Extremely warm, friendly, encouraging, and approachable — like a trusted mentor, brother, and trading companion who truly wants to see ${traderName} succeed!
-- Always greet warmly and enthusiastically ("Hey ${traderName}! 👋 Really great to see you!", "Welcome back, my friend! 😊").
-- Speak in a natural, conversational, and supportive first-person tone: "I'm right here with you", "Let's work through this together", "I'm proud of your discipline".
-- Never sound robotic, cold, bureaucratic, or dismissive.
-- If ${traderName} has 0 or few trades logged, warmly welcome them, reassure them that every great trader started with trade #1, and offer to chat about mindset, discipline, setups, or risk rules.
-- When ${traderName} expresses fear, doubt, loss, or FOMO, lead with heartfelt empathy FIRST before offering constructive guidance.
-- Celebrate small milestones and positive habits, not just profits.
-- Use uplifting emojis naturally to bring warmth (👋, 😊, 🚀, 💪, 🎯, 📈, 🧘, 🙏).
+Language & Communication:
+- ${traderName} speaks English, Malayalam, and Manglish (Malayalam written phonetically using the English alphabet).
+- Common Manglish phrases and their exact meanings:
+  * "ente trading engane und" / "engane und" -> "How is my trading performing?"
+  * "ethraya loss aayath" / "ethra loss aayi" -> "How much loss did I make?"
+  * "win rate ethraya" -> "What is my win rate?"
+  * "rpy onum crct allalo" / "reply crct alla" -> "Your replies are not accurate or not answering my question"
+  * "ai work avunondo" -> "Is the AI working?"
+  * "trade edukkatte" -> "Should I enter a trade?"
+  * "njan profit aano" -> "Am I in profit?"
+- If ${traderName} writes in Malayalam or Manglish, you MUST understand their exact question and reply in friendly, conversational Malayalam or Manglish.
+- NEVER give generic textbook definitions when asked conversational questions like "ente trading engane und". Always answer about their real account balance ($${currentBal.toFixed(2)}), net P/L (${parseFloat(netPnLVal) >= 0 ? '+' : ''}$${netPnLVal}), and drawdown (${drawdownPctVal}%)!
 
-Trader Profile:
-- Name: ${traderName}
-- Account: ${accountName}
-- Total Trades Logged: ${accountTrades.length}
+Account Live Overview:
+- Trader Name: ${traderName}
+- Account Name: ${accountName}
+- Broker & Platform: ${targetAcc?.broker || 'Exness'} (${targetAcc?.platform || 'MT5'})
+- Starting Capital: $${startingBal.toFixed(2)}
+- Current Live Balance: $${currentBal.toFixed(2)}
+- Live Equity: $${equityBal.toFixed(2)}
+- Net P/L: ${parseFloat(netPnLVal) >= 0 ? '+' : ''}$${netPnLVal}
+- Drawdown: ${drawdownPctVal}%
+- Detected MT5 Sync Trades: ${targetAcc?.eaSyncTradeCount || 0}
+- Detailed Journal Trades Logged: ${accountTrades.length}
 
-Trading History Digest (Last 50 trades):
+Trading History Digest (Latest ${digest.length} closed trades in journal):
 ${JSON.stringify(digest)}
 
-RESTRICTIONS:
-- ONLY discuss trading, trading psychology, risk management, discipline, emotional control, performance improvement, and journal insights.
-- If asked about unrelated topics, kindly redirect: "That's outside my expertise as your trading mentor — but I'm always here to talk trading, mindset, and strategy!"
-- NEVER promise profits or guarantee outcomes.
-- NEVER be dismissive or harsh. Always be encouraging and constructive.`;
+Personality & Guidance Rules:
+- Extremely warm, approachable, realistic, and disciplined — like an experienced prop firm risk manager who genuinely cares about ${traderName}'s growth.
+- MANDATORY LANGUAGE MATCHING: If ${traderName} speaks in Malayalam or Manglish, you MUST answer in Malayalam (or natural conversational Manglish).
+- MANDATORY ACCOUNT METRICS: Whenever ${traderName} asks about their performance, account, profits, or losses, ALWAYS directly mention their live numbers:
+  • Account: "${accountName}" (${targetAcc?.broker || 'Exness'} ${targetAcc?.platform || 'MT5'})
+  • Starting Capital: $${startingBal.toFixed(2)}
+  • Current Live Balance: $${currentBal.toFixed(2)}
+  • Net P/L: ${parseFloat(netPnLVal) >= 0 ? '+' : ''}$${netPnLVal} (${drawdownPctVal}% drawdown)
+  • Journaled Trades: ${accountTrades.length} trades
+  If detailed closed trade records are 0 in the journal (even though MT5 is connected), explain that their live balance is $${currentBal.toFixed(2)} (${drawdownPctVal}% drawdown), and once trades are synced or closed in MT5, win rate and setup stats will automatically show up.
+- Always encourage strict risk management (1-2% risk per trade, stop losses, avoiding revenge trading).
+- Use helpful emojis naturally (📊, 🎯, 🚀, 💡, 🛡️, 💪, 🙏).
+- NEVER guarantee profits or make financial promises.`;
 
   const firstUserIdx = messages.findIndex((m: any) => m.role === 'user');
   const validMessages = firstUserIdx !== -1 ? messages.slice(firstUserIdx) : messages;
@@ -7426,6 +7457,119 @@ app.post(['/api/payments/order', '/api/payments/create-order'], async (req, res)
     }
     res.status(502).json({ error: err?.message || 'Could not initiate Razorpay order. Please try again.' });
   }
+});
+
+/**
+ * Razorpay Standard Web Checkout: Create Order
+ * Endpoint: POST /api/create-order
+ * Request: { amount (paise), currency, receipt }
+ * Return: { order_id, amount, currency, key_id }
+ * Minimum amount: 100 paise
+ */
+app.post('/api/create-order', async (req, res) => {
+  const auth = razorpayAuth();
+  if (!auth) {
+    return res.status(401).json({ error: 'Razorpay credentials not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.' });
+  }
+
+  const rawAmount = req.body?.amount !== undefined ? Number(req.body.amount) : PRO_PLAN_AMOUNT_PAISE;
+  const currency = String(req.body?.currency || 'INR').toUpperCase();
+  const receipt = String(req.body?.receipt || `rcpt_${Date.now().toString(36)}`);
+
+  // Validate amount >= 100 paise
+  if (isNaN(rawAmount) || rawAmount < 100) {
+    return res.status(400).json({ error: 'Invalid amount. Minimum amount is 100 paise.' });
+  }
+
+  const amount = Math.round(rawAmount);
+
+  try {
+    const razorpay = new Razorpay({
+      key_id: auth.keyId,
+      key_secret: auth.keySecret,
+    });
+
+    const currentUser = (req as any).currentUser;
+    const order = await razorpay.orders.create({
+      amount,
+      currency,
+      receipt,
+      notes: {
+        userId: currentUser?.id || '',
+        email: currentUser?.email || '',
+        plan: 'pro',
+      },
+    });
+
+    return res.json({
+      order_id: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      key_id: auth.keyId,
+    });
+  } catch (err: any) {
+    console.error('[create-order] Razorpay API error:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'Failed to create Razorpay order' });
+  }
+});
+
+/**
+ * Razorpay Standard Web Checkout: Verify Payment Signature
+ * Endpoint: POST /api/verify-payment
+ * Algorithm: HMAC-SHA256(order_id + "|" + payment_id, KEY_SECRET)
+ * Compare generated signature with razorpay_signature
+ * Return success only if signatures match
+ */
+app.post('/api/verify-payment', async (req, res) => {
+  const auth = razorpayAuth();
+  if (!auth) {
+    return res.status(401).json({ error: 'Razorpay credentials not configured.' });
+  }
+
+  const razorpay_order_id = String(req.body?.razorpay_order_id || req.body?.order_id || req.body?.orderId || '').trim();
+  const razorpay_payment_id = String(req.body?.razorpay_payment_id || req.body?.payment_id || req.body?.paymentId || '').trim();
+  const razorpay_signature = String(req.body?.razorpay_signature || req.body?.signature || '').trim();
+
+  // Missing fields: return 400
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    return res.status(400).json({ error: 'Missing required payment verification fields (order_id, payment_id, signature).' });
+  }
+
+  // Algorithm: HMAC-SHA256(order_id + "|" + payment_id, KEY_SECRET)
+  const textToSign = `${razorpay_order_id}|${razorpay_payment_id}`;
+  const generatedSignature = crypto
+    .createHmac('sha256', auth.keySecret)
+    .update(textToSign)
+    .digest('hex');
+
+  // Compare generated signature with razorpay_signature
+  if (!safeTokenEqual(generatedSignature, razorpay_signature)) {
+    console.warn(`[verify-payment] Signature mismatch. expected=${generatedSignature} got=${razorpay_signature}`);
+    return res.status(400).json({ success: false, error: 'Payment signature verification failed. Invalid signature.' });
+  }
+
+  // If user is authenticated, grant 30-day Pro access
+  const currentUser = (req as any).currentUser;
+  if (currentUser) {
+    try {
+      await grantProForPayment({
+        userId: currentUser.id,
+        providerPaymentId: razorpay_payment_id,
+        amountRupees: 499,
+        userEmail: currentUser.email,
+        periodDays: 30,
+      });
+    } catch (e) {
+      console.warn('[verify-payment] grantPro error:', e);
+    }
+  }
+
+  return res.json({
+    success: true,
+    message: 'Payment verified successfully.',
+    order_id: razorpay_order_id,
+    payment_id: razorpay_payment_id,
+  });
 });
 
 /**
@@ -11240,12 +11384,16 @@ app.post('/api/admin/users/:id/plan', async (req, res) => {
   const ctx = await requirePermission(req, res, 'users.manage');
   if (!ctx) return;
   const { id } = req.params;
-  const { isPro } = req.body;
+  const { isPro, days } = req.body;
+
+  const durationDays = Number(days) || 30;
+  const proUntil = isPro ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : null;
 
   if (useSupabase) {
     const { error } = await supabase.from('users').update({
       is_pro: !!isPro,
-      pro_until: isPro ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null
+      pro_until: proUntil ? proUntil.toISOString() : null,
+      plan: isPro ? 'pro' : 'free'
     }).eq('id', id);
     if (error) {
       console.error('Error updating user plan:', error);
@@ -11253,22 +11401,23 @@ app.post('/api/admin/users/:id/plan', async (req, res) => {
     }
     userDatabases.delete(id);
     await writeAuditLog(req, ctx, isPro ? 'user.grant_pro' : 'user.revoke_pro', 'user', id);
-    return res.json({ message: `User plan updated to ${isPro ? 'Pro' : 'Free'}` });
+    return res.json({
+      message: `User plan updated to ${isPro ? `Pro (${durationDays} days)` : 'Free'}`,
+      isPro: !!isPro,
+      proUntil: proUntil ? proUntil.toISOString() : null
+    });
   }
 
-  // req.userDb holds only the admin in local mode, so the grant went nowhere.
-  // applyProState writes to the shared store and drops the target's cache.
-  //
-  // The lookup spans the caches as well as db.json: anyone who registered on
-  // this server lives only in memory, so reading the file alone answered
-  // "User not found" for every account that was not seeded — an admin could
-  // grant Pro to the demo users and to nobody else.
   const target = localFindUser((u: any) => u.id === id);
   if (!target) return res.status(404).json({ error: 'User not found' });
 
-  await applyProState(id, isPro ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null);
+  await applyProState(id, proUntil);
   await writeAuditLog(req, ctx, isPro ? 'user.grant_pro' : 'user.revoke_pro', 'user', id);
-  res.json({ message: `User plan updated to ${isPro ? 'Pro' : 'Free'}` });
+  res.json({
+    message: `User plan updated to ${isPro ? `Pro (${durationDays} days)` : 'Free'}`,
+    isPro: !!isPro,
+    proUntil: proUntil ? proUntil.toISOString() : null
+  });
 });
 
 app.get('/api/admin/bugs', async (req, res) => {

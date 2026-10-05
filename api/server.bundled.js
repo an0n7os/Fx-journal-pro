@@ -1,9 +1,16 @@
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
+
 // server.ts
 import "dotenv/config";
 import express from "express";
 import path2 from "path";
 import fs from "fs";
-import crypto2 from "crypto";
+import crypto4 from "crypto";
 import bcrypt from "bcryptjs";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import cookieParser from "cookie-parser";
@@ -664,10 +671,908 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
 }
 `;
 
+// src/mt5-integration-kit/backend/mt5Router.ts
+import crypto2 from "crypto";
+import { Router } from "express";
+
+// src/mt5-integration-kit/backend/mt5Service.ts
+import crypto from "crypto";
+
+// src/mt5-integration-kit/backend/eaTemplate.ts
+var EA_TEMPLATE2 = String.raw`//+------------------------------------------------------------------+
+//|                                                   FX Journal Pro Sync  |
+//|  Unique Expert Advisor generated for a portfolio account.             |
+//|  Authenticates with FX Journal Pro using an HMAC-signed handshake      |
+//|  and imports your complete MT5 trade history (90-day backfill), then   |
+//|  keeps syncing new trades, positions, orders and account snapshots     |
+//|  in real time. Read-only: contains no trading functions.               |
+//|                                                                        |
+//|  INSTALL:                                                              |
+//|  1. MT5: Tools -> Options -> Expert Advisors -> check                 |
+//|     "Allow WebRequest for listed URL" and add:                         |
+//|       __FXJP_WEBREQUEST_HOST__                                         |
+//|  2. Save this file into  MT5/Data folder -> MQL5/Experts/               |
+//|  3. Drag it onto any chart. The configuration below is pre-filled       |
+//|     for your account; do not change it.                                |
+//|                                                                        |
+//|  NOTE: keep your PC clock accurate (GMT) — every request is signed     |
+//|  with a timestamp and rejected if it is more than 5 minutes off.       |
+//+------------------------------------------------------------------+
+#property copyright "FX Journal Pro"
+#property link      "https://www.fxjournalpro.com"
+#property version   "2.00"
+#property description "FX Journal Pro automated MT5 synchronization (HMAC-signed)"
+
+//+------------------------------------------------------------------+
+//| Per-account configuration (filled by FX Journal Pro)             |
+//+------------------------------------------------------------------+
+string FXJP_ACCOUNT_ID = "__FXJP_ACCOUNT_ID__";
+string FXJP_TOKEN     = "__FXJP_TOKEN__";
+string FXJP_API_URL   = "__FXJP_API_URL__";
+
+//+------------------------------------------------------------------+
+//| Tuning inputs                                                    |
+//+------------------------------------------------------------------+
+input int    InpSyncIntervalSec = 30;  // Sync interval (seconds)
+input int    InpBatchSize       = 200; // Deals per request (1-500)
+input bool   InpFullSyncOnStart = true; // Import full history on start
+input int    InpBackfillDays    = 90;  // Days of history to backfill (0 = all)
+
+//+------------------------------------------------------------------+
+//| Internal state                                                   |
+//+------------------------------------------------------------------+
+string   g_gvName = "";         // GlobalVariable holding last synced deal ticket
+long     g_cursor = 0;          // last successfully synced deal ticket
+bool     g_syncing = false;     // re-entrancy guard
+bool     g_authed  = false;
+bool     g_stopped = false;     // set on token-revoked / auth-failure
+datetime g_lastSyncTime = 0;
+int      g_dealsInBatch = 0;
+string   g_flowsJson = "[]";    // money flows collected for the current batch
+int      g_reqCounter = 0;      // monotonically increasing request id seed
+int      g_retryDelay = 0;      // current backoff delay in seconds
+datetime g_nextAttemptTime = 0;
+
+//+------------------------------------------------------------------+
+//| Small JSON string escaper                                        |
+//+------------------------------------------------------------------+
+string JsonEscape(string s)
+{
+   StringReplace(s, "\\", "\\\\");
+   StringReplace(s, "\"", "\\\"");
+   StringReplace(s, "\r", " ");
+   StringReplace(s, "\n", " ");
+   return s;
+}
+
+//+------------------------------------------------------------------+
+//| Bound a string so the server schema is never violated            |
+//+------------------------------------------------------------------+
+string Trunc(string s, int maxLen)
+{
+   if (StringLen(s) > maxLen)
+      return StringSubstr(s, 0, maxLen);
+   return s;
+}
+
+//+------------------------------------------------------------------+
+//| Parse an integer field like "cursor":12345 from a JSON response  |
+//+------------------------------------------------------------------+
+long ParseIntField(string text, string field)
+{
+   string key = "\"" + field + "\":";
+   int p = StringFind(text, key);
+   if (p < 0) return 0;
+   string tail = StringSubstr(text, p + StringLen(key));
+   string num = "";
+   int len = StringLen(tail);
+   for (int i = 0; i < len; i++)
+   {
+      ushort c = StringGetCharacter(tail, i);
+      if ((c >= '0' && c <= '9') || c == '-') num += ShortToString(c);
+      else break;
+   }
+   return StringToInteger(num);
+}
+
+//+------------------------------------------------------------------+
+//| SHA-256 (hex) using the built-in CryptEncode engine              |
+//+------------------------------------------------------------------+
+string Sha256Hex(string input)
+{
+   uchar inBytes[];
+   StringToCharArray(input, inBytes, 0, StringLen(input), CP_UTF8);
+   uchar hashBytes[];
+   if (!CryptEncode(CRYPTO_HASH_SHA256, inBytes, hashBytes))
+      return "";
+   string outHex = "";
+   for (int i = 0; i < ArraySize(hashBytes); i++)
+      outHex += StringFormat("%02x", hashBytes[i]);
+   return outHex;
+}
+
+//+------------------------------------------------------------------+
+//| HMAC-SHA256 (hex). Key is used as UTF-8 bytes, exactly like the  |
+//|| server: secret = sha256(ea_token), message = the signed string.  |
+//+------------------------------------------------------------------+
+string HmacSha256Hex(string key, string message)
+{
+   uchar keyBytes[];
+   StringToCharArray(key, keyBytes, 0, StringLen(key), CP_UTF8);
+
+   uchar keyPrime[];
+   if (ArraySize(keyBytes) > 64)
+   {
+      uchar h[];
+      if (!CryptEncode(CRYPTO_HASH_SHA256, keyBytes, h)) return "";
+      ArrayResize(keyPrime, ArraySize(h));
+      ArrayCopy(keyPrime, h);
+   }
+   else
+   {
+      ArrayResize(keyPrime, ArraySize(keyBytes));
+      for (int i = 0; i < ArraySize(keyBytes); i++) keyPrime[i] = keyBytes[i];
+   }
+
+   uchar innerPad[];
+   uchar outerPad[];
+   ArrayResize(innerPad, 64);
+   ArrayResize(outerPad, 64);
+   for (int i = 0; i < 64; i++)
+   {
+      uchar kp = (i < ArraySize(keyPrime)) ? keyPrime[i] : 0;
+      innerPad[i] = (uchar)(kp ^ 0x36);
+      outerPad[i] = (uchar)(kp ^ 0x5c);
+   }
+
+   uchar msgBytes[];
+   StringToCharArray(message, msgBytes, 0, StringLen(message), CP_UTF8);
+
+   uchar innerInput[];
+   ArrayResize(innerInput, 64 + ArraySize(msgBytes));
+   ArrayCopy(innerInput, innerPad);
+   for (int i = 0; i < ArraySize(msgBytes); i++) innerInput[64 + i] = msgBytes[i];
+
+   uchar innerHash[];
+   if (!CryptEncode(CRYPTO_HASH_SHA256, innerInput, innerHash)) return "";
+
+   uchar outerInput[];
+   ArrayResize(outerInput, 64 + ArraySize(innerHash));
+   ArrayCopy(outerInput, outerPad);
+   for (int i = 0; i < ArraySize(innerHash); i++) outerInput[64 + i] = innerHash[i];
+
+   uchar outerHash[];
+   if (!CryptEncode(CRYPTO_HASH_SHA256, outerInput, outerHash)) return "";
+
+   string outHex = "";
+   for (int i = 0; i < ArraySize(outerHash); i++)
+      outHex += StringFormat("%02x", outerHash[i]);
+   return outHex;
+}
+
+//+------------------------------------------------------------------+
+//| ISO-8601 UTC timestamp used for the signature (and replay check) |
+//+------------------------------------------------------------------+
+string IsoTimestamp()
+{
+   MqlDateTime t;
+   TimeToStruct(TimeGMT(), t);
+   return StringFormat("%04d-%02d-%02dT%02d:%02d:%02d.000Z",
+      t.year, t.mon, t.day, t.hour, t.min, t.sec);
+}
+
+//+------------------------------------------------------------------+
+//| POST a JSON payload to the FX Journal Pro backend. Every request |
+//| is signed: HMAC-SHA256(secret = sha256(ea_token),                |
+//|   message = "<timestamp>.<accountId>.<rawBody>").                |
+//+------------------------------------------------------------------+
+bool HttpPost(string path, string payload, string &outBody, int &outCode)
+{
+   outCode = 0;
+   outBody = "";
+   string url = FXJP_API_URL + path;
+
+   string ts = IsoTimestamp();
+   string reqId = StringFormat("%d_%d", (long)TimeGMT(), g_reqCounter++);
+   string sig = HmacSha256Hex(Sha256Hex(FXJP_TOKEN),
+                              ts + "." + FXJP_ACCOUNT_ID + "." + payload);
+
+   string headers = "Content-Type: application/json\r\n"
+                  + "User-Agent: FXJournalPro-EA/2.0\r\n"
+                  + "Accept: application/json\r\n"
+                  + "Authorization: Bearer " + FXJP_TOKEN + "\r\n"
+                  + "X-EA-Account-Id: " + FXJP_ACCOUNT_ID + "\r\n"
+                  + "X-EA-Timestamp: " + ts + "\r\n"
+                  + "X-EA-Signature: " + sig + "\r\n"
+                  + "X-EA-Request-Id: " + reqId + "\r\n";
+
+   char postData[];
+   StringToCharArray(payload, postData, 0, StringLen(payload), CP_UTF8);
+
+   char respData[];
+   string respHeaders;
+   int code = WebRequest("POST", url, headers, 15000, postData, respData, respHeaders);
+   outCode = code;
+
+   if (code == 200)
+   {
+      outBody = CharArrayToString(respData, 0, WHOLE_ARRAY, CP_UTF8);
+      return true;
+   }
+
+   if (code == -1)
+   {
+      int err = GetLastError();
+      if (err == 4014)
+         Print("FXJP: WebRequest is blocked. In MT5 go to Tools -> Options -> Expert Advisors and allow \"__FXJP_WEBREQUEST_HOST__\" in the WebRequest allow list.");
+      else if (err == 4015)
+         Print("FXJP: Invalid URL or the URL is not in the WebRequest allow list. Add \"__FXJP_WEBREQUEST_HOST__\".");
+      else
+         Print("FXJP: WebRequest failed, error ", err);
+   }
+   else
+   {
+      int len = ArraySize(respData);
+      if (len > 0)
+         outBody = CharArrayToString(respData, 0, WHOLE_ARRAY, CP_UTF8);
+      Print("FXJP: Server returned HTTP ", code, " for ", path);
+   }
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| POST wrapper that reacts to specific server error codes          |
+//+------------------------------------------------------------------+
+bool PostJson(string path, string payload, string &outBody)
+{
+   int code = 0;
+   bool ok = HttpPost(path, payload, outBody, code);
+   if (ok) return true;
+
+   if (code == 401)
+   {
+      if (StringFind(outBody, "EA_TOKEN_REVOKED") >= 0)
+      {
+         Comment("FJP: token revoked — download a fresh EA file");
+         g_stopped = true;
+      }
+      else if (StringFind(outBody, "SIGNATURE_MISMATCH") >= 0 ||
+               StringFind(outBody, "EA_STALE_TIMESTAMP") >= 0)
+      {
+         Print("FXJP: HMAC verification failed. Check that your PC clock (GMT) is correct.");
+      }
+      else
+      {
+         Comment("FJP: auth failed");
+         g_stopped = true;
+      }
+   }
+   else if (code == 429)
+   {
+      Print("FXJP: rate limited (429) — backing off.");
+   }
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| Backoff: 5s -> 10s -> 30s -> ... -> max 5 min                    |
+//+------------------------------------------------------------------+
+void BackOff()
+{
+   if (g_retryDelay == 0) g_retryDelay = 5;
+   else g_retryDelay = MathMin(g_retryDelay * 2, 300);
+   g_nextAttemptTime = TimeCurrent() + g_retryDelay;
+}
+
+void ResetBackOff()
+{
+   g_retryDelay = 0;
+   g_nextAttemptTime = 0;
+}
+
+//+------------------------------------------------------------------+
+//| Payload builders (each matches the server's strict zod schema)   |
+//+------------------------------------------------------------------+
+string BuildValidatePayload()
+{
+   return "{"
+      + "\"accountId\":\"" + FXJP_ACCOUNT_ID + "\","
+      + "\"login\":\"" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "\","
+      + "\"server\":\"" + JsonEscape(Trunc(AccountInfoString(ACCOUNT_SERVER), 64)) + "\","
+      + "\"build\":" + IntegerToString(TerminalInfoInteger(TERMINAL_BUILD))
+      + "}";
+}
+
+string BuildSnapshotPayload()
+{
+   return "{"
+      + "\"accountId\":\"" + FXJP_ACCOUNT_ID + "\","
+      + "\"balance\":" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2) + ","
+      + "\"equity\":" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2) + ","
+      + "\"margin\":" + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN), 2) + ","
+      + "\"marginFree\":" + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_FREE), 2) + ","
+      + "\"marginLevel\":" + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_LEVEL), 2) + ","
+      + "\"currency\":\"" + JsonEscape(Trunc(AccountInfoString(ACCOUNT_CURRENCY), 8)) + "\","
+      + "\"leverage\":" + IntegerToString(AccountInfoInteger(ACCOUNT_LEVERAGE))
+      + "}";
+}
+
+string BuildAccountBriefJson()
+{
+   return "{"
+      + "\"balance\":" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2) + ","
+      + "\"equity\":" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2) + ","
+      + "\"currency\":\"" + JsonEscape(Trunc(AccountInfoString(ACCOUNT_CURRENCY), 8)) + "\""
+      + "}";
+}
+
+string BuildHeartbeatPayload()
+{
+   return "{"
+      + "\"accountId\":\"" + FXJP_ACCOUNT_ID + "\","
+      + "\"balance\":" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2) + ","
+      + "\"equity\":" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2)
+      + "}";
+}
+
+string BuildDealJson(ulong ticket)
+{
+   string symbol = Trunc(HistoryDealGetString(ticket, DEAL_SYMBOL), 32);
+   string cmt = Trunc(HistoryDealGetString(ticket, DEAL_COMMENT), 200);
+   string s = "{";
+   s += "\"ticket\":"     + IntegerToString((long)ticket) + ",";
+   s += "\"positionId\":" + IntegerToString((long)HistoryDealGetInteger(ticket, DEAL_POSITION_ID)) + ",";
+   s += "\"time\":"       + IntegerToString((long)HistoryDealGetInteger(ticket, DEAL_TIME)) + ",";
+   s += "\"type\":"       + IntegerToString((int)HistoryDealGetInteger(ticket, DEAL_TYPE)) + ",";
+   s += "\"entry\":"      + IntegerToString((int)HistoryDealGetInteger(ticket, DEAL_ENTRY)) + ",";
+   s += "\"magic\":"      + IntegerToString((long)HistoryDealGetInteger(ticket, DEAL_MAGIC)) + ",";
+   s += "\"symbol\":\""   + JsonEscape(symbol) + "\",";
+   s += "\"volume\":"     + DoubleToString(HistoryDealGetDouble(ticket, DEAL_VOLUME), 2) + ",";
+   s += "\"price\":"      + DoubleToString(HistoryDealGetDouble(ticket, DEAL_PRICE), 5) + ",";
+   s += "\"profit\":"     + DoubleToString(HistoryDealGetDouble(ticket, DEAL_PROFIT), 2) + ",";
+   s += "\"commission\":" + DoubleToString(HistoryDealGetDouble(ticket, DEAL_COMMISSION), 2) + ",";
+   s += "\"swap\":"       + DoubleToString(HistoryDealGetDouble(ticket, DEAL_SWAP), 2) + ",";
+   s += "\"comment\":\""  + JsonEscape(cmt) + "\"";
+   s += "}";
+   return s;
+}
+
+string BuildMoneyFlowJson(ulong ticket)
+{
+   long dType = (int)HistoryDealGetInteger(ticket, DEAL_TYPE);
+   double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT);
+   string flowType = "CREDIT";
+   if (dType == DEAL_TYPE_BALANCE)
+      flowType = (profit >= 0 ? "DEPOSIT" : "WITHDRAWAL");
+   string s = "{";
+   s += "\"ticket\":"   + IntegerToString((long)ticket) + ",";
+   s += "\"type\":\""   + flowType + "\",";
+   s += "\"amount\":"   + DoubleToString(profit, 2) + ",";
+   s += "\"currency\":\"" + JsonEscape(Trunc(AccountInfoString(ACCOUNT_CURRENCY), 8)) + "\",";
+   s += "\"time\":"     + IntegerToString((long)HistoryDealGetInteger(ticket, DEAL_TIME));
+   s += "}";
+   return s;
+}
+
+//+------------------------------------------------------------------+
+//| Collect up to InpBatchSize deals with ticket > g_cursor.         |
+//| Fills g_dealsInBatch and g_flowsJson (balance/credit money flows |
+//| that belong to the collected deals).                             |
+//+------------------------------------------------------------------+
+string CollectDealBatch()
+{
+   g_dealsInBatch = 0;
+   g_flowsJson = "[";
+
+   datetime from = 0;
+   if (InpBackfillDays > 0)
+      from = TimeCurrent() - (datetime)InpBackfillDays * 86400;
+   HistorySelect(from, TimeCurrent());
+   int total = HistoryDealsTotal();
+   if (total <= 0)
+   {
+      g_flowsJson = "[]";
+      return "[]";
+   }
+
+   int flowCount = 0;
+   string json = "[";
+   for (int i = 0; i < total && g_dealsInBatch < InpBatchSize; i++)
+   {
+      ulong ticket = HistoryDealGetTicket(i);
+      if ((long)ticket <= g_cursor) continue;
+
+      long dType = (int)HistoryDealGetInteger(ticket, DEAL_TYPE);
+      string symbol = HistoryDealGetString(ticket, DEAL_SYMBOL);
+
+      if (g_dealsInBatch > 0) json += ",";
+      json += BuildDealJson(ticket);
+      g_dealsInBatch++;
+
+      if (StringLen(symbol) == 0 && (dType == DEAL_TYPE_BALANCE || dType == DEAL_TYPE_CREDIT))
+      {
+         if (flowCount > 0) g_flowsJson += ",";
+         g_flowsJson += BuildMoneyFlowJson(ticket);
+         flowCount++;
+      }
+   }
+   json += "]";
+   g_flowsJson += "]";
+   return json;
+}
+
+string BuildPositionsPayload()
+{
+   string json = "\"positions\":[";
+   int count = 0;
+   for (int i = 0; i < PositionsTotal(); i++)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if (ticket == 0) continue;
+      if (!PositionSelectByTicket(ticket)) continue;
+
+      string symbol = Trunc(PositionGetString(POSITION_SYMBOL), 32);
+      long posType = (long)PositionGetInteger(POSITION_TYPE);
+      double bid = SymbolInfoDouble(symbol, SYMBOL_BID);
+
+      if (count > 0) json += ",";
+      json += "{";
+      json += "\"positionId\":" + IntegerToString((long)PositionGetInteger(POSITION_IDENTIFIER)) + ",";
+      json += "\"ticket\":"    + IntegerToString((long)PositionGetInteger(POSITION_TICKET)) + ",";
+      json += "\"symbol\":\""  + JsonEscape(symbol) + "\",";
+      json += "\"side\":\""    + (posType == POSITION_TYPE_BUY ? "Buy" : "Sell") + "\",";
+      json += "\"volume\":"    + DoubleToString(PositionGetDouble(POSITION_VOLUME), 2) + ",";
+      json += "\"openTime\":"  + IntegerToString((long)PositionGetInteger(POSITION_TIME)) + ",";
+      json += "\"openPrice\":" + DoubleToString(PositionGetDouble(POSITION_PRICE_OPEN), 5) + ",";
+      json += "\"sl\":"        + DoubleToString(PositionGetDouble(POSITION_SL), 5) + ",";
+      json += "\"tp\":"        + DoubleToString(PositionGetDouble(POSITION_TP), 5) + ",";
+      json += "\"commission\":"+ DoubleToString(PositionGetDouble(POSITION_COMMISSION), 2) + ",";
+      json += "\"swap\":"      + DoubleToString(PositionGetDouble(POSITION_SWAP), 2) + ",";
+      json += "\"profit\":"    + DoubleToString(PositionGetDouble(POSITION_PROFIT), 2) + ",";
+      json += "\"currentPrice\":" + DoubleToString(bid, 5);
+      json += "}";
+      count++;
+   }
+   json += "]";
+   return "{\"accountId\":\"" + FXJP_ACCOUNT_ID + "\"," + json + "}";
+}
+
+string BuildOrdersPayload()
+{
+   string json = "\"orders\":[";
+   int count = 0;
+   for (int i = 0; i < OrdersTotal(); i++)
+   {
+      ulong ticket = OrderGetTicket(i);
+      if (ticket == 0) continue;
+      if (!OrderSelect(ticket)) continue;
+
+      string otype = "Other";
+      long t = (long)OrderGetInteger(ORDER_TYPE);
+      if (t == ORDER_TYPE_BUY_LIMIT) otype = "Buy Limit";
+      else if (t == ORDER_TYPE_BUY_STOP) otype = "Buy Stop";
+      else if (t == ORDER_TYPE_SELL_LIMIT) otype = "Sell Limit";
+      else if (t == ORDER_TYPE_SELL_STOP) otype = "Sell Stop";
+      else if (t == ORDER_TYPE_BUY_STOP_LIMIT) otype = "Buy Stop Limit";
+      else if (t == ORDER_TYPE_SELL_STOP_LIMIT) otype = "Sell Stop Limit";
+
+      string state = "Unknown";
+      long st = (long)OrderGetInteger(ORDER_STATE);
+      if (st == ORDER_STATE_STARTED) state = "Started";
+      else if (st == ORDER_STATE_PLACED) state = "Placed";
+      else if (st == ORDER_STATE_CANCELED) state = "Canceled";
+      else if (st == ORDER_STATE_PARTIAL) state = "Partial";
+      else if (st == ORDER_STATE_FILLED) state = "Filled";
+      else if (st == ORDER_STATE_REJECTED) state = "Rejected";
+      else if (st == ORDER_STATE_EXPIRED) state = "Expired";
+      else if (st == ORDER_STATE_REQUEST_ADD || st == ORDER_STATE_REQUEST_MODIFY ||
+               st == ORDER_STATE_REQUEST_CANCEL) state = "Requested";
+
+      if (count > 0) json += ",";
+      json += "{";
+      json += "\"orderId\":"  + IntegerToString((long)OrderGetInteger(ORDER_TICKET)) + ",";
+      json += "\"symbol\":\"" + JsonEscape(Trunc(OrderGetString(ORDER_SYMBOL), 32)) + "\",";
+      json += "\"type\":\""   + otype + "\",";
+      json += "\"volume\":"   + DoubleToString(OrderGetDouble(ORDER_VOLUME_CURRENT), 2) + ",";
+      json += "\"openPrice\":"+ DoubleToString(OrderGetDouble(ORDER_PRICE_OPEN), 5) + ",";
+      json += "\"sl\":"       + DoubleToString(OrderGetDouble(ORDER_SL), 5) + ",";
+      json += "\"tp\":"       + DoubleToString(OrderGetDouble(ORDER_TP), 5) + ",";
+      json += "\"magic\":"    + IntegerToString((long)OrderGetInteger(ORDER_MAGIC)) + ",";
+      json += "\"state\":\""  + state + "\"";
+      json += "}";
+      count++;
+   }
+   json += "]";
+   return "{\"accountId\":\"" + FXJP_ACCOUNT_ID + "\"," + json + "}";
+}
+
+//+------------------------------------------------------------------+
+//| API calls                                                        |
+//+------------------------------------------------------------------+
+bool Validate()
+{
+   string body;
+   if (!PostJson("/ea/validate", BuildValidatePayload(), body)) return false;
+
+   long lastDeal = ParseIntField(body, "lastDealId");
+   if (lastDeal > g_cursor)
+   {
+      g_cursor = lastDeal;
+      GlobalVariableSet(g_gvName, (double)g_cursor);
+   }
+   g_authed = true;
+   g_lastSyncTime = TimeCurrent();
+   ResetBackOff();
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| Push all pending deals to the backend (batched) + money flows    |
+//+------------------------------------------------------------------+
+bool PostDeals()
+{
+   int guard = 0;
+   bool anyOk = false;
+   while (guard < 1000 && !g_stopped)
+   {
+      guard++;
+      string dealsJson = CollectDealBatch();
+      if (g_dealsInBatch <= 0) break;
+
+      string payload = "{"
+         + "\"accountId\":\"" + FXJP_ACCOUNT_ID + "\","
+         + "\"deals\":"       + dealsJson + ","
+         + "\"moneyFlows\":"  + g_flowsJson + ","
+         + "\"account\":"     + BuildAccountBriefJson()
+         + "}";
+
+      string outBody;
+      if (!PostJson("/ea/sync", payload, outBody))
+      {
+         if (!anyOk) return false;
+         break;
+      }
+      anyOk = true;
+
+      // Trust the server cursor: it stores every deal and returns the max stored
+      long serverCursor = ParseIntField(outBody, "cursor");
+      if (serverCursor > g_cursor) g_cursor = serverCursor;
+      GlobalVariableSet(g_gvName, (double)g_cursor);
+      g_lastSyncTime = TimeCurrent();
+
+      // Pace backfill bursts so we stay under the per-account rate limit
+      Sleep(600);
+   }
+   return anyOk;
+}
+
+//+------------------------------------------------------------------+
+//| One full sync cycle: snapshot -> positions -> orders -> deals    |
+//+------------------------------------------------------------------+
+void PeriodicSync()
+{
+   if (g_stopped || g_syncing) return;
+   if (g_nextAttemptTime > 0 && TimeCurrent() < g_nextAttemptTime) return;
+
+   g_syncing = true;
+
+   if (!g_authed)
+   {
+      if (!Validate())
+      {
+         BackOff();
+         g_syncing = false;
+         return;
+      }
+   }
+
+   bool ok = false;
+   string body;
+
+   if (PostJson("/ea/account", BuildSnapshotPayload(), body)) ok = true;
+   if (!g_stopped && PostJson("/ea/positions", BuildPositionsPayload(), body)) ok = true;
+   if (!g_stopped && PostJson("/ea/orders", BuildOrdersPayload(), body)) ok = true;
+   if (!g_stopped && PostDeals()) ok = true;
+   if (!g_stopped && PostJson("/ea/heartbeat", BuildHeartbeatPayload(), body)) ok = true;
+
+   if (ok) ResetBackOff();
+   else BackOff();
+
+   g_syncing = false;
+}
+
+//+------------------------------------------------------------------+
+//| Expert Advisor lifecycle                                         |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   g_gvName = "FXJP_" + FXJP_ACCOUNT_ID;
+   g_cursor = (long)GlobalVariableGet(g_gvName);
+
+   EventSetTimer(InpSyncIntervalSec);
+
+   // Handshake first. On transient failures the timer retries with backoff;
+   // a hard 401 (bad token) sets g_stopped and the terminal comment.
+   if (!Validate())
+   {
+      if (!g_stopped) BackOff();
+   }
+   else if (InpFullSyncOnStart)
+   {
+      PeriodicSync();
+   }
+
+   return INIT_SUCCEEDED;
+}
+
+void OnDeinit(const int reason)
+{
+   EventKillTimer();
+}
+
+void OnTick()
+{
+   // Real-time sync is handled by OnTradeTransaction; the timer is the fallback.
+}
+
+void OnTimer()
+{
+   if (g_stopped) return;
+   if (g_nextAttemptTime > 0 && TimeCurrent() < g_nextAttemptTime) return;
+   PeriodicSync();
+}
+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+{
+   // Fire on every new deal so closed trades + balance changes sync instantly
+   if (g_stopped) return;
+   if (trans.type == TRADE_TRANSACTION_DEAL_ADD)
+      PeriodicSync();
+}
+`;
+
+// src/mt5-integration-kit/backend/mt5Service.ts
+var ENTRY_IN = 0;
+var ENTRY_OUT = 1;
+var ENTRY_INOUT = 2;
+var DEAL_TYPE_SELL = 1;
+var DEAL_TYPE_BALANCE = 2;
+var DEAL_TYPE_CREDIT = 3;
+function generateEaToken() {
+  return "ea_" + crypto.randomBytes(24).toString("hex");
+}
+function hmacSign(message, secret) {
+  return crypto.createHmac("sha256", secret).update(message).digest("hex");
+}
+function generateEaSource(account, apiUrl) {
+  const urlObj = new URL(apiUrl);
+  const host = urlObj.host;
+  return EA_TEMPLATE2.split("__FXJP_ACCOUNT_ID__").join(account.id).split("__FXJP_TOKEN__").join(account.eaToken || "").split("__FXJP_API_URL__").join(apiUrl).split("__FXJP_WEBREQUEST_HOST__").join(host);
+}
+function verifyEaSignature(req, account, token) {
+  const headerSig = (req.headers["x-ea-signature"] || "").toString().trim();
+  const headerTs = (req.headers["x-ea-timestamp"] || "").toString().trim();
+  const accountId = String(account.id || "");
+  const rawBody = typeof req.rawBody === "string" ? req.rawBody : "";
+  if (!headerSig || !headerTs) {
+    return { ok: false, code: "EA_SIGNATURE_MISSING", reason: "Missing X-EA-Signature / X-EA-Timestamp headers" };
+  }
+  const ts = Date.parse(headerTs);
+  if (Number.isNaN(ts)) {
+    return { ok: false, code: "EA_BAD_TIMESTAMP", reason: "X-EA-Timestamp is not a valid date" };
+  }
+  const windowMs = 5 * 60 * 1e3;
+  if (Math.abs(Date.now() - ts) > windowMs) {
+    return { ok: false, code: "EA_STALE_TIMESTAMP", reason: "Request timestamp outside allowed window" };
+  }
+  const message = `${headerTs}.${accountId}.${rawBody}`;
+  const expected = hmacSign(message, token);
+  const provided = Buffer.from(headerSig, "utf8");
+  const expectedBuf = Buffer.from(expected, "utf8");
+  if (provided.length !== expectedBuf.length || !crypto.timingSafeEqual(provided, expectedBuf)) {
+    return { ok: false, code: "SIGNATURE_MISMATCH", reason: "HMAC signature does not match" };
+  }
+  return { ok: true };
+}
+function recomputeMt5Trades(accountId, deals, skipBalanceTicket) {
+  const result = [];
+  const posGroups = /* @__PURE__ */ new Map();
+  for (const d of deals) {
+    if (d.symbol && (d.entry === ENTRY_IN || d.entry === ENTRY_OUT || d.entry === ENTRY_INOUT)) {
+      if (!posGroups.has(d.positionId)) posGroups.set(d.positionId, []);
+      posGroups.get(d.positionId).push(d);
+    }
+  }
+  for (const [posId, list] of posGroups) {
+    const inDeals = list.filter((d) => d.entry === ENTRY_IN);
+    const outDeals = list.filter((d) => d.entry === ENTRY_OUT || d.entry === ENTRY_INOUT);
+    if (outDeals.length === 0) continue;
+    const inDeal = inDeals[0] || outDeals[0];
+    const lastOut = outDeals[outDeals.length - 1];
+    const direction = inDeals.length > 0 ? inDeals[0].type === DEAL_TYPE_SELL ? "Sell" : "Buy" : lastOut.type === DEAL_TYPE_SELL ? "Buy" : "Sell";
+    const totalProfit = list.reduce((s, d) => s + (d.profit || 0), 0);
+    const totalComm = list.reduce((s, d) => s + (d.commission || 0), 0);
+    const totalSwap = list.reduce((s, d) => s + (d.swap || 0), 0);
+    result.push({
+      id: `mt5_${accountId}_${posId}`,
+      accountId,
+      date: new Date(inDeal.time * 1e3).toISOString(),
+      exitTime: new Date(lastOut.time * 1e3).toISOString(),
+      symbol: lastOut.symbol || inDeal.symbol || "UNKNOWN",
+      type: direction,
+      lotSize: lastOut.volume || inDeal.volume || 0.01,
+      entryPrice: inDeal.price,
+      exitPrice: lastOut.price,
+      profit: Math.round((totalProfit + totalComm + totalSwap) * 100) / 100,
+      commission: totalComm,
+      swap: totalSwap,
+      strategy: "MT5 EA Sync",
+      tags: ["MT5 Sync"],
+      isMt5Sync: true,
+      eaDealId: lastOut.ticket,
+      eaPositionId: posId
+    });
+  }
+  for (const d of deals) {
+    if (d.symbol) continue;
+    if (d.type !== DEAL_TYPE_BALANCE && d.type !== DEAL_TYPE_CREDIT) continue;
+    if (skipBalanceTicket !== void 0 && d.ticket === skipBalanceTicket) continue;
+    result.push({
+      id: `mt5_${accountId}_dep_${d.ticket}`,
+      accountId,
+      date: new Date(d.time * 1e3).toISOString(),
+      exitTime: new Date(d.time * 1e3).toISOString(),
+      symbol: "BALANCE",
+      type: d.profit >= 0 ? "Deposit" : "Withdrawal",
+      lotSize: 0,
+      entryPrice: 0,
+      exitPrice: 0,
+      profit: d.profit,
+      commission: d.commission || 0,
+      swap: d.swap || 0,
+      strategy: "MT5 EA Sync",
+      tags: ["MT5 Sync"],
+      isMt5Sync: true,
+      eaDealId: d.ticket,
+      eaPositionId: 0
+    });
+  }
+  return result;
+}
+
+// src/mt5-integration-kit/backend/mt5Router.ts
+function safeTokenEqual(a, b) {
+  const ha = crypto2.createHash("sha256").update(String(a ?? ""), "utf8").digest();
+  const hb = crypto2.createHash("sha256").update(String(b ?? ""), "utf8").digest();
+  return crypto2.timingSafeEqual(ha, hb);
+}
+function createMt5Router(deps) {
+  const router = Router();
+  const workerAuth = (req, res, next) => {
+    const configured = String(deps.bridgeAuthToken || "").trim();
+    if (!configured) {
+      return res.status(503).json({ error: "Bridge sync is not configured on this deployment.", code: "BRIDGE_NOT_CONFIGURED" });
+    }
+    const header = String(req.headers.authorization || "").trim();
+    const presented = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+    if (presented && safeTokenEqual(presented, configured)) return next();
+    return res.status(401).json({ error: "Unauthorized worker" });
+  };
+  router.get("/ea/:accountId/download", async (req, res) => {
+    try {
+      const account = await deps.getAccount(req.params.accountId);
+      if (!account) return res.status(404).json({ error: "Account not found" });
+      if (!account.eaToken) {
+        account.eaToken = generateEaToken();
+        account.eaStatus = "Not Connected";
+        await deps.saveAccount(account);
+      }
+      const proto = req.headers["x-forwarded-proto"] || req.protocol;
+      const host = req.headers["x-forwarded-host"] || req.get("host");
+      const apiUrl = `${proto}://${host}/api/mt5`;
+      const source = generateEaSource(account, apiUrl);
+      const safeName = String(account.name || "Account").replace(/[^A-Za-z0-9]+/g, "_");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="FXJournalPro_Sync_${safeName}.mq5"`);
+      return res.send(source);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+  router.post("/ea/validate", async (req, res) => {
+    const { token, accountId, login, server, build } = req.body;
+    const account = await deps.getAccount(accountId);
+    if (!account || account.eaToken !== token) {
+      return res.status(401).json({ error: "Invalid EA Token", code: "EA_AUTH_FAILED" });
+    }
+    const sig = verifyEaSignature(req, account, token);
+    if (!sig.ok) return res.status(401).json({ error: sig.reason, code: sig.code });
+    account.eaStatus = "Connected";
+    account.terminalLogin = login;
+    account.terminalServer = server;
+    account.terminalBuild = build;
+    account.lastHeartbeatAt = (/* @__PURE__ */ new Date()).toISOString();
+    await deps.saveAccount(account);
+    return res.json({ ok: true, status: "Connected", lastDealId: account.eaLastDealId || 0, portfolioId: account.id });
+  });
+  router.post("/ea/account", async (req, res) => {
+    const { token, accountId, balance, equity, margin, marginFree, currency } = req.body;
+    const account = await deps.getAccount(accountId);
+    if (!account || account.eaToken !== token) return res.status(401).json({ error: "Unauthorized" });
+    account.currentBalance = balance;
+    account.equity = equity;
+    if (currency) account.currency = currency;
+    account.lastHeartbeatAt = (/* @__PURE__ */ new Date()).toISOString();
+    await deps.saveAccount(account);
+    await deps.saveSnapshots([{
+      accountId,
+      balance,
+      equity,
+      margin,
+      marginFree,
+      currency,
+      capturedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }]);
+    return res.json({ ok: true, captured: true });
+  });
+  router.post("/ea/positions", async (req, res) => {
+    const { token, accountId, positions } = req.body;
+    const account = await deps.getAccount(accountId);
+    if (!account || account.eaToken !== token) return res.status(401).json({ error: "Unauthorized" });
+    await deps.saveOpenPositions(accountId, positions || []);
+    return res.json({ ok: true, count: (positions || []).length });
+  });
+  router.post("/ea/orders", async (req, res) => {
+    const { token, accountId, orders } = req.body;
+    const account = await deps.getAccount(accountId);
+    if (!account || account.eaToken !== token) return res.status(401).json({ error: "Unauthorized" });
+    await deps.savePendingOrders(accountId, orders || []);
+    return res.json({ ok: true, count: (orders || []).length });
+  });
+  router.post("/ea/heartbeat", async (req, res) => {
+    const { token, accountId, balance, equity } = req.body;
+    const account = await deps.getAccount(accountId);
+    if (!account || account.eaToken !== token) return res.status(401).json({ error: "Unauthorized" });
+    if (balance !== void 0) account.currentBalance = balance;
+    if (equity !== void 0) account.equity = equity;
+    account.lastHeartbeatAt = (/* @__PURE__ */ new Date()).toISOString();
+    await deps.saveAccount(account);
+    return res.json({ ok: true });
+  });
+  router.post("/ea/sync", async (req, res) => {
+    const { token, accountId, deals } = req.body;
+    const account = await deps.getAccount(accountId);
+    if (!account || account.eaToken !== token) return res.status(401).json({ error: "Unauthorized" });
+    const trades = recomputeMt5Trades(accountId, deals || []);
+    await deps.saveTrades(trades);
+    const maxTicket = (deals || []).reduce((max, d) => Math.max(max, d.ticket || 0), account.eaLastDealId || 0);
+    account.eaLastDealId = maxTicket;
+    account.lastSyncTime = (/* @__PURE__ */ new Date()).toISOString();
+    await deps.saveAccount(account);
+    return res.json({ ok: true, totalTrades: trades.length, cursor: maxTicket });
+  });
+  router.post("/worker/heartbeat", workerAuth, (_req, res) => res.json({ success: true }));
+  router.get("/worker/jobs", workerAuth, async (_req, res) => {
+    const jobs = await deps.getQueuedJobs();
+    return res.json({ jobs: jobs.slice(0, 1) });
+  });
+  router.post("/worker/job/:id/status", workerAuth, async (req, res) => {
+    const { status, error_message } = req.body;
+    await deps.updateJobStatus(req.params.id, status, error_message);
+    return res.json({ success: true });
+  });
+  router.post("/worker/job/:id/trades", workerAuth, async (req, res) => {
+    const result = await deps.saveImportedTrades(req.params.id, req.body);
+    return res.json(result);
+  });
+  return router;
+}
+
 // server.ts
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import MetaApiModule from "metaapi.cloud-sdk/dist/index";
 import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 
 // auth.ts
@@ -678,8 +1583,14 @@ import { getMigrations } from "better-auth/db/migration";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createRequire } from "node:module";
 import path from "path";
-import crypto from "node:crypto";
-var nodeRequire = createRequire(import.meta.url);
+import crypto3 from "node:crypto";
+var getNodeRequire = () => {
+  if (typeof __require !== "undefined") return __require;
+  if (typeof import.meta !== "undefined" && import.meta?.url) {
+    return createRequire(import.meta.url);
+  }
+  return createRequire(path.join(process.cwd(), "dummy.js"));
+};
 var IS_SERVERLESS = !!(process.env.VERCEL || process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
 var DB_PATH = path.join(process.cwd(), "auth.sqlite");
 function createMemoryStore() {
@@ -705,7 +1616,7 @@ function getDatabaseAdapter() {
     return memoryAdapter(createMemoryStore());
   }
   if (process.env.DATABASE_URL) {
-    const pgModule = nodeRequire("pg");
+    const pgModule = getNodeRequire()("pg");
     const Pool = pgModule.Pool ?? pgModule.default?.Pool;
     return new Pool({
       connectionString: process.env.DATABASE_URL,
@@ -714,7 +1625,7 @@ function getDatabaseAdapter() {
     });
   }
   try {
-    const sqliteModule = nodeRequire("node:sqlite");
+    const sqliteModule = getNodeRequire()("node:sqlite");
     return new sqliteModule.DatabaseSync(DB_PATH);
   } catch (e) {
     console.warn("[Better Auth] Could not load SQLite, falling back to in-memory adapter:", e);
@@ -730,7 +1641,7 @@ function resolveAuthSecret() {
     );
   }
   console.warn("[Better Auth] No BETTER_AUTH_SECRET set \u2014 using an ephemeral development key.");
-  return crypto.randomBytes(32).toString("hex");
+  return crypto3.randomBytes(32).toString("hex");
 }
 function resolveBaseURL() {
   if (process.env.BETTER_AUTH_URL?.trim()) {
@@ -932,8 +1843,8 @@ var auth = betterAuth({
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://fx-journal-pro-pi.vercel.app",
-    "https://fxjournalp.netlify.app",
     "https://fxjournalpro.com",
+    "https://www.fxjournalpro.com",
     ...process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL.trim()] : [],
     ...process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL.trim()}`] : [],
     ...process.env.VERCEL_PROJECT_PRODUCTION_URL ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`] : [],
@@ -996,7 +1907,6 @@ async function autoMigrateBetterAuth() {
 }
 
 // server.ts
-var MetaApi = MetaApiModule.default || MetaApiModule;
 autoMigrateBetterAuth().catch((err) => console.error("[Better Auth] Auto-migrate failed:", err?.message || err));
 var IS_SERVERLESS2 = !!(process.env.VERCEL || process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
 var IS_DEV = !IS_SERVERLESS2 && process.env.NODE_ENV !== "production";
@@ -1108,7 +2018,10 @@ function loadDatabaseFromFile() {
       tradingStyle: "Day Trading",
       mainMarkets: ["Forex", "Gold"],
       onboardingCompleted: true,
-      isPro: true
+      isPro: true,
+      // The local store has no column defaults, so a seeded row without this
+      // reads "Joined: N/A" in the user registry.
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
     }
   ] : [];
   const initialDB = {
@@ -1233,7 +2146,7 @@ async function sendOtpEmail(email, otp, subject = "Your FX Journal Pro Verificat
   return { success: false, provider: "None", otp };
 }
 function createEmptyUserDb(userId, email, injectDummyUser = false) {
-  const cleanUserId = userId?.trim() || `user_${crypto2.randomUUID()}`;
+  const cleanUserId = userId?.trim() || `user_${crypto4.randomUUID()}`;
   const cleanEmail = email ? email.toLowerCase().trim() : "";
   const isDev = IS_DEV && !!DEV_ACCOUNT_EMAIL && !!DEV_ADMIN_PASSWORD_HASH && cleanEmail === DEV_ACCOUNT_EMAIL;
   const users = [];
@@ -1250,7 +2163,8 @@ function createEmptyUserDb(userId, email, injectDummyUser = false) {
       mainMarkets: ["Forex", "Gold"],
       onboardingCompleted: isDev ? true : false,
       isPro: isDev ? true : false,
-      isEmailVerified: true
+      isEmailVerified: true,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   }
   return {
@@ -1264,12 +2178,13 @@ function createEmptyUserDb(userId, email, injectDummyUser = false) {
         platform: "MT5",
         accountType: "Demo",
         currency: "USD",
-        startingBalance: 1e4,
-        currentBalance: 1e4,
-        equity: 1e4,
+        startingBalance: 0,
+        currentBalance: 0,
+        equity: 0,
         status: "Active",
         eaToken: `ea_demo_${cleanUserId.slice(-8)}`,
-        eaStatus: "Not Connected"
+        eaStatus: "Not Connected",
+        isDefaultDemo: true
       }
     ] : [],
     trades: [],
@@ -1279,13 +2194,21 @@ function createEmptyUserDb(userId, email, injectDummyUser = false) {
     payments: []
   };
 }
+var OPAQUE_JSON_KEYS = /* @__PURE__ */ new Set([
+  "preferences",
+  "mentor_access",
+  "mentorAccess",
+  "payout_details",
+  "payoutDetails",
+  "detail"
+]);
 function toCamel(obj) {
   if (Array.isArray(obj)) return obj.map(toCamel);
   if (obj !== null && typeof obj === "object") {
     const n = {};
     Object.keys(obj).forEach((k) => {
       const camelKey = k.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-      n[camelKey] = toCamel(obj[k]);
+      n[camelKey] = OPAQUE_JSON_KEYS.has(k) ? obj[k] : toCamel(obj[k]);
     });
     return n;
   }
@@ -1297,13 +2220,27 @@ function toSnake(obj) {
     const n = {};
     Object.keys(obj).forEach((k) => {
       const snakeKey = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-      n[snakeKey] = toSnake(obj[k]);
+      n[snakeKey] = OPAQUE_JSON_KEYS.has(k) ? obj[k] : toSnake(obj[k]);
     });
     return n;
   }
   return obj;
 }
-function generateEaToken() {
+function prefsValue(prefs, camelKey) {
+  if (!prefs || typeof prefs !== "object") return void 0;
+  if (prefs[camelKey] !== void 0) return toCamel(prefs[camelKey]);
+  const snakeKey = camelKey.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`);
+  if (prefs[snakeKey] !== void 0) return toCamel(prefs[snakeKey]);
+  return void 0;
+}
+function setPrefsValue(prefs, camelKey, value) {
+  const target = prefs && typeof prefs === "object" ? prefs : {};
+  const snakeKey = camelKey.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`);
+  if (snakeKey !== camelKey) delete target[snakeKey];
+  target[camelKey] = value;
+  return target;
+}
+function generateEaToken2() {
   return `ea_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 6)}`;
 }
 function apiBaseUrl(req) {
@@ -1311,7 +2248,7 @@ function apiBaseUrl(req) {
   const host = (req.headers["x-forwarded-host"]?.toString().split(",")[0] || req.get("host") || "www.fxjournalpro.com").trim();
   return `${proto}://${host}/api/mt5`;
 }
-function generateEaSource(account, apiUrl) {
+function generateEaSource2(account, apiUrl) {
   const host = apiUrl.replace(/^https?:\/\//, "").split("/")[0];
   return EA_TEMPLATE.split("__FXJP_ACCOUNT_ID__").join(account.id).split("__FXJP_TOKEN__").join(account.eaToken || "").split("__FXJP_API_URL__").join(apiUrl).split("__FXJP_WEBREQUEST_HOST__").join(host);
 }
@@ -1386,14 +2323,14 @@ var SESSION_SECRET = (() => {
     throw new Error("SESSION_SECRET is required in production");
   }
   console.warn("[Auth] SESSION_SECRET not set \u2014 using an ephemeral development key.");
-  return crypto2.randomBytes(32).toString("hex");
+  return crypto4.randomBytes(32).toString("hex");
 })();
 function b64url(input) {
   return Buffer.from(input).toString("base64url");
 }
 function signSessionValue(payload) {
   const body = b64url(JSON.stringify({ ...payload, iat: Date.now() }));
-  const sig = crypto2.createHmac("sha256", SESSION_SECRET).update(body).digest("base64url");
+  const sig = crypto4.createHmac("sha256", SESSION_SECRET).update(body).digest("base64url");
   return `${body}.${sig}`;
 }
 function verifySessionValue(raw) {
@@ -1402,10 +2339,10 @@ function verifySessionValue(raw) {
   if (dot <= 0) return null;
   const body = raw.slice(0, dot);
   const sig = raw.slice(dot + 1);
-  const expected = crypto2.createHmac("sha256", SESSION_SECRET).update(body).digest("base64url");
+  const expected = crypto4.createHmac("sha256", SESSION_SECRET).update(body).digest("base64url");
   const sigBuf = Buffer.from(sig);
   const expBuf = Buffer.from(expected);
-  if (sigBuf.length !== expBuf.length || !crypto2.timingSafeEqual(sigBuf, expBuf)) return null;
+  if (sigBuf.length !== expBuf.length || !crypto4.timingSafeEqual(sigBuf, expBuf)) return null;
   try {
     const parsed = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
     if (!parsed?.iat || Date.now() - parsed.iat > SESSION_TTL_MS) return null;
@@ -1507,25 +2444,25 @@ function canExposeOtp() {
   return IS_DEV && process.env.EXPOSE_DEV_OTP !== "false";
 }
 function sha256Hex(value) {
-  return crypto2.createHash("sha256").update(value, "utf8").digest("hex");
+  return crypto4.createHash("sha256").update(value, "utf8").digest("hex");
 }
-function safeTokenEqual(a, b) {
+function safeTokenEqual2(a, b) {
   try {
     const aBuf = Buffer.from(a, "utf8");
     const bBuf = Buffer.from(b, "utf8");
     if (aBuf.length !== bBuf.length) return false;
-    return crypto2.timingSafeEqual(aBuf, bBuf);
+    return crypto4.timingSafeEqual(aBuf, bBuf);
   } catch {
     return false;
   }
 }
-function hmacSign(message, token) {
-  return crypto2.createHmac("sha256", sha256Hex(token)).update(message, "utf8").digest("hex");
+function hmacSign2(message, token) {
+  return crypto4.createHmac("sha256", sha256Hex(token)).update(message, "utf8").digest("hex");
 }
 function eaHmacMessage(timestamp, accountId, rawBody) {
   return `${timestamp}.${accountId}.${rawBody || ""}`;
 }
-function verifyEaSignature(req, account, token) {
+function verifyEaSignature2(req, account, token) {
   const headerSig = (req.headers["x-ea-signature"] || "").toString().trim();
   const headerTs = (req.headers["x-ea-timestamp"] || "").toString().trim();
   const accountId = String(account.id || "");
@@ -1542,10 +2479,10 @@ function verifyEaSignature(req, account, token) {
   if (Math.abs(now - ts) > windowMin * 60 * 1e3) {
     return { ok: false, code: "EA_STALE_TIMESTAMP", reason: "Request timestamp outside allowed window" };
   }
-  const expected = hmacSign(eaHmacMessage(headerTs, accountId, rawBody), token);
+  const expected = hmacSign2(eaHmacMessage(headerTs, accountId, rawBody), token);
   const provided = Buffer.from(headerSig, "utf8");
   const expectedBuf = Buffer.from(expected, "utf8");
-  const sigOk = provided.length === expectedBuf.length && crypto2.timingSafeEqual(provided, expectedBuf);
+  const sigOk = provided.length === expectedBuf.length && crypto4.timingSafeEqual(provided, expectedBuf);
   if (!sigOk) {
     return { ok: false, code: "SIGNATURE_MISMATCH", reason: "HMAC signature does not match" };
   }
@@ -1583,7 +2520,7 @@ async function authEaRequest(req, res, bodyToken) {
     return null;
   }
   const token = resolveEaToken(req, bodyToken);
-  if (!token || !account.eaToken || !safeTokenEqual(token, account.eaToken)) {
+  if (!token || !account.eaToken || !safeTokenEqual2(token, account.eaToken)) {
     res.status(401).json({ error: "Invalid EA token. Reset the token from your dashboard and download a new EA file.", code: "EA_AUTH_FAILED" });
     return null;
   }
@@ -1591,7 +2528,7 @@ async function authEaRequest(req, res, bodyToken) {
     res.status(401).json({ error: "EA token revoked. Download a fresh EA file.", code: "EA_TOKEN_REVOKED" });
     return null;
   }
-  const sig = verifyEaSignature(req, account, token);
+  const sig = verifyEaSignature2(req, account, token);
   if (!sig.ok) {
     const legacyAllowed = process.env.EA_ALLOW_LEGACY_TOKEN !== "false";
     const sentSignatureHeaders = !!(req.headers["x-ea-signature"] || "" || (req.headers["x-ea-timestamp"] || ""));
@@ -1657,13 +2594,13 @@ function cloudMasterKey() {
 function encryptInvestorPassword(plaintext) {
   const master = cloudMasterKey();
   if (!master) return null;
-  const dek = crypto2.randomBytes(32);
-  const iv = crypto2.randomBytes(12);
-  const cipher = crypto2.createCipheriv("aes-256-gcm", dek, iv);
+  const dek = crypto4.randomBytes(32);
+  const iv = crypto4.randomBytes(12);
+  const cipher = crypto4.createCipheriv("aes-256-gcm", dek, iv);
   const ct = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
-  const wrapIv = crypto2.randomBytes(12);
-  const wc = crypto2.createCipheriv("aes-256-gcm", master, wrapIv);
+  const wrapIv = crypto4.randomBytes(12);
+  const wc = crypto4.createCipheriv("aes-256-gcm", master, wrapIv);
   const wct = Buffer.concat([wc.update(dek), wc.final()]);
   const wt = wc.getAuthTag();
   const payload = Buffer.concat([iv, tag, wrapIv, wt, wct, ct]);
@@ -1683,10 +2620,10 @@ function decryptInvestorPassword(account) {
     const wrapTag = payload.subarray(40, 56);
     const wct = payload.subarray(56, 88);
     const ct = payload.subarray(88);
-    const wd = crypto2.createDecipheriv("aes-256-gcm", master, wrapIv);
+    const wd = crypto4.createDecipheriv("aes-256-gcm", master, wrapIv);
     wd.setAuthTag(wrapTag);
     const dek = Buffer.concat([wd.update(wct), wd.final()]);
-    const d = crypto2.createDecipheriv("aes-256-gcm", dek, iv);
+    const d = crypto4.createDecipheriv("aes-256-gcm", dek, iv);
     d.setAuthTag(tag);
     return Buffer.concat([d.update(ct), d.final()]).toString("utf8");
   } catch (e) {
@@ -1744,16 +2681,30 @@ var META_DEAL_ENTRY = {
 var cloudApi = null;
 var cloudWorkers = /* @__PURE__ */ new Map();
 var cloudJobLocks = /* @__PURE__ */ new Set();
-function getCloudApi() {
+var sdkUnavailable = false;
+async function getCloudApi() {
   const token = process.env.META_API_TOKEN?.trim();
-  if (!token) return null;
-  if (!cloudApi) {
-    cloudApi = new MetaApi(token, {
-      application: "journalpro",
-      requestTimeout: 60,
-      connectTimeout: 60
-    });
+  if (!token || sdkUnavailable) return null;
+  if (cloudApi) return cloudApi;
+  let MetaApi = null;
+  try {
+    const mod = await import(
+      /* @vite-ignore */
+      "metaapi.cloud-sdk/dist/index"
+    );
+    MetaApi = mod.default?.default || mod.default || mod;
+  } catch {
+    if (!sdkUnavailable) {
+      console.warn("[Cloud] metaapi.cloud-sdk is not installed \u2014 cloud sync is unavailable. `npm i metaapi.cloud-sdk` to enable it.");
+      sdkUnavailable = true;
+    }
+    return null;
   }
+  cloudApi = new MetaApi(token, {
+    application: "journalpro",
+    requestTimeout: 60,
+    connectTimeout: 60
+  });
   return cloudApi;
 }
 function cloudErrorCode(e) {
@@ -1892,9 +2843,9 @@ async function cloudSyncNow(db, account, session, initial) {
     if (!res?.synchronizing) break;
     await new Promise((r) => setTimeout(r, 1e4 * (attempt + 1)));
   }
-  const moneyFlows = deals.filter((d) => !d.symbol && (d.type === DEAL_TYPE_BALANCE || d.type === DEAL_TYPE_CREDIT)).map((d) => ({
+  const moneyFlows = deals.filter((d) => !d.symbol && (d.type === DEAL_TYPE_BALANCE2 || d.type === DEAL_TYPE_CREDIT2)).map((d) => ({
     ticket: d.ticket,
-    type: d.type === DEAL_TYPE_BALANCE ? d.profit >= 0 ? "DEPOSIT" : "WITHDRAWAL" : "CREDIT",
+    type: d.type === DEAL_TYPE_BALANCE2 ? d.profit >= 0 ? "DEPOSIT" : "WITHDRAWAL" : "CREDIT",
     amount: d.profit,
     currency,
     time: d.time
@@ -1941,7 +2892,7 @@ async function runCloudConnect(db, job, account) {
   const server = String(account.mt5Server || "").trim();
   if (!login || !server) throw new Error("MT5 login/server are not set on this account");
   account.isMt5Sync = true;
-  const api = getCloudApi();
+  const api = await getCloudApi();
   if (!api) throw new Error("META_API_TOKEN is not configured on this deployment");
   let ma = null;
   try {
@@ -2033,7 +2984,7 @@ async function runCloudSyncNow(db, job, account) {
   const login = String(account.mt5Login || "").trim();
   const server = String(account.mt5Server || "").trim();
   if (!login || !server) throw new Error("MT5 login/server are not set");
-  const api = getCloudApi();
+  const api = await getCloudApi();
   if (!api) throw new Error("META_API_TOKEN is not configured");
   let ma = null;
   try {
@@ -2087,7 +3038,7 @@ async function runCloudSyncNow(db, job, account) {
 }
 async function runCloudDisconnect(db, job, account) {
   setCloudJob(db, job, "IN_PROGRESS", "Deprovisioning cloud terminal");
-  const api = getCloudApi();
+  const api = await getCloudApi();
   if (api) {
     const cached = cloudWorkers.get(account.id);
     if (cached) {
@@ -2130,7 +3081,7 @@ async function runCloudJob(db, job) {
   }
 }
 async function processCloudJobs() {
-  const api = getCloudApi();
+  const api = await getCloudApi();
   if (!api) return;
   for (const db of userDatabases.values()) {
     if (!db || !Array.isArray(db.mt5ConnectJobs)) continue;
@@ -2145,6 +3096,7 @@ async function processCloudJobs() {
     }
   }
 }
+var cloudSyncAvailable = () => process.env.MT5_CLOUD_SYNC_ENABLED === "true" && !IS_SERVERLESS2 && !!process.env.META_API_TOKEN?.trim();
 function startCloudWorker() {
   if (IS_SERVERLESS2) {
     console.warn("[MT5 Cloud] Background worker not started: serverless runtime has no long-lived process. Run the cloud sync on a dedicated host or an external scheduler.");
@@ -2307,12 +3259,12 @@ async function findDbByAccountId(accountId) {
   }
   return null;
 }
-var DEAL_TYPE_SELL = 1;
-var DEAL_TYPE_BALANCE = 2;
-var DEAL_TYPE_CREDIT = 3;
-var ENTRY_IN = 0;
-var ENTRY_OUT = 1;
-var ENTRY_INOUT = 2;
+var DEAL_TYPE_SELL2 = 1;
+var DEAL_TYPE_BALANCE2 = 2;
+var DEAL_TYPE_CREDIT2 = 3;
+var ENTRY_IN2 = 0;
+var ENTRY_OUT2 = 1;
+var ENTRY_INOUT2 = 2;
 function normalizeDeal(raw) {
   return {
     ticket: Number(raw.ticket),
@@ -2334,17 +3286,18 @@ function recomputeMt5TradesForAccount(account, deals, skipBalanceTicket) {
   const result = [];
   const posGroups = /* @__PURE__ */ new Map();
   for (const d of deals) {
-    if (d.symbol && (d.entry === ENTRY_IN || d.entry === ENTRY_OUT || d.entry === ENTRY_INOUT)) {
+    if (d.symbol && (d.entry === ENTRY_IN2 || d.entry === ENTRY_OUT2 || d.entry === ENTRY_INOUT2)) {
       if (!posGroups.has(d.positionId)) posGroups.set(d.positionId, []);
       posGroups.get(d.positionId).push(d);
     }
   }
   for (const [posId, list] of posGroups) {
-    const inDeals = list.filter((d) => d.entry === ENTRY_IN);
-    const outDeals = list.filter((d) => d.entry === ENTRY_OUT || d.entry === ENTRY_INOUT);
+    const inDeals = list.filter((d) => d.entry === ENTRY_IN2);
+    const outDeals = list.filter((d) => d.entry === ENTRY_OUT2 || d.entry === ENTRY_INOUT2);
     if (outDeals.length === 0) continue;
     const inDeal = inDeals[0] || outDeals[0];
     const lastOut = outDeals[outDeals.length - 1];
+    const direction = inDeals.length > 0 ? inDeals[0].type === DEAL_TYPE_SELL2 ? "Sell" : "Buy" : lastOut.type === DEAL_TYPE_SELL2 ? "Buy" : "Sell";
     const totalProfit = list.reduce((s, d) => s + d.profit, 0);
     const totalComm = list.reduce((s, d) => s + d.commission, 0);
     const totalSwap = list.reduce((s, d) => s + d.swap, 0);
@@ -2354,7 +3307,7 @@ function recomputeMt5TradesForAccount(account, deals, skipBalanceTicket) {
       date: new Date(inDeal.time * 1e3).toISOString(),
       exitTime: new Date(lastOut.time * 1e3).toISOString(),
       symbol: lastOut.symbol || inDeal.symbol || "UNKNOWN",
-      type: lastOut.type === DEAL_TYPE_SELL ? "Sell" : "Buy",
+      type: direction,
       lotSize: lastOut.volume || inDeal.volume || 0.01,
       entryPrice: inDeal.price,
       exitPrice: lastOut.price,
@@ -2374,7 +3327,7 @@ function recomputeMt5TradesForAccount(account, deals, skipBalanceTicket) {
   }
   for (const d of deals) {
     if (d.symbol) continue;
-    if (d.type !== DEAL_TYPE_BALANCE && d.type !== DEAL_TYPE_CREDIT) continue;
+    if (d.type !== DEAL_TYPE_BALANCE2 && d.type !== DEAL_TYPE_CREDIT2) continue;
     if (skipBalanceTicket !== void 0 && d.ticket === skipBalanceTicket) continue;
     const type = d.profit >= 0 ? "Deposit" : "Withdrawal";
     result.push({
@@ -2834,7 +3787,7 @@ async function saveDatabase(data, overrideUserId, overrideEmail, previousAliases
         id: j.id,
         account_id: j.accountId,
         user_id: j.userId || uid,
-        action: j.action,
+        action: j.action === "SYNC_NOW" ? "RESYNC" : j.action,
         payload: j.payload || null,
         status: j.status || "PENDING",
         attempts: j.attempts || 0,
@@ -2858,23 +3811,24 @@ async function ensureDefaultPortfolioAccount(db, userId, email) {
     const existing = db.accounts.filter((acc) => acc.userId === userId || !acc.userId);
     if (existing.length > 0) return null;
     const newAcc = {
-      id: `acc_${crypto2.randomUUID()}`,
+      id: `acc_${crypto4.randomUUID()}`,
       userId,
       name: "Portfolio Account",
       broker: "MT5 Demo Broker",
       platform: "MT5",
       accountType: "Demo",
       currency: "USD",
-      startingBalance: 1e4,
-      currentBalance: 1e4,
-      equity: 1e4,
+      startingBalance: 0,
+      currentBalance: 0,
+      equity: 0,
       status: "Active",
-      eaToken: generateEaToken(),
-      eaStatus: "Not Connected"
+      eaToken: generateEaToken2(),
+      eaStatus: "Not Connected",
+      isDefaultDemo: true
     };
     db.accounts.push(newAcc);
     const newRisk = {
-      id: `r_${crypto2.randomUUID()}`,
+      id: `r_${crypto4.randomUUID()}`,
       accountId: newAcc.id,
       riskPerTradeLimit: 2,
       dailyLossLimit: 500,
@@ -2890,6 +3844,55 @@ async function ensureDefaultPortfolioAccount(db, userId, email) {
   } catch (err) {
     console.error("[Auth] Failed to auto-create default portfolio account:", err?.message || err);
     return null;
+  }
+}
+function isDefaultDemoAccount(acc) {
+  if (!acc) return false;
+  if (acc.isDefaultDemo === true || acc.is_default_demo === true) return true;
+  if (acc.id === "acc_demo_1") return true;
+  const isDemo = acc.accountType === "Demo" || acc.account_type === "DEMO";
+  const isStarterBroker = acc.broker === "MT5 Demo Broker" || acc.broker === "Demo Broker" || acc.name === "Portfolio Account" || acc.name === "Main Trading Account";
+  const isNotSynced = !acc.isMt5Sync && !acc.is_mt5_sync && !acc.mt5Login && !acc.eaTerminalLogin;
+  return isDemo && isStarterBroker && isNotSynced;
+}
+async function cleanupDefaultDemoAccounts(db, userId, exceptAccountId) {
+  try {
+    if (!db || !Array.isArray(db.accounts) || !userId) return [];
+    const removedIds = [];
+    const toKeep = [];
+    for (const acc of db.accounts) {
+      const belongsToUser = acc.userId === userId || acc.user_id === userId;
+      if (belongsToUser && acc.id !== exceptAccountId && isDefaultDemoAccount(acc)) {
+        removedIds.push(acc.id);
+      } else {
+        toKeep.push(acc);
+      }
+    }
+    if (removedIds.length > 0) {
+      db.accounts = toKeep;
+      if (Array.isArray(db.trades)) {
+        db.trades = db.trades.filter((t) => !removedIds.includes(t.accountId || t.account_id));
+      }
+      if (Array.isArray(db.riskSettings)) {
+        db.riskSettings = db.riskSettings.filter((r) => !removedIds.includes(r.accountId || r.account_id));
+      }
+      if (useSupabase) {
+        try {
+          for (const id of removedIds) {
+            await supabase.from("trading_accounts").delete().eq("id", id);
+            await supabase.from("trades").delete().eq("account_id", id);
+            await supabase.from("risk_settings").delete().eq("account_id", id);
+          }
+        } catch (err) {
+          console.error("[cleanupDefaultDemoAccounts] Supabase delete error:", err);
+        }
+      }
+      console.log(`[cleanupDefaultDemoAccounts] Cleaned up default demo account(s) [${removedIds.join(", ")}] for user ${userId} upon MT5 connection`);
+    }
+    return removedIds;
+  } catch (err) {
+    console.error("[cleanupDefaultDemoAccounts] Error cleaning up demo accounts:", err);
+    return [];
   }
 }
 async function attachTicketUserNames(tickets) {
@@ -3051,7 +4054,6 @@ app.use((req, res, next) => {
   const isAllowedOrigin = (orig) => {
     if (!orig) return true;
     if (allowedOrigins.includes(orig)) return true;
-    if (orig.endsWith(".netlify.app")) return true;
     if (orig.endsWith(".vercel.app")) return true;
     if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(orig)) return true;
     return false;
@@ -3191,7 +4193,7 @@ app.use(async (req, res, next) => {
             supabase.from("users").update({ role: "SUPER_ADMIN", is_pro: true }).eq("id", existingUserRow.id).then();
           }
         } else if (betterUser && email) {
-          const canonicalId = authUserId || `user_${crypto2.randomUUID()}`;
+          const canonicalId = authUserId || `user_${crypto4.randomUUID()}`;
           const newRecord = {
             id: canonicalId,
             email,
@@ -3211,7 +4213,7 @@ app.use(async (req, res, next) => {
           try {
             await supabase.from("users").upsert(newRecord, { onConflict: "id" });
             const defaultAcc = {
-              id: `acc_${crypto2.randomUUID()}`,
+              id: `acc_${crypto4.randomUUID()}`,
               user_id: canonicalId,
               name: "Main Trading Account",
               broker: "Demo Broker",
@@ -3222,7 +4224,8 @@ app.use(async (req, res, next) => {
               current_balance: 1e4,
               equity: 1e4,
               status: "ACTIVE",
-              is_mt5_sync: false
+              is_mt5_sync: false,
+              is_default_demo: true
             };
             await supabase.from("trading_accounts").upsert([defaultAcc], { onConflict: "id" });
           } catch (createErr) {
@@ -3240,7 +4243,7 @@ app.use(async (req, res, next) => {
         db = await ensureUserDbLoaded(userId, email);
         dbUser = db.users[0] || null;
         if (!dbUser && betterUser && email) {
-          const canonicalId = authUserId || `user_${crypto2.randomUUID()}`;
+          const canonicalId = authUserId || `user_${crypto4.randomUUID()}`;
           const newRecord = {
             id: canonicalId,
             email,
@@ -3448,7 +4451,7 @@ app.post("/api/auth/register", authIpBackstopLimiter, authRateLimiter, async (re
     const otp = generateOtp();
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1e3).toISOString();
     if (isSso) {
-      const uid2 = existingUserRow?.id || authUserId || `user_${crypto2.randomUUID()}`;
+      const uid2 = existingUserRow?.id || authUserId || `user_${crypto4.randomUUID()}`;
       const userRecord2 = {
         id: uid2,
         email: normalizedEmail,
@@ -3508,7 +4511,7 @@ app.post("/api/auth/register", authIpBackstopLimiter, authRateLimiter, async (re
       const sessionToken = issueSession(res, { id: uid2, email: normalizedEmail });
       return res.json({ message: "Registration successful.", user: sanitizeUser(camelUser2), requiresOtp: false, sessionToken });
     }
-    const uid = existingUserRow?.id || authUserId || `user_${crypto2.randomUUID()}`;
+    const uid = existingUserRow?.id || authUserId || `user_${crypto4.randomUUID()}`;
     const hashedPassword = password ? await bcrypt.hash(password, 10) : existingUserRow?.password || "";
     const userRecord = {
       id: uid,
@@ -3521,6 +4524,11 @@ app.post("/api/auth/register", authIpBackstopLimiter, authRateLimiter, async (re
       onboarding_completed: existingUserRow?.onboarding_completed || false,
       is_pro: existingUserRow?.is_pro || false,
       is_email_verified: false,
+      // Set here rather than left to the column default. Supabase fills it
+      // from DEFAULT NOW(), but the local store has no defaults, so every
+      // account registered against db.json read "Joined: N/A" in the registry
+      // and sorted as if it had no join date at all.
+      created_at: existingUserRow?.created_at || (/* @__PURE__ */ new Date()).toISOString(),
       email_otp: otp,
       otp_expires_at: otpExpiresAt,
       otp_attempts: 0,
@@ -3702,7 +4710,7 @@ app.post("/api/auth/verify-otp", otpRateLimiter, async (req, res) => {
       }
       const storedOtp = row.email_otp;
       const expiresAt = row.otp_expires_at ? new Date(row.otp_expires_at).getTime() : 0;
-      if (!storedOtp || !safeTokenEqual(storedOtp, otp.toString().trim())) {
+      if (!storedOtp || !safeTokenEqual2(storedOtp, otp.toString().trim())) {
         const attempts = registerFailedOtp(normalizedEmail);
         if (attempts >= MAX_OTP_ATTEMPTS) {
           await supabase.from("users").update({ email_otp: null, otp_expires_at: null }).eq("email", normalizedEmail);
@@ -3733,7 +4741,7 @@ app.post("/api/auth/verify-otp", otpRateLimiter, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "Account not found. Please register first." });
     }
-    if (user.emailOtp && safeTokenEqual(user.emailOtp, otp.toString().trim())) {
+    if (user.emailOtp && safeTokenEqual2(user.emailOtp, otp.toString().trim())) {
       const expiresAt = user.otpExpiresAt ? new Date(user.otpExpiresAt).getTime() : 0;
       if (Date.now() > expiresAt) {
         return res.status(400).json({ error: "Verification code has expired. Please click resend to get a new code." });
@@ -4017,17 +5025,72 @@ app.get("/api/plan/entitlements", (req, res) => {
     }
   });
 });
+var sanitizeAccount = (account) => {
+  if (!account || typeof account !== "object") return account;
+  const {
+    investorPasswordEnc,
+    investor_password_enc,
+    passwordEncNonce,
+    password_enc_nonce,
+    passwordKmsKeyId,
+    password_kms_key_id,
+    eaToken,
+    ea_token,
+    ...safe
+  } = account;
+  return { ...safe, hasStoredCredentials: !!(investorPasswordEnc || investor_password_enc) };
+};
 app.get("/api/accounts", async (req, res) => {
   let currentUser = req.currentUser;
-  if (!currentUser) return res.json({ accounts: [] });
+  if (!currentUser) return res.status(401).json({ error: "Not authenticated" });
   if (useSupabase) {
     try {
       const { data: rows, error } = await supabase.from("trading_accounts").select("*").eq("user_id", currentUser.id);
       if (error) {
         console.error("[GET /api/accounts] Supabase error:", JSON.stringify(error));
       } else {
-        const accounts = toCamel(rows || []);
+        let accounts = toCamel(rows || []).map(sanitizeAccount);
         console.log(`[GET /api/accounts] User: ${currentUser.id}, accounts from Supabase: ${accounts.length}`);
+        const hasMt52 = accounts.some((a) => a.isMt5Sync || a.is_mt5_sync || a.mt5Login || a.eaTerminalLogin);
+        if (hasMt52) {
+          const demoAccs = accounts.filter(isDefaultDemoAccount);
+          if (demoAccs.length > 0) {
+            for (const d of demoAccs) {
+              await supabase.from("trading_accounts").delete().eq("id", d.id);
+              await supabase.from("trades").delete().eq("account_id", d.id);
+              await supabase.from("risk_settings").delete().eq("account_id", d.id);
+            }
+            accounts = accounts.filter((a) => !demoAccs.some((d) => d.id === a.id));
+          }
+        }
+        for (const acc of accounts) {
+          if (acc.isMt5Sync && (acc.startingBalance === 1e4 || !acc.startingBalance || acc.startingBalance === 0)) {
+            try {
+              const { data: dealRows } = await supabase.from("mt5_deals").select("*").eq("account_id", acc.id);
+              const accountDeals = dealRows || [];
+              const deposits = accountDeals.filter((d) => d.type === DEAL_TYPE_BALANCE2 && (d.profit || 0) > 0).sort((a, b) => a.time - b.time);
+              if (deposits.length > 0) {
+                acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
+                await supabase.from("trading_accounts").update({ starting_balance: acc.startingBalance }).eq("id", acc.id);
+              } else if (acc.currentBalance > 0 && acc.currentBalance !== 1e4) {
+                const { data: tradeRows } = await supabase.from("trades").select("*").eq("account_id", acc.id);
+                const closedPnl = (tradeRows || []).filter((t) => t.type !== "Deposit" && t.type !== "Withdrawal").reduce((sum, t) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
+                acc.startingBalance = parseFloat(Math.max(0, acc.currentBalance - closedPnl).toFixed(2));
+                await supabase.from("trading_accounts").update({ starting_balance: acc.startingBalance }).eq("id", acc.id);
+              }
+            } catch (calibErr) {
+              console.error("[GET /api/accounts] Calibration error:", calibErr);
+            }
+          } else if (isDefaultDemoAccount(acc) && acc.startingBalance === 1e4) {
+            acc.startingBalance = 0;
+            acc.currentBalance = 0;
+            acc.equity = 0;
+            try {
+              await supabase.from("trading_accounts").update({ starting_balance: 0, current_balance: 0, equity: 0 }).eq("id", acc.id);
+            } catch {
+            }
+          }
+        }
         if (accounts.length > 0) {
           return res.json({ accounts });
         }
@@ -4039,6 +5102,14 @@ app.get("/api/accounts", async (req, res) => {
   const db = req.userDb;
   if (!db) return res.json({ accounts: [] });
   let userAccounts = (db.accounts || []).filter((acc) => acc.userId === currentUser.id || acc.user_id === currentUser.id);
+  const hasMt5 = userAccounts.some((a) => a.isMt5Sync || a.is_mt5_sync || a.mt5Login || a.eaTerminalLogin);
+  if (hasMt5) {
+    const removedIds = await cleanupDefaultDemoAccounts(db, currentUser.id);
+    if (removedIds.length > 0) {
+      userAccounts = userAccounts.filter((a) => !removedIds.includes(a.id));
+      await saveDatabase(db, currentUser.email);
+    }
+  }
   if (userAccounts.length === 0) {
     try {
       const starter = await ensureDefaultPortfolioAccount(db, currentUser.id, currentUser.email);
@@ -4049,8 +5120,22 @@ app.get("/api/accounts", async (req, res) => {
       console.error("[GET /api/accounts] Starter account creation error:", err);
     }
   }
+  for (const acc of userAccounts) {
+    if (acc.isMt5Sync && (acc.startingBalance === 1e4 || !acc.startingBalance || acc.startingBalance === 0)) {
+      const accountDeals = (db.mt5Deals || []).filter((d) => d.accountId === acc.id);
+      const deposits = accountDeals.filter((d) => d.type === DEAL_TYPE_BALANCE2 && (d.profit || 0) > 0).sort((a, b) => a.time - b.time);
+      if (deposits.length > 0) {
+        acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
+        acc.startingBalanceLocked = true;
+      } else if (acc.currentBalance > 0 && acc.currentBalance !== 1e4) {
+        const closedPnl = (db.trades || []).filter((t) => t.accountId === acc.id && t.type !== "Deposit" && t.type !== "Withdrawal").reduce((sum, t) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
+        acc.startingBalance = parseFloat(Math.max(0, acc.currentBalance - closedPnl).toFixed(2));
+        acc.startingBalanceLocked = true;
+      }
+    }
+  }
   console.log(`[GET /api/accounts] User: ${currentUser.id} (${currentUser.email}), active accounts: ${userAccounts.length}`);
-  res.json({ accounts: userAccounts });
+  res.json({ accounts: userAccounts.map(sanitizeAccount) });
 });
 app.post("/api/accounts", async (req, res) => {
   let db = req.userDb;
@@ -4060,7 +5145,13 @@ app.post("/api/accounts", async (req, res) => {
   if (!currentUser || !db) return res.status(401).json({ error: "Not authenticated. Please refresh the page and log in again." });
   if (!db.accounts) db.accounts = [];
   if (!db.riskSettings) db.riskSettings = [];
-  const existingUserAccounts = db.accounts.filter((acc) => acc.userId === currentUser.id || acc.user_id === currentUser.id);
+  const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType, login, server, investorPassword } = req.body;
+  const existingUserAccounts = db.accounts.filter((acc) => {
+    const isOwner = acc.userId === currentUser.id || acc.user_id === currentUser.id;
+    if (!isOwner) return false;
+    if (isMt5Sync && isDefaultDemoAccount(acc)) return false;
+    return true;
+  });
   if (!hasPro(currentUser) && existingUserAccounts.length >= FREE_ACCOUNT_LIMIT) {
     return res.status(403).json({
       error: PRO_FEATURE_MESSAGES.unlimitedAccounts,
@@ -4068,7 +5159,6 @@ app.post("/api/accounts", async (req, res) => {
       feature: "unlimitedAccounts"
     });
   }
-  const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType, login, server, investorPassword } = req.body;
   if (isMt5Sync && !hasPro(currentUser)) {
     return res.status(403).json({
       error: PRO_FEATURE_MESSAGES.mt5Sync,
@@ -4093,7 +5183,7 @@ app.post("/api/accounts", async (req, res) => {
     enc = encryptInvestorPassword(investorPassword);
   }
   const newAcc = {
-    id: `acc_${crypto2.randomUUID()}`,
+    id: `acc_${crypto4.randomUUID()}`,
     userId: currentUser.id,
     name,
     broker,
@@ -4106,27 +5196,49 @@ app.post("/api/accounts", async (req, res) => {
     equity: startBal,
     status: "Active",
     isMt5Sync: !!isMt5Sync,
-    eaToken: generateEaToken(),
-    eaStatus: isMt5Sync ? "Connected" : "Not Connected",
+    eaToken: generateEaToken2(),
+    // A new MT5 account has no EA running yet — the file has not even been
+    // downloaded. Marking it Connected at creation told the customer they were
+    // synced before anything was installed, and hid the setup UI that would
+    // have got them there: the method cards and the "Waiting for MT5" banner
+    // both key off the connected state. The EA flips this itself on its first
+    // authenticate or validate.
+    eaStatus: "Not Connected",
     ...login ? { mt5Login: String(login).trim(), eaTerminalLogin: String(login).trim() } : {},
     ...server ? { mt5Server: String(server).trim(), eaTerminalServer: String(server).trim() } : {},
-    ...enc ? {
+    // Storing a password is not a connection. This said Connected the moment
+    // the form was submitted, on the dead MetaApi method, and queued nothing —
+    // so the customer saw "Connected" against an empty journal forever and had
+    // no way to tell that nothing was ever going to arrive. An account with
+    // credentials goes on the VPS queue where one can run; otherwise it waits
+    // for its EA, and says so.
+    ...enc && vpsSyncAvailable() ? {
       investorPasswordEnc: enc.enc,
       passwordEncNonce: "",
       passwordKmsKeyId: enc.keyId,
-      syncMethod: "CLOUD",
-      connectionStatus: "Connected"
+      syncMethod: "VPS",
+      connectionStatus: "Queued"
+    } : enc ? {
+      investorPasswordEnc: enc.enc,
+      passwordEncNonce: "",
+      passwordKmsKeyId: enc.keyId,
+      syncMethod: "EA",
+      connectionStatus: "Not Connected"
     } : {
-      ...isMt5Sync && login && server ? {
-        syncMethod: "CLOUD",
-        connectionStatus: "Connected"
-      } : {}
+      ...isMt5Sync ? { syncMethod: "EA", connectionStatus: "Not Connected" } : {}
     }
   };
+  if (isMt5Sync) {
+    await cleanupDefaultDemoAccounts(db, currentUser.id);
+  }
   db.accounts.push(newAcc);
+  if (enc && vpsSyncAvailable()) {
+    enqueueConnectJob(db, newAcc, "SYNC_NOW");
+    logEaEvent(db, newAcc, "VPS_CONNECT_REQUESTED", "info", "Queued for a VPS terminal on account creation");
+  }
   const riskBase = startBal || 1e4;
   const newRisk = {
-    id: `r_${crypto2.randomUUID()}`,
+    id: `r_${crypto4.randomUUID()}`,
     accountId: newAcc.id,
     riskPerTradeLimit: 2,
     dailyLossLimit: riskBase * 0.05,
@@ -4146,7 +5258,7 @@ app.post("/api/accounts", async (req, res) => {
     }
     return res.status(500).json({ error: "Account could not be saved to the database. Please try again." });
   }
-  res.json({ message: "Trading account created", account: newAcc });
+  res.json({ message: "Trading account created", account: sanitizeAccount(newAcc) });
 });
 app.put("/api/accounts/:id", async (req, res) => {
   let db = req.userDb;
@@ -4176,7 +5288,7 @@ app.put("/api/accounts/:id", async (req, res) => {
     if (currentBalance !== void 0) db.accounts[accIdx].currentBalance = money(currentBalance);
     if (equity !== void 0) db.accounts[accIdx].equity = money(equity);
     await saveDatabase(db, authEmail);
-    res.json({ message: "Account updated successfully", account: db.accounts[accIdx] });
+    res.json({ message: "Account updated successfully", account: sanitizeAccount(db.accounts[accIdx]) });
   } else if (accIdx !== -1) {
     res.status(403).json({ error: "You can only edit your own trading accounts." });
   } else {
@@ -4214,7 +5326,7 @@ app.delete("/api/accounts/:id", async (req, res) => {
 });
 app.get("/api/trades", async (req, res) => {
   let currentUser = req.currentUser;
-  if (!currentUser) return res.json({ trades: [] });
+  if (!currentUser) return res.status(401).json({ error: "Not authenticated" });
   const { accountId } = req.query;
   let accountTrades = [];
   if (useSupabase) {
@@ -4407,7 +5519,7 @@ app.post("/api/trades", async (req, res) => {
     if (ownAccounts.length > 0) {
       accountIdx = 0;
     } else {
-      const defaultAccId = `acc_${crypto2.randomUUID()}`;
+      const defaultAccId = `acc_${crypto4.randomUUID()}`;
       db.accounts.push({
         id: defaultAccId,
         userId: currentUser.id,
@@ -4435,7 +5547,7 @@ app.post("/api/trades", async (req, res) => {
     return res.status(400).json({ error: "Duplicate trade submission detected. Please wait a moment." });
   }
   const newTrade = {
-    id: `trade_${crypto2.randomUUID()}`,
+    id: `trade_${crypto4.randomUUID()}`,
     accountId: targetAccountId,
     // Without this the trade was stored with no owner, and GET /api/trades —
     // which filters on userId when no accountId is given — never returned it.
@@ -4528,7 +5640,7 @@ app.post("/api/trades/batch", async (req, res) => {
     if (tk) existingTickets.add(tk);
     existingValues.add(vk);
     const newTrade = {
-      id: `trade_${crypto2.randomUUID()}`,
+      id: `trade_${crypto4.randomUUID()}`,
       accountId,
       userId: currentUser.id,
       date: t.date || (/* @__PURE__ */ new Date()).toISOString(),
@@ -4655,7 +5767,7 @@ app.get("/api/risk-settings/:accountId", async (req, res) => {
   const settings = (db.riskSettings || []).find((r) => r.accountId === accountId);
   if (!settings) {
     const defaultSettings = {
-      id: `r_${crypto2.randomUUID()}`,
+      id: `r_${crypto4.randomUUID()}`,
       accountId,
       riskPerTradeLimit: 2,
       dailyLossLimit: 500,
@@ -4697,7 +5809,7 @@ app.put("/api/risk-settings/:accountId", async (req, res) => {
     res.json({ message: "Risk parameters saved", riskSettings: existing });
   } else {
     const newRisk = {
-      id: `r_${crypto2.randomUUID()}`,
+      id: `r_${crypto4.randomUUID()}`,
       accountId,
       riskPerTradeLimit: !isNaN(parseFloat(riskPerTradeLimit)) ? parseFloat(riskPerTradeLimit) : 2,
       dailyLossLimit: !isNaN(parseFloat(dailyLossLimit)) ? parseFloat(dailyLossLimit) : 500,
@@ -4719,12 +5831,12 @@ app.get("/api/mt5/ea/:accountId/download", async (req, res) => {
   if (!account) return res.status(404).json({ error: "Account not found" });
   if (account.userId !== currentUser.id) return res.status(403).json({ error: "Access denied" });
   if (!account.eaToken) {
-    account.eaToken = generateEaToken();
+    account.eaToken = generateEaToken2();
     account.eaStatus = account.eaStatus || "Not Connected";
     await saveDatabase(db, currentUser.email);
   }
   const apiUrl = apiBaseUrl(req);
-  const source = generateEaSource(account, apiUrl);
+  const source = generateEaSource2(account, apiUrl);
   const safeName = String(account.name || "account").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 30);
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="FXJournalPro_Sync_${safeName}.mq5"`);
@@ -4737,7 +5849,7 @@ app.post("/api/mt5/ea/:accountId/reset-token", async (req, res) => {
   const account = db.accounts.find((a) => a.id === req.params.accountId);
   if (!account) return res.status(404).json({ error: "Account not found" });
   if (account.userId !== currentUser.id) return res.status(403).json({ error: "Access denied" });
-  account.eaToken = generateEaToken();
+  account.eaToken = generateEaToken2();
   account.eaStatus = "Not Connected";
   account.eaConnectedAt = void 0;
   account.eaLastDealId = 0;
@@ -4976,11 +6088,13 @@ function applyEaSyncPayload(db, acc, deals, moneyFlows, account) {
   const accountDeals = db.mt5Deals.filter((d) => d.accountId === accountId);
   let skipBalanceTicket;
   if (acc.isMt5Sync) {
-    const deposits = accountDeals.filter((d) => d.type === DEAL_TYPE_BALANCE && (d.profit || 0) > 0).sort((a, b) => a.time - b.time);
+    const deposits = accountDeals.filter((d) => d.type === DEAL_TYPE_BALANCE2 && (d.profit || 0) > 0).sort((a, b) => a.time - b.time);
+    const isPlaceholderOrUnset = !acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 1e4 || acc.isDefaultDemo;
     if (deposits.length > 0) {
       skipBalanceTicket = deposits[0].ticket;
-      if (!acc.startingBalance || acc.startingBalance === 0) {
+      if (isPlaceholderOrUnset || !acc.startingBalanceLocked) {
         acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
+        acc.startingBalanceLocked = true;
       }
     }
   }
@@ -5010,6 +6124,14 @@ function applyEaSyncPayload(db, acc, deals, moneyFlows, account) {
     if (account.equity !== void 0) acc.equity = parseFloat(account.equity) || acc.equity;
     if (account.currency !== void 0 && account.currency) acc.currency = String(account.currency);
   }
+  if (acc.isMt5Sync && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 1e4 || acc.isDefaultDemo || !acc.startingBalanceLocked)) {
+    const netTradingProfit = recomputed.filter((t) => t.type !== "Deposit" && t.type !== "Withdrawal").reduce((sum, t) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
+    const effCurBalance = acc.currentBalance || (account?.balance ? parseFloat(account.balance) : 0);
+    if (effCurBalance > 0) {
+      acc.startingBalance = parseFloat(Math.max(0, effCurBalance - netTradingProfit).toFixed(2));
+      acc.startingBalanceLocked = true;
+    }
+  }
   acc.eaStatus = "Connected";
   acc.connectionStatus = "Connected";
   acc.eaConnectedAt = acc.eaConnectedAt || (/* @__PURE__ */ new Date()).toISOString();
@@ -5028,6 +6150,12 @@ app.post("/api/mt5/ea/sync", ...eaProtection, async (req, res) => {
   if (!auth2) return;
   const { db, account: acc } = auth2;
   const { deals, moneyFlows, account } = body;
+  acc.isMt5Sync = true;
+  acc.isDefaultDemo = false;
+  const targetUserId = acc.userId || db.users?.[0]?.id;
+  if (targetUserId) {
+    await cleanupDefaultDemoAccounts(db, targetUserId, acc.id);
+  }
   const summary = applyEaSyncPayload(db, acc, deals, moneyFlows, account);
   logEaEvent(db, acc, "EA_SYNC", "info", `Deals: ${summary.added} new / ${deals.length} received; money flows: ${summary.moneyFlowAdded} new`);
   await saveDatabase(db, db.users?.[0]?.email);
@@ -5045,8 +6173,11 @@ app.get("/api/mt5/:accountId/status", async (req, res) => {
   const moneyFlows = Array.isArray(db.mt5MoneyFlows) ? db.mt5MoneyFlows.filter((f) => f.accountId === account.id) : [];
   const lastErrors = Array.isArray(db.mt5ConnectionErrors) ? db.mt5ConnectionErrors.filter((e) => e.accountId === account.id).slice(-5) : [];
   const snapshots = Array.isArray(db.mt5Snapshots) ? db.mt5Snapshots.filter((s) => s.accountId === account.id).slice(-500) : [];
-  const connectJobs = Array.isArray(db.mt5ConnectJobs) ? db.mt5ConnectJobs.filter((j) => j.accountId === account.id).slice(-5) : [];
-  const workerConfigured = !!process.env.META_API_TOKEN?.trim();
+  const allConnectJobs = Array.isArray(db.mt5ConnectJobs) ? db.mt5ConnectJobs : [];
+  const connectJobs = allConnectJobs.filter((j) => j.accountId === account.id).slice(-5);
+  const workerLastSeenAt = allConnectJobs.map((j) => j.startedAt).filter((t) => typeof t === "string").sort().pop() || null;
+  const oldestPending = allConnectJobs.filter((j) => j.accountId === account.id && j.status === "PENDING").map((j) => j.createdAt).filter((t) => typeof t === "string").sort()[0] || null;
+  const workerConfigured = cloudSyncAvailable();
   const cloudStuckValidating = account.syncMethod === "CLOUD" && account.connectionStatus === "Validating" && !workerConfigured;
   let connStatus = account.connectionStatus || account.eaStatus || "Not Connected";
   let resolvedErrors = lastErrors;
@@ -5067,6 +6198,19 @@ app.get("/api/mt5/:accountId/status", async (req, res) => {
     syncMethod: account.syncMethod || "EA",
     cloudConnected: !!account.investorPasswordEnc,
     workerConfigured,
+    // The UI offers cloud as the easier of the two methods, so it has to know
+    // whether this deployment can honour that before showing the form.
+    // Two different methods, two different answers. cloudSyncAvailable is the
+    // old MetaApi path, which is off; vpsSyncAvailable is our own terminal
+    // pool. The UI gates each on its own flag rather than one shared "cloud".
+    cloudSyncAvailable: workerConfigured,
+    vpsSyncAvailable: vpsSyncAvailable(),
+    // Configured to accept a worker (above) versus one having actually turned
+    // up (below). The UI needs both: the first decides whether to offer the
+    // method, the second decides whether "queued" is a promise or a dead end.
+    workerLastSeenAt,
+    queuedSince: oldestPending,
+    queueDepth: queueDepth(db),
     connectJobs,
     lastSyncTime: account.eaLastSyncTime || null,
     lastHeartbeatAt: account.lastHeartbeatAt || null,
@@ -5094,9 +6238,9 @@ app.post("/api/mt5/cloud/connect", async (req, res) => {
   const account = db.accounts.find((a) => a.id === body.accountId);
   if (!account) return res.status(404).json({ error: "Account not found" });
   if (account.userId !== currentUser.id) return res.status(403).json({ error: "Access denied" });
-  if (!process.env.META_API_TOKEN?.trim()) {
+  if (!cloudSyncAvailable()) {
     return res.status(503).json({
-      error: "The cloud sync worker is not configured on this deployment yet (META_API_TOKEN is missing). Use the EA method, which needs no extra setup.",
+      error: "Cloud sync is not available on this deployment. Use the Expert Advisor method \u2014 it needs no extra setup and syncs your full history.",
       code: "CLOUD_WORKER_UNAVAILABLE"
     });
   }
@@ -5150,6 +6294,12 @@ app.post("/api/mt5/cloud/sync", async (req, res) => {
   const account = db.accounts.find((a) => a.id === body.accountId);
   if (!account) return res.status(404).json({ error: "Account not found" });
   if (account.userId !== currentUser.id) return res.status(403).json({ error: "Access denied" });
+  if (!cloudSyncAvailable()) {
+    return res.status(503).json({
+      error: "Cloud sync is not available on this deployment. Use the Expert Advisor method instead.",
+      code: "CLOUD_WORKER_UNAVAILABLE"
+    });
+  }
   if (account.syncMethod !== "CLOUD") {
     return res.status(400).json({ error: "Account is not configured for cloud sync" });
   }
@@ -5179,6 +6329,640 @@ app.post("/api/mt5/:accountId/disconnect", async (req, res) => {
   await saveDatabase(db, db.users?.[0]?.email);
   res.json({ ok: true, status: "Disconnected" });
 });
+var MT5_JOB_LEASE_MS = 5 * 60 * 1e3;
+var MT5_JOB_MAX_ATTEMPTS = 3;
+var vpsSyncAvailable = () => process.env.MT5_VPS_SYNC_ENABLED === "true" && !!process.env.MT5_WORKER_TOKEN?.trim();
+function authWorker(req, res) {
+  const configured = process.env.MT5_WORKER_TOKEN?.trim();
+  if (!configured) {
+    res.status(503).json({ error: "VPS sync is not configured on this deployment.", code: "VPS_NOT_CONFIGURED" });
+    return false;
+  }
+  const header = (req.headers["authorization"] || "").toString().trim();
+  const presented = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!presented || !safeTokenEqual2(presented, configured)) {
+    res.status(401).json({ error: "Invalid worker token", code: "WORKER_AUTH_FAILED" });
+    return false;
+  }
+  const proto = (req.headers["x-forwarded-proto"] || "").toString().split(",")[0].trim();
+  if (IS_PRODUCTION_LIKE && proto && proto !== "https") {
+    res.status(403).json({ error: "Worker API requires HTTPS", code: "WORKER_INSECURE_TRANSPORT" });
+    return false;
+  }
+  return true;
+}
+var WorkerClaimSchema = z.object({
+  workerId: boundedString(64),
+  terminal: boundedString(64).optional()
+}).strict();
+var WorkerJobRefSchema = z.object({
+  jobId: boundedString(80),
+  workerId: boundedString(64)
+}).strict();
+var WorkerSyncSchema = z.object({
+  jobId: boundedString(80),
+  workerId: boundedString(64),
+  deals: z.array(EaDealSchema).max(500),
+  moneyFlows: z.array(EaMoneyFlowSchema).max(500).optional(),
+  account: z.object({
+    balance: finiteNumber().optional(),
+    equity: finiteNumber().optional(),
+    currency: boundedString(8).optional()
+  }).optional()
+}).strict();
+var WorkerCompleteSchema = z.object({
+  jobId: boundedString(80),
+  workerId: boundedString(64),
+  ok: z.boolean(),
+  error: boundedString(500).optional(),
+  errorCode: boundedString(64).optional(),
+  tradesImported: z.number().int().nonnegative().optional()
+}).strict();
+function reapExpiredJobs(db) {
+  const jobs = Array.isArray(db.mt5ConnectJobs) ? db.mt5ConnectJobs : [];
+  const now = Date.now();
+  let reaped = 0;
+  for (const job of jobs) {
+    if (job.status !== "RUNNING") continue;
+    const leaseUntil = job.leaseUntil ? Date.parse(job.leaseUntil) : 0;
+    if (!leaseUntil || leaseUntil > now) continue;
+    reaped++;
+    if ((job.attempts || 0) >= MT5_JOB_MAX_ATTEMPTS) {
+      job.status = "FAILED";
+      job.error = "Worker stopped responding and the job ran out of attempts.";
+    } else {
+      job.status = "PENDING";
+      job.workerId = null;
+      job.leaseUntil = null;
+    }
+    job.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  }
+  return reaped;
+}
+var allJobDbs = () => {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  const add = (d) => {
+    if (d && !seen.has(d)) {
+      seen.add(d);
+      out.push(d);
+    }
+  };
+  try {
+    add(loadDatabaseFromFile());
+  } catch {
+  }
+  for (const cached of userDatabases.values()) add(cached);
+  return out;
+};
+app.post("/api/mt5/worker/claim", async (req, res) => {
+  if (!authWorker(req, res)) return;
+  const body = validateEaBody(res, WorkerClaimSchema, req.body || {});
+  if (!body) return;
+  if (useSupabase) {
+    try {
+      const { data: pendingRows } = await supabase.from("trading_accounts").select("*").in("sync_method", ["CLOUD", "VPS"]).in("connection_status", ["Validating", "Queued", "In Queue"]).not("investor_password_enc", "is", null).limit(5);
+      for (const rawAcc of pendingRows || []) {
+        const account = toCamel(rawAcc);
+        const password = decryptInvestorPassword(account);
+        if (!password) {
+          console.error("[worker/claim] Stored investor password could not be decrypted for account:", account.id);
+          continue;
+        }
+        const db = await ensureUserDbLoaded(account.userId, "");
+        const jobId = `job_acc_${account.id}`;
+        const job = {
+          id: jobId,
+          action: "CONNECT",
+          accountId: account.id,
+          attempts: 1,
+          leaseUntil: new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString(),
+          workerId: body.workerId,
+          terminal: body.terminal || null,
+          startedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          status: "RUNNING"
+        };
+        if (!Array.isArray(db.mt5ConnectJobs)) db.mt5ConnectJobs = [];
+        db.mt5ConnectJobs = db.mt5ConnectJobs.filter((j) => j.accountId !== account.id);
+        db.mt5ConnectJobs.push(job);
+        logEaEvent(db, account, "VPS_JOB_CLAIMED", "info", `Worker ${body.workerId} claimed CONNECT for MT5 ${account.mt5Login}`);
+        await saveDatabase(db, db.users?.[0]?.email);
+        return res.json({
+          job: {
+            id: job.id,
+            action: job.action,
+            accountId: account.id,
+            attempts: job.attempts,
+            leaseUntil: job.leaseUntil,
+            leaseSeconds: Math.floor(MT5_JOB_LEASE_MS / 1e3)
+          },
+          credentials: {
+            login: String(account.mt5Login || ""),
+            server: String(account.mt5Server || ""),
+            investorPassword: password
+          },
+          sinceDeal: account.eaLastDealId || 0,
+          backfillDays: Number(process.env.MT5_CLOUD_BACKFILL_DAYS || 90)
+        });
+      }
+    } catch (e) {
+      console.error("[worker/claim] Supabase pending accounts lookup failed:", e?.message || e);
+    }
+  }
+  const dbs = useSupabase ? [] : allJobDbs();
+  if (useSupabase) {
+    const { data: rows } = await supabase.from("users").select("id").limit(100);
+    for (const r of rows || []) {
+      const d = await ensureUserDbLoaded(r.id, "");
+      if (d) dbs.push(d);
+    }
+  }
+  for (const db of dbs) {
+    reapExpiredJobs(db);
+    const jobs = Array.isArray(db.mt5ConnectJobs) ? db.mt5ConnectJobs : [];
+    const job = jobs.filter((j) => j.status === "PENDING" && (j.action === "SYNC_NOW" || j.action === "CONNECT")).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))[0];
+    if (!job) continue;
+    const account = (db.accounts || []).find((a) => a.id === job.accountId);
+    if (!account) {
+      job.status = "FAILED";
+      job.error = "Account no longer exists";
+      job.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      await saveDatabase(db, db.users?.[0]?.email);
+      continue;
+    }
+    const password = decryptInvestorPassword(account);
+    if (!password) {
+      job.status = "FAILED";
+      job.error = "Stored investor password could not be decrypted. Ask the customer to reconnect.";
+      job.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      account.connectionStatus = "Error";
+      logEaEvent(db, account, "VPS_CREDENTIAL_UNREADABLE", "error", job.error);
+      await saveDatabase(db, db.users?.[0]?.email);
+      continue;
+    }
+    job.status = "RUNNING";
+    job.attempts = (job.attempts || 0) + 1;
+    job.workerId = body.workerId;
+    job.terminal = body.terminal || null;
+    job.leaseUntil = new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString();
+    job.startedAt = (/* @__PURE__ */ new Date()).toISOString();
+    job.updatedAt = job.startedAt;
+    account.connectionStatus = "Validating";
+    logEaEvent(db, account, "VPS_JOB_CLAIMED", "info", `Worker ${body.workerId} claimed ${job.action}`);
+    await saveDatabase(db, db.users?.[0]?.email);
+    return res.json({
+      job: {
+        id: job.id,
+        action: job.action,
+        accountId: account.id,
+        attempts: job.attempts,
+        leaseUntil: job.leaseUntil,
+        leaseSeconds: Math.floor(MT5_JOB_LEASE_MS / 1e3)
+      },
+      credentials: {
+        login: String(account.mt5Login || ""),
+        server: String(account.mt5Server || ""),
+        investorPassword: password
+      },
+      sinceDeal: account.eaLastDealId || 0,
+      backfillDays: Number(process.env.MT5_CLOUD_BACKFILL_DAYS || 90)
+    });
+  }
+  res.json({ job: null });
+});
+async function resolveJobDb(jobId, workerId) {
+  for (const db of allJobDbs()) {
+    const job = (db.mt5ConnectJobs || []).find((j) => j.id === jobId);
+    if (job) return { db, job };
+  }
+  if (useSupabase && jobId.startsWith("job_acc_")) {
+    const accountId = jobId.replace("job_acc_", "");
+    const { data: acc } = await supabase.from("trading_accounts").select("user_id").eq("id", accountId).maybeSingle();
+    if (acc?.user_id) {
+      const udb = await ensureUserDbLoaded(acc.user_id, "");
+      if (udb) {
+        if (!Array.isArray(udb.mt5ConnectJobs)) udb.mt5ConnectJobs = [];
+        let job = udb.mt5ConnectJobs.find((j) => j.id === jobId);
+        if (!job) {
+          job = {
+            id: jobId,
+            accountId,
+            userId: acc.user_id,
+            workerId: workerId || "vps1-terminal1",
+            status: "RUNNING",
+            leaseUntil: new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString()
+          };
+          udb.mt5ConnectJobs.push(job);
+        }
+        return { db: udb, job };
+      }
+    }
+  }
+  return null;
+}
+app.post("/api/mt5/worker/heartbeat", async (req, res) => {
+  if (!authWorker(req, res)) return;
+  const body = validateEaBody(res, WorkerJobRefSchema, req.body || {});
+  if (!body) return;
+  const resolved = await resolveJobDb(body.jobId, body.workerId);
+  if (!resolved) {
+    return res.status(404).json({ error: "Job not found", code: "JOB_NOT_FOUND" });
+  }
+  const { db, job } = resolved;
+  if (job.workerId && job.workerId !== body.workerId) {
+    return res.status(409).json({ error: "This job belongs to another worker", code: "JOB_LEASE_LOST" });
+  }
+  job.workerId = body.workerId;
+  job.status = "RUNNING";
+  job.leaseUntil = new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString();
+  job.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  await saveDatabase(db, db.users?.[0]?.email);
+  return res.json({ ok: true, leaseUntil: job.leaseUntil });
+});
+app.post("/api/mt5/worker/sync", async (req, res) => {
+  if (!authWorker(req, res)) return;
+  const body = validateEaBody(res, WorkerSyncSchema, req.body || {});
+  if (!body) return;
+  const resolved = await resolveJobDb(body.jobId, body.workerId);
+  if (!resolved) {
+    return res.status(404).json({ error: "Job not found", code: "JOB_NOT_FOUND" });
+  }
+  const { db, job } = resolved;
+  if (job.workerId && job.workerId !== body.workerId) {
+    return res.status(409).json({ error: "Job lease lost \u2014 stop and re-claim", code: "JOB_LEASE_LOST" });
+  }
+  const account = (db.accounts || []).find((a) => a.id === job.accountId);
+  if (!account) return res.status(404).json({ error: "Account not found" });
+  const summary = applyEaSyncPayload(db, account, body.deals, body.moneyFlows, body.account);
+  account.syncMethod = "VPS";
+  job.workerId = body.workerId;
+  job.status = "RUNNING";
+  job.leaseUntil = new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString();
+  job.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  logEaEvent(
+    db,
+    account,
+    "VPS_SYNC",
+    "info",
+    `Deals: ${summary.added} new / ${body.deals.length} received; money flows: ${summary.moneyFlowAdded} new`
+  );
+  await saveDatabase(db, db.users?.[0]?.email);
+  return res.json({
+    ok: true,
+    inserted: summary.inserted,
+    updated: summary.updated,
+    cursor: summary.maxTicket,
+    totalTrades: account.eaSyncTradeCount,
+    leaseUntil: job.leaseUntil
+  });
+});
+app.post("/api/mt5/worker/complete", async (req, res) => {
+  if (!authWorker(req, res)) return;
+  const body = validateEaBody(res, WorkerCompleteSchema, req.body || {});
+  if (!body) return;
+  const resolved = await resolveJobDb(body.jobId, body.workerId);
+  if (!resolved) {
+    return res.status(404).json({ error: "Job not found", code: "JOB_NOT_FOUND" });
+  }
+  const { db, job } = resolved;
+  if (job.workerId && job.workerId !== body.workerId) {
+    return res.status(409).json({ error: "This job belongs to another worker", code: "JOB_LEASE_LOST" });
+  }
+  const account = (db.accounts || []).find((a) => a.id === job.accountId);
+  job.status = body.ok ? "DONE" : job.attempts >= MT5_JOB_MAX_ATTEMPTS ? "FAILED" : "PENDING";
+  job.error = body.ok ? null : body.error || "Sync failed";
+  job.errorCode = body.ok ? null : body.errorCode || null;
+  job.workerId = null;
+  job.leaseUntil = null;
+  job.finishedAt = (/* @__PURE__ */ new Date()).toISOString();
+  job.updatedAt = job.finishedAt;
+  if (account) {
+    if (body.ok) {
+      account.connectionStatus = "Connected";
+      account.eaStatus = "Connected";
+      account.eaLastSyncTime = (/* @__PURE__ */ new Date()).toISOString();
+      account.lastHeartbeatAt = account.eaLastSyncTime;
+      logEaEvent(
+        db,
+        account,
+        "VPS_SYNC_DONE",
+        "info",
+        `Sync finished; ${body.tradesImported ?? account.eaSyncTradeCount ?? 0} trades in the journal`
+      );
+    } else {
+      account.connectionStatus = job.status === "FAILED" ? "Error" : "Validating";
+      if (!Array.isArray(db.mt5ConnectionErrors)) db.mt5ConnectionErrors = [];
+      db.mt5ConnectionErrors.push({
+        accountId: account.id,
+        userId: db.users?.[0]?.id,
+        errorCode: body.errorCode || "VPS_SYNC_FAILED",
+        errorMessage: String(body.error || "Sync failed").slice(0, 500),
+        occurredAt: (/* @__PURE__ */ new Date()).toISOString(),
+        resolvedAt: null
+      });
+      logEaEvent(db, account, "VPS_SYNC_FAILED", "error", String(body.error || "Sync failed").slice(0, 200));
+    }
+  }
+  await saveDatabase(db, db.users?.[0]?.email);
+  return res.json({ ok: true, status: job.status });
+});
+app.post("/api/mt5/vps/connect", async (req, res) => {
+  const db = req.userDb;
+  const currentUser = req.currentUser;
+  if (!currentUser || !db) return res.status(401).json({ error: "Not authenticated" });
+  if (!requirePro(req, res, "mt5Sync")) return;
+  if (!vpsSyncAvailable()) {
+    return res.status(503).json({
+      error: "Automatic sync is not available on this deployment yet. Use the Expert Advisor method.",
+      code: "VPS_NOT_CONFIGURED"
+    });
+  }
+  const body = validateEaBody(res, CloudConnectSchema, req.body || {});
+  if (!body) return;
+  const account = db.accounts.find((a) => a.id === body.accountId);
+  if (!account) return res.status(404).json({ error: "Account not found" });
+  if (account.userId !== currentUser.id) return res.status(403).json({ error: "Access denied" });
+  const enc = encryptInvestorPassword(body.investorPassword);
+  if (!enc) {
+    return res.status(503).json({
+      error: "Credential storage is not configured on this deployment (MT5_CREDENTIAL_MASTER_KEY).",
+      code: "CLOUD_NOT_CONFIGURED"
+    });
+  }
+  account.investorPasswordEnc = enc.enc;
+  account.passwordEncNonce = "";
+  account.passwordKmsKeyId = enc.keyId;
+  account.mt5Login = body.login;
+  account.mt5Server = body.server;
+  account.isMt5Sync = true;
+  account.isDefaultDemo = false;
+  if (account.accountType === "Demo" && (account.broker === "MT5 Demo Broker" || account.broker === "Demo Broker")) {
+    account.broker = body.server || "MetaTrader 5";
+    if (account.name === "Portfolio Account" || account.name === "Main Trading Account") {
+      account.name = `MT5 - ${body.login}`;
+    }
+  }
+  account.syncMethod = "VPS";
+  account.connectionStatus = "Queued";
+  account.eaStatus = "Not Connected";
+  await cleanupDefaultDemoAccounts(db, currentUser.id, account.id);
+  const jobId = enqueueConnectJob(db, account, "SYNC_NOW");
+  logEaEvent(db, account, "VPS_CONNECT_REQUESTED", "info", "Queued for a VPS terminal; password stored encrypted");
+  await saveDatabase(db, db.users?.[0]?.email);
+  res.json({ ok: true, jobId, syncMethod: "VPS", status: "Queued", queuePosition: queueDepth(db) });
+});
+app.post("/api/mt5/vps/sync", async (req, res) => {
+  const db = req.userDb;
+  const currentUser = req.currentUser;
+  if (!currentUser || !db) return res.status(401).json({ error: "Not authenticated" });
+  if (!requirePro(req, res, "mt5Sync")) return;
+  if (!vpsSyncAvailable()) {
+    return res.status(503).json({
+      error: "Automatic sync is not available on this deployment yet.",
+      code: "VPS_NOT_CONFIGURED"
+    });
+  }
+  const body = validateEaBody(res, CloudDisconnectSchema, req.body || {});
+  if (!body) return;
+  const account = db.accounts.find((a) => a.id === body.accountId);
+  if (!account) return res.status(404).json({ error: "Account not found" });
+  if (account.userId !== currentUser.id) return res.status(403).json({ error: "Access denied" });
+  if (!account.investorPasswordEnc) {
+    return res.status(400).json({ error: "This account is not connected for automatic sync yet." });
+  }
+  const existing = (db.mt5ConnectJobs || []).find(
+    (j) => j.accountId === account.id && (j.status === "PENDING" || j.status === "RUNNING")
+  );
+  if (existing) {
+    return res.json({ ok: true, jobId: existing.id, status: existing.status, alreadyQueued: true });
+  }
+  const jobId = enqueueConnectJob(db, account, "SYNC_NOW");
+  account.connectionStatus = "Queued";
+  logEaEvent(db, account, "VPS_SYNC_REQUESTED", "info", "Sync queued");
+  await saveDatabase(db, db.users?.[0]?.email);
+  res.json({ ok: true, jobId, status: "Queued", queuePosition: queueDepth(db) });
+});
+function queueDepth(db) {
+  return (db.mt5ConnectJobs || []).filter((j) => j.status === "PENDING").length;
+}
+var bridgeAuthToken = () => process.env.BRIDGE_AUTH_TOKEN?.trim() || process.env.MT5_WORKER_TOKEN?.trim() || "";
+function findBridgeJob(jobId) {
+  for (const db of allJobDbs()) {
+    const job = (db.mt5ConnectJobs || []).find((j) => j.id === jobId);
+    if (!job) continue;
+    const account = (db.accounts || []).find((a) => a.id === job.accountId) || null;
+    return { db, job, account };
+  }
+  return null;
+}
+app.use("/api/mt5", createMt5Router({
+  getAccount: async (id) => {
+    for (const db of allJobDbs()) {
+      const account = (db.accounts || []).find((a) => a.id === id);
+      if (account) return account;
+    }
+    return null;
+  },
+  saveAccount: async (account) => {
+    for (const db of allJobDbs()) {
+      if ((db.accounts || []).some((a) => a.id === account.id)) {
+        await saveDatabase(db, db.users?.[0]?.email);
+        return;
+      }
+    }
+  },
+  // The EA routes that would use these are all answered above, so these exist
+  // to satisfy the kit's interface rather than to be called. They write to the
+  // same collections the live handlers use, so if the kit's router ever does
+  // become reachable the data lands in one place rather than two.
+  saveSnapshots: async (snapshots) => {
+    for (const snap of snapshots) {
+      for (const db of allJobDbs()) {
+        if (!(db.accounts || []).some((a) => a.id === snap.accountId)) continue;
+        if (!Array.isArray(db.mt5AccountSnapshots)) db.mt5AccountSnapshots = [];
+        db.mt5AccountSnapshots.push({ ...snap, userId: db.users?.[0]?.id });
+        await saveDatabase(db, db.users?.[0]?.email);
+        break;
+      }
+    }
+  },
+  saveOpenPositions: async (accountId, positions) => {
+    for (const db of allJobDbs()) {
+      if (!(db.accounts || []).some((a) => a.id === accountId)) continue;
+      if (!Array.isArray(db.mt5OpenPositions)) db.mt5OpenPositions = [];
+      db.mt5OpenPositions = db.mt5OpenPositions.filter((p) => p.accountId !== accountId);
+      db.mt5OpenPositions.push(...positions.map((p) => ({ ...p, accountId, userId: db.users?.[0]?.id })));
+      await saveDatabase(db, db.users?.[0]?.email);
+      return;
+    }
+  },
+  savePendingOrders: async (accountId, orders) => {
+    for (const db of allJobDbs()) {
+      if (!(db.accounts || []).some((a) => a.id === accountId)) continue;
+      if (!Array.isArray(db.mt5PendingOrders)) db.mt5PendingOrders = [];
+      db.mt5PendingOrders = db.mt5PendingOrders.filter((o) => o.accountId !== accountId);
+      db.mt5PendingOrders.push(...orders.map((o) => ({ ...o, accountId, userId: db.users?.[0]?.id })));
+      await saveDatabase(db, db.users?.[0]?.email);
+      return;
+    }
+  },
+  saveTrades: async (trades) => {
+    if (!trades.length) return;
+    const accountId = trades[0].accountId;
+    for (const db of allJobDbs()) {
+      if (!(db.accounts || []).some((a) => a.id === accountId)) continue;
+      if (!Array.isArray(db.trades)) db.trades = [];
+      const existing = new Set(db.trades.map((t) => t.id));
+      for (const t of trades) {
+        if (!existing.has(t.id)) db.trades.push({ ...t, userId: db.users?.[0]?.id });
+      }
+      await saveDatabase(db, db.users?.[0]?.email);
+      return;
+    }
+  },
+  /**
+   * Hands the desktop worker its next job, with the credentials for it.
+   *
+   * The kit's own version returned `jobs.slice(0, 1)` from a plain queue and
+   * marked nothing, so two workers polling five seconds apart both received
+   * the same job and imported it twice. Claiming it under the same lease the
+   * VPS workers use means a second worker gets nothing instead of a duplicate,
+   * and a worker that dies mid-job has its lease reaped and the job retried.
+   */
+  getQueuedJobs: async () => {
+    for (const db of allJobDbs()) {
+      reapExpiredJobs(db);
+      const job = (db.mt5ConnectJobs || []).filter((j) => j.status === "PENDING" && (j.action === "SYNC_NOW" || j.action === "CONNECT")).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))[0];
+      if (!job) continue;
+      const account = (db.accounts || []).find((a) => a.id === job.accountId);
+      if (!account) {
+        job.status = "FAILED";
+        job.error = "Account no longer exists";
+        job.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+        await saveDatabase(db, db.users?.[0]?.email);
+        continue;
+      }
+      const password = decryptInvestorPassword(account);
+      if (!password) {
+        job.status = "FAILED";
+        job.error = "Stored investor password could not be decrypted. Ask the customer to reconnect.";
+        job.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+        account.connectionStatus = "Error";
+        logEaEvent(db, account, "VPS_CREDENTIAL_UNREADABLE", "error", job.error);
+        await saveDatabase(db, db.users?.[0]?.email);
+        continue;
+      }
+      job.status = "RUNNING";
+      job.attempts = (job.attempts || 0) + 1;
+      job.workerId = "desktop-bridge";
+      job.leaseUntil = new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString();
+      job.startedAt = (/* @__PURE__ */ new Date()).toISOString();
+      job.updatedAt = job.startedAt;
+      account.connectionStatus = "Validating";
+      logEaEvent(db, account, "BRIDGE_JOB_CLAIMED", "info", `Desktop bridge claimed ${job.action}`);
+      await saveDatabase(db, db.users?.[0]?.email);
+      return [{
+        id: job.id,
+        connection: {
+          mt5AccountNumber: String(account.mt5Login || ""),
+          mt5Server: String(account.mt5Server || ""),
+          investorPassword: password
+        }
+      }];
+    }
+    return [];
+  },
+  updateJobStatus: async (jobId, status, error) => {
+    const found = findBridgeJob(jobId);
+    if (!found) return;
+    const { db, job, account } = found;
+    if (status === "COMPLETED" || status === "FAILED") {
+      job.status = status === "COMPLETED" ? "DONE" : "FAILED";
+      job.leaseUntil = null;
+      job.completedAt = (/* @__PURE__ */ new Date()).toISOString();
+      if (error) job.error = error;
+      if (account) {
+        account.connectionStatus = status === "COMPLETED" ? "Connected" : "Error";
+        if (status === "COMPLETED") account.lastSyncTime = (/* @__PURE__ */ new Date()).toISOString();
+        logEaEvent(
+          db,
+          account,
+          `BRIDGE_${status}`,
+          status === "COMPLETED" ? "info" : "error",
+          error || `Desktop bridge reported ${status}`
+        );
+      }
+    } else {
+      job.leaseUntil = new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString();
+      job.statusMessage = status;
+      if (account) account.connectionStatus = "Syncing";
+    }
+    job.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    await saveDatabase(db, db.users?.[0]?.email);
+  },
+  /**
+   * Stores the trades the desktop worker reconstructed.
+   *
+   * worker.py sends finished trades rather than raw deals, so this cannot go
+   * through applyEaSyncPayload — that one takes deals. Rows are keyed on the
+   * broker's position id, which is what makes a re-run idempotent: the worker
+   * pulls the full history from 2000 every time it runs, so without the key
+   * every sync would duplicate the entire journal.
+   */
+  saveImportedTrades: async (jobId, payload) => {
+    const found = findBridgeJob(jobId);
+    if (!found || !found.account) return { imported: 0, skipped: 0 };
+    const { db, account } = found;
+    if (!Array.isArray(db.trades)) db.trades = [];
+    const existing = new Set(db.trades.map((t) => String(t.id)));
+    const userId = db.users?.[0]?.id;
+    let imported = 0;
+    let skipped = 0;
+    for (const t of Array.isArray(payload?.trades) ? payload.trades : []) {
+      const id = `mt5bridge_${account.id}_${t.externalTradeId}`;
+      if (existing.has(id)) {
+        skipped++;
+        continue;
+      }
+      db.trades.push({
+        id,
+        accountId: account.id,
+        userId,
+        date: t.entryTime || t.exitTime || (/* @__PURE__ */ new Date()).toISOString(),
+        exitTime: t.exitTime || null,
+        symbol: String(t.symbol || "UNKNOWN").toUpperCase(),
+        type: String(t.type).toUpperCase() === "SELL" ? "Sell" : "Buy",
+        lotSize: Number(t.lotSize) || 0,
+        entryPrice: Number(t.entryPrice) || 0,
+        exitPrice: Number(t.exitPrice) || 0,
+        // worker.py has already folded commission and swap into netProfit, so
+        // adding them again here would double-count every cost.
+        profit: Number(t.netProfit) || 0,
+        commission: Number(t.commission) || 0,
+        swap: Number(t.swap) || 0,
+        riskPercentage: 1,
+        strategy: "MT5 Bridge Sync",
+        emotion: "Calm",
+        notes: "",
+        screenshot: "",
+        tags: ["MT5 Sync"],
+        isMt5Sync: true,
+        ticket: String(t.externalTradeId)
+      });
+      existing.add(id);
+      imported++;
+    }
+    if (payload?.balance !== void 0) account.currentBalance = Number(payload.balance);
+    if (payload?.equity !== void 0) account.equity = Number(payload.equity);
+    account.eaSyncTradeCount = db.trades.filter((t) => t.accountId === account.id && t.isMt5Sync).length;
+    account.syncMethod = "VPS";
+    logEaEvent(db, account, "BRIDGE_IMPORT", "info", `Imported ${imported} trades, ${skipped} already present`);
+    await saveDatabase(db, db.users?.[0]?.email);
+    return { imported, skipped };
+  },
+  bridgeAuthToken: bridgeAuthToken()
+}));
 app.post("/api/ai/mentor", async (req, res) => {
   let db = req.userDb;
   let currentUser = req.currentUser;
@@ -5428,20 +7212,8 @@ I'm here to support your full trading journey! You can ask me things like:
 
 What's on your mind today?`;
   };
-  if (!geminiKey || geminiKey === "MY_GEMINI_API_KEY") {
-    const fallbackReply = generateSmartMentorFallback(userMessage, accountTrades, accountName);
-    return res.json({ reply: fallbackReply, fallback: true });
-  }
-  try {
-    const ai = new GoogleGenAI({
-      apiKey: geminiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build"
-        }
-      }
-    });
-    const systemInstruction = `You are ${traderName}'s personal trading mentor, coach, and companion on FX Journal Pro. Your name is "AI Mentor".
+  const openRouterKey = process.env.OPENROUTER_API_KEY || "";
+  const systemInstruction = `You are ${traderName}'s personal trading mentor, coach, and companion on FX Journal Pro. Your name is "AI Mentor".
 
 Personality & Vibe:
 - Extremely warm, friendly, encouraging, and approachable \u2014 like a trusted mentor, brother, and trading companion who truly wants to see ${traderName} succeed!
@@ -5466,26 +7238,85 @@ RESTRICTIONS:
 - If asked about unrelated topics, kindly redirect: "That's outside my expertise as your trading mentor \u2014 but I'm always here to talk trading, mindset, and strategy!"
 - NEVER promise profits or guarantee outcomes.
 - NEVER be dismissive or harsh. Always be encouraging and constructive.`;
-    const firstUserIdx = messages.findIndex((m) => m.role === "user");
-    const validMessages = firstUserIdx !== -1 ? messages.slice(firstUserIdx) : messages;
-    const conversation = validMessages.map((msg) => ({
-      role: msg.role === "mentor" ? "model" : "user",
-      parts: [{ text: msg.content }]
-    }));
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: conversation,
-      config: {
-        systemInstruction
+  const firstUserIdx = messages.findIndex((m) => m.role === "user");
+  const validMessages = firstUserIdx !== -1 ? messages.slice(firstUserIdx) : messages;
+  if (openRouterKey && !openRouterKey.includes("MY_KEY")) {
+    try {
+      const requestedModel = String(req.body?.model || "").toLowerCase();
+      let preferredModel = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+      if (requestedModel.includes("gpt")) {
+        preferredModel = "openai/gpt-4o-mini";
+      } else if (requestedModel.includes("gemma")) {
+        preferredModel = "google/gemma-4-26b-a4b-it:free";
       }
-    });
-    const replyText = response.text || generateSmartMentorFallback(userMessage, accountTrades, accountName);
-    res.json({ reply: replyText });
-  } catch (err) {
-    console.error("Gemini API Error, using smart mentor fallback:", err);
-    const fallbackReply = generateSmartMentorFallback(userMessage, accountTrades, accountName);
-    res.json({ reply: fallbackReply });
+      const candidateModels = [.../* @__PURE__ */ new Set([preferredModel, "openai/gpt-4o-mini", "google/gemma-4-26b-a4b-it:free", "openai/gpt-4o"])];
+      const promptMessages = [
+        { role: "system", content: systemInstruction },
+        ...validMessages.map((m) => ({
+          role: m.role === "mentor" ? "assistant" : "user",
+          content: m.content
+        }))
+      ];
+      for (const model of candidateModels) {
+        try {
+          const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${openRouterKey.trim()}`,
+              "HTTP-Referer": "https://www.fxjournalpro.com",
+              "X-Title": "FX Journal Pro",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model,
+              max_tokens: 1200,
+              messages: promptMessages
+            })
+          });
+          const orData = await orRes.json();
+          if (orData?.choices?.[0]?.message?.content) {
+            return res.json({ reply: orData.choices[0].message.content });
+          }
+          console.warn(`[OpenRouter] Model ${model} unavailable:`, orData?.error?.message || orData);
+        } catch (mErr) {
+          console.warn(`[OpenRouter] Model ${model} fetch failed:`, mErr?.message || mErr);
+        }
+      }
+    } catch (e) {
+      console.error("[OpenRouter] Request error:", e?.message || e);
+    }
   }
+  if (geminiKey && geminiKey !== "MY_GEMINI_API_KEY") {
+    try {
+      const ai = new GoogleGenAI({
+        apiKey: geminiKey,
+        httpOptions: {
+          headers: {
+            "User-Agent": "aistudio-build"
+          }
+        }
+      });
+      const conversation = validMessages.map((msg) => ({
+        role: msg.role === "mentor" ? "model" : "user",
+        parts: [{ text: msg.content }]
+      }));
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: conversation,
+        config: {
+          systemInstruction
+        }
+      });
+      const replyText = response.text;
+      if (replyText) {
+        return res.json({ reply: replyText });
+      }
+    } catch (err) {
+      console.error("Gemini API Error, using smart mentor fallback:", err);
+    }
+  }
+  const fallbackReply = generateSmartMentorFallback(userMessage, accountTrades, accountName);
+  return res.json({ reply: fallbackReply, fallback: true });
 });
 app.get("/api/tickets", async (req, res) => {
   let db = req.userDb;
@@ -5521,7 +7352,7 @@ app.post("/api/tickets", async (req, res) => {
   const { title, description, category } = req.body;
   if (!title || !description) return res.status(400).json({ error: "Title and description are required" });
   const newTicket = {
-    id: `ticket_${crypto2.randomUUID()}`,
+    id: `ticket_${crypto4.randomUUID()}`,
     userId: currentUser.id,
     userEmail: currentUser.email,
     userName: currentUser.name || "",
@@ -5609,19 +7440,28 @@ var razorpayAuth = () => {
   const keyId = process.env.RAZORPAY_KEY_ID?.trim();
   const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
   if (!keyId || !keySecret) return null;
-  return { keyId, keySecret, header: "Basic " + Buffer.from(`${keyId}:${keySecret}`).toString("base64") };
+  return {
+    keyId,
+    keySecret,
+    header: "Basic " + Buffer.from(`${keyId}:${keySecret}`).toString("base64"),
+    mode: keyId.startsWith("rzp_live_") ? "production" : "test"
+  };
 };
 var razorpayFetch = async (path3, init = {}) => {
   const auth2 = razorpayAuth();
   if (!auth2) throw new Error("RAZORPAY_NOT_CONFIGURED");
   const res = await fetch(RAZORPAY_API + path3, {
     ...init,
-    headers: { "Content-Type": "application/json", Authorization: auth2.header, ...init.headers || {} }
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: auth2.header,
+      ...init.headers || {}
+    }
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    console.error(`[razorpay] ${path3} failed:`, body);
-    throw new Error(body?.error?.description || "Razorpay request failed");
+    console.error(`[razorpay] ${path3} failed (${res.status}):`, body);
+    throw new Error(body?.error?.description || body?.message || "Razorpay request failed");
   }
   return body;
 };
@@ -5644,7 +7484,7 @@ var claimPayment = async (opts) => {
   if (!providerPaymentId) return false;
   if (useSupabase) {
     const { error } = await supabase.from("payments").insert({
-      id: `pay_${crypto2.randomUUID()}`,
+      id: `pay_${crypto4.randomUUID()}`,
       user_id: userId,
       provider: "razorpay",
       provider_payment_id: providerPaymentId,
@@ -5673,7 +7513,7 @@ var claimPayment = async (opts) => {
     const fileDb = loadDatabaseFromFile();
     fileDb.payments = fileDb.payments || [];
     fileDb.payments.unshift({
-      id: `pay_${crypto2.randomUUID()}`,
+      id: `pay_${crypto4.randomUUID()}`,
       userId,
       userEmail: userEmail || null,
       provider: "razorpay",
@@ -5726,11 +7566,11 @@ app.get("/api/payments/config", (req, res) => {
   const configured = !!auth2;
   res.json({
     configured,
-    // Only true on a dev box with ALLOW_TEST_BILLING=true. The client uses it
-    // to decide whether to show the test-tier switch at all.
+    provider: "razorpay",
+    keyId: auth2?.keyId || "rzp_test_sandbox_mode",
+    mode: auth2?.mode || "test",
     testBilling: allowTestBilling(),
     sandboxMode: !configured && allowTestBilling(),
-    keyId: auth2?.keyId || "rzp_test_sandbox_mode",
     amount: PRO_PLAN_AMOUNT_PAISE,
     amountRupees: 499,
     currency: "INR",
@@ -5763,8 +7603,10 @@ app.post(["/api/payments/order", "/api/payments/create-order"], async (req, res)
     }
     return res.json({
       sandboxMode: true,
+      provider: "razorpay",
+      mode: "sandbox",
       keyId: "rzp_test_sandbox",
-      orderId: `order_test_${currentUser.id.slice(-6)}_${crypto2.randomUUID()}`,
+      orderId: `order_test_${currentUser.id.slice(-6)}_${crypto4.randomUUID()}`,
       amount: orderAmountPaise,
       amountRupees: appliedOfferPrice,
       originalPrice: 499,
@@ -5781,7 +7623,7 @@ app.post(["/api/payments/order", "/api/payments/create-order"], async (req, res)
       body: JSON.stringify({
         amount: orderAmountPaise,
         currency: "INR",
-        receipt: `rcpt_${currentUser.id.slice(0, 8)}_${Date.now().toString(36)}`,
+        receipt: `rcpt_${currentUser.id.replace(/[^A-Za-z0-9]/g, "").slice(0, 8)}_${Date.now().toString(36)}`,
         notes: {
           userId: currentUser.id,
           email: currentUser.email || "",
@@ -5795,6 +7637,8 @@ app.post(["/api/payments/order", "/api/payments/create-order"], async (req, res)
       })
     });
     res.json({
+      provider: "razorpay",
+      keyId: auth2.keyId,
       orderId: order.id,
       amount: order.amount,
       amountRupees: appliedOfferPrice,
@@ -5802,68 +7646,39 @@ app.post(["/api/payments/order", "/api/payments/create-order"], async (req, res)
       mentorCommission,
       discountApplied: !!partner && appliedOfferPrice < 499,
       couponCode: partner?.code || null,
-      currency: order.currency,
-      keyId: auth2.keyId
+      currency: order.currency || "INR"
     });
   } catch (err) {
     console.error("[payments/order]", err?.message || err);
-    res.status(502).json({ error: "Could not initiate Razorpay order. Please try again." });
+    if (allowTestBilling()) {
+      console.log("[payments/order] Razorpay live API unavailable; falling back to simulated test billing.");
+      return res.json({
+        sandboxMode: true,
+        provider: "razorpay",
+        mode: "sandbox",
+        keyId: "rzp_test_sandbox",
+        orderId: `order_test_${currentUser.id.slice(-6)}_${crypto4.randomUUID()}`,
+        amount: orderAmountPaise,
+        amountRupees: appliedOfferPrice,
+        originalPrice: 499,
+        mentorCommission,
+        discountApplied: !!partner && appliedOfferPrice < 499,
+        couponCode: partner?.code || null,
+        currency: "INR",
+        message: "Razorpay test billing: simulated Pro upgrade."
+      });
+    }
+    res.status(502).json({ error: err?.message || "Could not initiate Razorpay order. Please try again." });
   }
 });
 app.post("/api/payments/subscribe", async (req, res) => {
   const currentUser = req.currentUser;
   if (!currentUser) return res.status(401).json({ error: "Not authenticated" });
-  const planId = process.env.RAZORPAY_PLAN_ID?.trim();
-  const auth2 = razorpayAuth();
-  if (!auth2 || !planId) {
-    if (!allowTestBilling()) {
-      console.error(auth2 ? "[payments/subscribe] RAZORPAY_PLAN_ID is not set \u2014 run `npm run razorpay:check`." : "[payments/subscribe] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set.");
-      return res.status(503).json({
-        error: "Payments are not configured yet. Please try again shortly."
-      });
-    }
-    return res.json({
-      sandboxMode: true,
-      keyId: "rzp_test_sandbox",
-      subscriptionId: `sub_test_${currentUser.id.slice(-6)}_${Date.now()}`,
-      message: "Razorpay running in test/sandbox mode."
-    });
-  }
-  try {
-    if (useSupabase) {
-      const { data: existing } = await supabase.from("subscriptions").select("*").eq("user_id", currentUser.id).in("status", ["created", "authenticated", "active", "pending"]).maybeSingle();
-      if (existing?.provider_subscription_id && existing.status !== "active") {
-        return res.json({ subscriptionId: existing.provider_subscription_id, keyId: auth2.keyId, reused: true });
-      }
-      if (existing?.status === "active") {
-        return res.status(409).json({ error: "You already have an active Pro subscription." });
-      }
-    }
-    const subscription = await razorpayFetch("/subscriptions", {
-      method: "POST",
-      body: JSON.stringify({
-        plan_id: planId,
-        customer_notify: 1,
-        total_count: 120,
-        // ten years of monthly cycles; cancellation ends it
-        notes: { userId: currentUser.id, email: currentUser.email }
-      })
-    });
-    if (useSupabase) {
-      await supabase.from("subscriptions").insert({
-        id: `sub_${crypto2.randomUUID()}`,
-        user_id: currentUser.id,
-        provider: "razorpay",
-        provider_subscription_id: subscription.id,
-        plan: "pro",
-        status: subscription.status || "created"
-      });
-    }
-    res.json({ subscriptionId: subscription.id, keyId: auth2.keyId });
-  } catch (err) {
-    console.error("[payments/subscribe]", err?.message || err);
-    res.status(502).json({ error: "Could not start the subscription. Please try again." });
-  }
+  console.warn("[payments/subscribe] called, but Pro is sold as a 30-day order \u2014 use /api/payments/order.");
+  return res.status(503).json({
+    error: "Monthly auto-billing is not available yet. Pro is sold as a 30-day pass.",
+    code: "SUBSCRIPTIONS_NOT_ENABLED"
+  });
 });
 app.post("/api/payments/toggle-test-tier", async (req, res) => {
   const currentUser = req.currentUser;
@@ -5889,10 +7704,25 @@ app.post("/api/payments/toggle-test-tier", async (req, res) => {
     message: isPro ? "Activated Pro Mode! All features unlocked." : "Switched to Free Tier."
   });
 });
+var grantProForPayment = async (opts) => {
+  const { userId, providerPaymentId, amountRupees, userEmail, periodDays = 30 } = opts;
+  const claimed = await claimPayment({
+    providerPaymentId,
+    userId,
+    userEmail,
+    amountRupees
+  });
+  if (!claimed) return { granted: false, proUntil: null };
+  const existingUntil = await readProUntil(userId);
+  const base = existingUntil && existingUntil > Date.now() ? existingUntil : Date.now();
+  const proUntil = new Date(base + periodDays * 864e5);
+  await applyProState(userId, proUntil);
+  return { granted: true, proUntil };
+};
 app.post("/api/payments/webhook", async (req, res) => {
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || process.env.RAZORPAY_KEY_SECRET?.trim();
   if (!secret) {
-    console.error("[webhook] RAZORPAY_WEBHOOK_SECRET is not set \u2014 rejecting.");
+    console.error("[webhook] RAZORPAY_WEBHOOK_SECRET / RAZORPAY_KEY_SECRET is not set \u2014 rejecting.");
     return res.status(503).end();
   }
   const signature = req.headers["x-razorpay-signature"];
@@ -5901,8 +7731,8 @@ app.post("/api/payments/webhook", async (req, res) => {
     console.error("[webhook] raw body unavailable \u2014 cannot verify signature.");
     return res.status(400).end();
   }
-  const expected = crypto2.createHmac("sha256", secret).update(raw, "utf8").digest("hex");
-  if (!signature || !safeTokenEqual(expected, String(signature))) {
+  const expected = crypto4.createHmac("sha256", secret).update(raw, "utf8").digest("hex");
+  if (!signature || !safeTokenEqual2(expected, String(signature))) {
     console.warn("[webhook] signature mismatch \u2014 ignoring.");
     return res.status(400).end();
   }
@@ -5914,62 +7744,47 @@ app.post("/api/payments/webhook", async (req, res) => {
   }
   res.status(200).json({ received: true });
   try {
-    const type = event.event;
-    const sub = event.payload?.subscription?.entity;
+    const type = String(event.event || "");
     const payment = event.payload?.payment?.entity;
-    const providerSubId = sub?.id || payment?.subscription_id;
-    if (!providerSubId) {
-      if (type !== "payment.captured" && type !== "order.paid") return;
-      const payUserId = payment?.notes?.userId || event.payload?.order?.entity?.notes?.userId;
-      const payId = payment?.id;
+    const order = event.payload?.order?.entity;
+    const sub = event.payload?.subscription?.entity;
+    if (type === "payment.captured" || type === "order.paid") {
+      const payUserId = payment?.notes?.userId || order?.notes?.userId;
+      const payId = payment?.id || order?.id;
       if (!payUserId || !payId) {
-        console.warn("[webhook] one-time payment with no userId in notes:", payId);
+        console.warn("[webhook] payment with no userId in notes:", payId);
         return;
       }
-      if (useSupabase) {
-        const { data: seen } = await supabase.from("payments").select("id").eq("provider_payment_id", payId).maybeSingle();
-        if (seen) {
-          console.log("[webhook] payment already recorded, skipping:", payId);
-          return;
-        }
-      } else {
-        const local = loadDatabaseFromFile();
-        if ((local.payments || []).some((x) => x.providerPaymentId === payId)) {
-          console.log("[webhook] payment already recorded, skipping:", payId);
-          return;
-        }
+      const amountRupees = Number((payment?.amount || order?.amount || PRO_PLAN_AMOUNT_PAISE) / 100);
+      const periodDays = Number(order?.notes?.periodDays || payment?.notes?.periodDays || 30);
+      const { granted, proUntil } = await grantProForPayment({
+        userId: payUserId,
+        providerPaymentId: String(payId),
+        amountRupees,
+        userEmail: payment?.email || payment?.notes?.email,
+        periodDays
+      });
+      if (!granted) {
+        console.log("[webhook] payment already credited, skipping:", payId);
+        return;
       }
-      const existingUntil = await readProUntil(payUserId);
-      const base = existingUntil && existingUntil > Date.now() ? existingUntil : Date.now();
-      const until = new Date(base + 30 * 864e5);
-      await applyProState(payUserId, until);
-      if (useSupabase) {
-        await supabase.from("payments").upsert({
-          id: `pay_${crypto2.randomUUID()}`,
-          user_id: payUserId,
-          provider: "razorpay",
-          provider_payment_id: payId,
-          amount: (payment.amount || PRO_PLAN_AMOUNT_PAISE) / 100,
-          currency: payment.currency || "INR",
-          plan: "pro",
-          status: payment.status || "captured",
-          paid_at: (/* @__PURE__ */ new Date()).toISOString()
-        }, { onConflict: "provider_payment_id" });
+      console.log(`[webhook] ${type} \u2014 Pro until ${proUntil?.toISOString()} for ${payUserId}`);
+      if (useSupabase && proUntil) {
+        await supabase.from("subscriptions").update({
+          status: "active",
+          current_period_end: proUntil.toISOString(),
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        }).eq("user_id", payUserId).in("status", ["created", "authenticated", "active", "pending", "halted"]);
       }
-      console.log(`[webhook] ${type} \u2014 Pro until ${until.toISOString()} for ${payUserId} (order path)`);
       return;
     }
-    if (!useSupabase) return;
-    const { data: row } = await supabase.from("subscriptions").select("*").eq("provider_subscription_id", providerSubId).maybeSingle();
-    if (!row) {
-      console.warn("[webhook] no local subscription for", providerSubId);
-      return;
-    }
-    const periodEnd = sub?.current_end ? new Date(sub.current_end * 1e3) : null;
-    switch (type) {
-      case "subscription.activated":
-      case "subscription.charged": {
-        const until = periodEnd || new Date(Date.now() + 31 * 24 * 60 * 60 * 1e3);
+    const providerSubId = sub?.id || payment?.subscription_id;
+    if (providerSubId && useSupabase) {
+      const { data: row } = await supabase.from("subscriptions").select("*").eq("provider_subscription_id", providerSubId).maybeSingle();
+      if (!row) return;
+      const periodEnd = sub?.current_end ? new Date(sub.current_end * 1e3) : null;
+      if (type === "subscription.activated" || type === "subscription.charged") {
+        const until = periodEnd || new Date(Date.now() + 31 * 864e5);
         await supabase.from("subscriptions").update({
           status: "active",
           current_period_end: until.toISOString(),
@@ -5977,43 +7792,14 @@ app.post("/api/payments/webhook", async (req, res) => {
         }).eq("id", row.id);
         await applyProState(row.user_id, until);
         if (payment?.id) {
-          await supabase.from("payments").upsert({
-            id: `pay_${crypto2.randomUUID()}`,
-            user_id: row.user_id,
-            subscription_id: row.id,
-            provider: "razorpay",
-            provider_payment_id: payment.id,
-            amount: (payment.amount || PRO_PLAN_AMOUNT_PAISE) / 100,
-            currency: payment.currency || "INR",
-            plan: "pro",
-            status: payment.status || "captured",
-            paid_at: (/* @__PURE__ */ new Date()).toISOString()
-          }, { onConflict: "provider_payment_id" });
+          await claimPayment({
+            providerPaymentId: String(payment.id),
+            userId: row.user_id,
+            userEmail: payment?.email,
+            amountRupees: (payment.amount || PRO_PLAN_AMOUNT_PAISE) / 100
+          });
         }
-        console.log(`[webhook] ${type} \u2014 Pro until ${until.toISOString()} for ${row.user_id}`);
-        break;
       }
-      case "subscription.cancelled":
-      case "subscription.completed":
-      case "subscription.expired": {
-        await supabase.from("subscriptions").update({
-          status: type.split(".")[1],
-          updated_at: (/* @__PURE__ */ new Date()).toISOString()
-        }).eq("id", row.id);
-        const until = row.current_period_end ? new Date(row.current_period_end) : null;
-        await applyProState(row.user_id, until);
-        break;
-      }
-      case "subscription.halted":
-      case "subscription.pending": {
-        await supabase.from("subscriptions").update({
-          status: type.split(".")[1],
-          updated_at: (/* @__PURE__ */ new Date()).toISOString()
-        }).eq("id", row.id);
-        break;
-      }
-      default:
-        break;
     }
   } catch (err) {
     console.error("[webhook] handler error:", err?.message || err);
@@ -6041,70 +7827,48 @@ app.post("/api/payments/verify", async (req, res) => {
       message: "Sandbox Upgrade Complete! Welcome to Pro."
     });
   }
-  const {
-    razorpay_order_id,
-    razorpay_subscription_id,
-    razorpay_payment_id,
-    razorpay_signature
-  } = req.body || {};
+  const razorpay_order_id = String(req.body?.razorpay_order_id || req.body?.orderId || req.body?.order_id || "").trim();
+  const razorpay_payment_id = String(req.body?.razorpay_payment_id || req.body?.paymentId || req.body?.payment_id || "").trim();
+  const razorpay_signature = String(req.body?.razorpay_signature || req.body?.signature || "").trim();
+  const razorpay_subscription_id = String(req.body?.razorpay_subscription_id || req.body?.subscriptionId || "").trim();
   const auth2 = razorpayAuth();
   if (!auth2) return res.status(503).json({ error: "Payments are not configured yet." });
   if (!razorpay_payment_id || !razorpay_signature || !razorpay_order_id && !razorpay_subscription_id) {
     return res.status(400).json({ error: "Incomplete payment confirmation." });
   }
-  if (razorpay_order_id) {
-    const expected2 = crypto2.createHmac("sha256", auth2.keySecret).update(`${razorpay_order_id}|${razorpay_payment_id}`).digest("hex");
-    if (!safeTokenEqual(expected2, String(razorpay_signature))) {
-      console.warn(`[payments/verify] order signature mismatch for user ${currentUser.id}`);
-      return res.status(400).json({ error: "Payment verification failed." });
-    }
-    const claimed = await claimPayment({
-      providerPaymentId: String(razorpay_payment_id),
-      userId: currentUser.id,
-      userEmail: currentUser.email,
-      amountRupees: PRO_PLAN_AMOUNT_PAISE / 100
-    });
-    if (!claimed) {
-      return res.json({
-        success: true,
-        active: !!currentUser.isPro,
-        proUntil: currentUser.proUntil || null,
-        alreadyApplied: true,
-        message: "This payment was already applied to your account."
-      });
-    }
-    const currentProUntil = currentUser.proUntil ? new Date(currentUser.proUntil).getTime() : 0;
-    const baseTime = currentProUntil > Date.now() ? currentProUntil : Date.now();
-    const proUntil2 = new Date(baseTime + 30 * 864e5);
-    await applyProState(currentUser.id, proUntil2);
-    const db2 = req.userDb;
-    if (db2 && Array.isArray(db2.users)) {
-      const u = db2.users.find((x) => x.id === currentUser.id);
-      if (u) {
-        u.isPro = true;
-        u.proUntil = proUntil2.toISOString();
-        await saveDatabase(db2);
-      }
-    }
-    return res.json({
-      success: true,
-      active: true,
-      proUntil: proUntil2.toISOString(),
-      message: "Payment verified successfully! Welcome to Pro (30 days access)."
-    });
-  }
-  const expected = crypto2.createHmac("sha256", auth2.keySecret).update(`${razorpay_payment_id}|${razorpay_subscription_id}`).digest("hex");
-  if (!safeTokenEqual(expected, String(razorpay_signature))) {
+  const textToSign = razorpay_order_id ? `${razorpay_order_id}|${razorpay_payment_id}` : `${razorpay_payment_id}|${razorpay_subscription_id}`;
+  const expected = crypto4.createHmac("sha256", auth2.keySecret).update(textToSign).digest("hex");
+  if (!safeTokenEqual2(expected, razorpay_signature)) {
     console.warn(`[payments/verify] signature mismatch for user ${currentUser.id}`);
     return res.status(400).json({ error: "Payment verification failed." });
   }
-  const subClaimed = await claimPayment({
-    providerPaymentId: String(razorpay_payment_id),
+  let periodDays = 30;
+  let amountRupees = PRO_PLAN_AMOUNT_PAISE / 100;
+  if (razorpay_order_id) {
+    try {
+      const order = await razorpayFetch(`/orders/${encodeURIComponent(razorpay_order_id)}`);
+      if (order?.notes?.userId && order.notes.userId !== currentUser.id) {
+        console.warn(`[payments/verify] order ${razorpay_order_id} belongs to ${order.notes.userId}, not ${currentUser.id}`);
+        return res.status(400).json({ error: "Payment verification failed." });
+      }
+      if (order?.amount) {
+        amountRupees = order.amount / 100;
+      }
+      if (order?.notes?.periodDays) {
+        periodDays = Number(order.notes.periodDays) || 30;
+      }
+    } catch (e) {
+      console.warn("[payments/verify] order fetch warning (offline fallback allowed if signature valid):", e);
+    }
+  }
+  const { granted, proUntil } = await grantProForPayment({
     userId: currentUser.id,
+    providerPaymentId: razorpay_payment_id,
+    amountRupees,
     userEmail: currentUser.email,
-    amountRupees: PRO_PLAN_AMOUNT_PAISE / 100
+    periodDays
   });
-  if (!subClaimed) {
+  if (!granted) {
     return res.json({
       success: true,
       active: !!currentUser.isPro,
@@ -6112,16 +7876,6 @@ app.post("/api/payments/verify", async (req, res) => {
       alreadyApplied: true,
       message: "This payment was already applied to your account."
     });
-  }
-  const proUntil = new Date(Date.now() + 31 * 864e5);
-  await applyProState(currentUser.id, proUntil);
-  let active = true;
-  if (useSupabase) {
-    await supabase.from("subscriptions").update({
-      status: "active",
-      current_period_end: proUntil.toISOString(),
-      updated_at: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("provider_subscription_id", razorpay_subscription_id);
   }
   const db = req.userDb;
   if (db && Array.isArray(db.users)) {
@@ -6134,9 +7888,9 @@ app.post("/api/payments/verify", async (req, res) => {
   }
   res.json({
     success: true,
-    active,
+    active: true,
     proUntil: proUntil.toISOString(),
-    message: "Payment received. Welcome to Pro!"
+    message: `Payment verified successfully! Welcome to Pro (${periodDays} days access).`
   });
 });
 app.post("/api/payments/cancel", async (req, res) => {
@@ -6148,12 +7902,9 @@ app.post("/api/payments/cancel", async (req, res) => {
     return res.status(404).json({ error: "No active subscription to cancel." });
   }
   try {
-    await razorpayFetch(`/subscriptions/${row.provider_subscription_id}/cancel`, {
-      method: "POST",
-      body: JSON.stringify({ cancel_at_cycle_end: 1 })
-    });
     await supabase.from("subscriptions").update({
       cancel_at_period_end: true,
+      status: "cancelled",
       updated_at: (/* @__PURE__ */ new Date()).toISOString()
     }).eq("id", row.id);
     res.json({
@@ -6258,7 +8009,7 @@ var requirePermission = async (req, res, permission) => {
 var inMemoryAuditLogs = [];
 var writeAuditLog = async (req, actor, action, targetType, targetId, detail = {}) => {
   const entry = {
-    id: `audit_${crypto2.randomUUID()}`,
+    id: `audit_${crypto4.randomUUID()}`,
     actor_id: actor.user?.id || null,
     actor_email: actor.user?.email || null,
     actor_role: actor.role,
@@ -6320,14 +8071,14 @@ var tradeVisibleUserIds = async (role, adminUserId) => {
   const ids = scope || [];
   if (ids.length === 0) return [];
   if (!useSupabase) {
-    return localAllUsers().filter((u) => ids.includes(u.id) && (u.id === "user_demo_pro" || u.id.startsWith("user_demo_") || u.allowPartnerTradeView !== false)).map((u) => u.id);
+    return localAllUsers().filter((u) => ids.includes(u.id) && u.allowPartnerTradeView === true).map((u) => u.id);
   }
   const { data, error } = await supabase.from("users").select("id, allow_partner_trade_view").in("id", ids);
   if (error) {
     console.error("[tradeVisibleUserIds] consent lookup failed:", error.message);
     return [];
   }
-  return (data || []).filter((r) => r.id === "user_demo_pro" || r.id.startsWith("user_demo_") || r.allow_partner_trade_view !== false).map((r) => r.id);
+  return (data || []).filter((r) => r.allow_partner_trade_view === true).map((r) => r.id);
 };
 var canSeeTrades = (visible, userId) => visible === null || visible.includes(userId);
 var mentorAccessByUser = async (role, adminUserId) => {
@@ -6339,8 +8090,7 @@ var mentorAccessByUser = async (role, adminUserId) => {
   if (!useSupabase) {
     for (const u of localAllUsers()) {
       if (!ids.includes(u.id)) continue;
-      const demo = u.id === "user_demo_pro" || String(u.id).startsWith("user_demo_");
-      out.set(u.id, demo ? normaliseMentorAccess({ notebook: true }, true) : normaliseMentorAccess(u.mentorAccess, u.allowPartnerTradeView === true));
+      out.set(u.id, normaliseMentorAccess(u.mentorAccess, u.allowPartnerTradeView === true));
     }
     return out;
   }
@@ -6350,8 +8100,7 @@ var mentorAccessByUser = async (role, adminUserId) => {
     return out;
   }
   for (const r of data || []) {
-    const demo = r.id === "user_demo_pro" || String(r.id).startsWith("user_demo_");
-    out.set(r.id, demo ? normaliseMentorAccess({ notebook: true }, true) : normaliseMentorAccess(r.mentor_access, r.allow_partner_trade_view === true));
+    out.set(r.id, normaliseMentorAccess(r.mentor_access, r.allow_partner_trade_view === true));
   }
   return out;
 };
@@ -6364,14 +8113,15 @@ var MENTOR_ACCESS_BOOLEAN_SECTIONS = [
   "journal",
   "notebook"
 ];
-var normaliseMentorAccess = (raw, _legacyAllow) => {
+var normaliseMentorAccess = (raw, legacyAllow) => {
+  const legacy = legacyAllow === true;
   const base = {
-    dashboard: true,
-    analysis: true,
+    dashboard: legacy,
+    analysis: legacy,
     accounts: null,
-    calendar: true,
-    liveCharts: true,
-    journal: true,
+    calendar: legacy,
+    liveCharts: legacy,
+    journal: legacy,
     notebook: false
   };
   if (!raw || typeof raw !== "object") return base;
@@ -6388,14 +8138,7 @@ var normaliseMentorAccess = (raw, _legacyAllow) => {
   }
   return out;
 };
-var mentorCanSee = (access, section) => {
-  if (section === "accounts") return access.accounts === null || access.accounts.length > 0;
-  return access[section] === true;
-};
 var readMentorAccess = async (userId) => {
-  if (userId === "user_demo_pro" || userId.startsWith("user_demo_")) {
-    return normaliseMentorAccess({ notebook: true }, true);
-  }
   if (!useSupabase) {
     const row = localFindUser((u) => u.id === userId);
     return normaliseMentorAccess(row?.mentorAccess, row?.allowPartnerTradeView === true);
@@ -6404,7 +8147,6 @@ var readMentorAccess = async (userId) => {
   return normaliseMentorAccess(data?.mentor_access, data?.allow_partner_trade_view === true);
 };
 var readTradeConsent = async (userId) => {
-  if (userId === "user_demo_pro" || userId.startsWith("user_demo_")) return true;
   const access = await readMentorAccess(userId);
   if (access && (access.analysis || access.journal || access.dashboard || access.calendar || access.liveCharts)) {
     return true;
@@ -6479,7 +8221,7 @@ app.post("/api/admin/assignments", async (req, res) => {
   if (!target) return res.status(404).json({ error: "No account with that email." });
   if (target.id === subAdminId) return res.status(400).json({ error: "A sub-admin cannot be assigned to themselves." });
   const { error } = await supabase.from("sub_admin_assignments").insert({
-    id: `saa_${crypto2.randomUUID()}`,
+    id: `saa_${crypto4.randomUUID()}`,
     sub_admin_id: subAdminId,
     user_id: target.id,
     assigned_by: ctx.user?.id || null,
@@ -6678,7 +8420,7 @@ app.get("/api/subadmin/overview", async (req, res) => {
     const access = accessOf(accessByUser, u.id);
     const shown = access.accounts === null ? own : own.filter((t) => t.accountId && access.accounts.includes(t.accountId));
     const tradesVisible = canSeeTrades(visible, u.id) && access.dashboard;
-    const sharesAnything = MENTOR_ACCESS_BOOLEAN_SECTIONS.some((k) => access[k] === true) || mentorCanSee(access, "accounts");
+    const sharesAnything = MENTOR_ACCESS_BOOLEAN_SECTIONS.some((k) => access[k] === true);
     return {
       id: u.id,
       name: u.name || (u.email || "").split("@")[0],
@@ -6727,7 +8469,7 @@ app.get("/api/subadmin/user/:id", async (req, res) => {
   const scope = await scopeUserIds(ctx.role, ctx.user?.id || null);
   if (!canSeeUser(scope, id)) return res.status(404).json({ error: "User not found" });
   const access = ctx.role === "PARTNER" ? await readMentorAccess(id) : normaliseMentorAccess(null, true);
-  const sharesAnything = ctx.role !== "PARTNER" || MENTOR_ACCESS_BOOLEAN_SECTIONS.some((k) => access[k] === true) || mentorCanSee(access, "accounts");
+  const sharesAnything = ctx.role !== "PARTNER" || MENTOR_ACCESS_BOOLEAN_SECTIONS.some((k) => access[k] === true);
   if (!sharesAnything) {
     return res.status(403).json({
       error: "This user has not shared their trading data with you.",
@@ -6836,6 +8578,19 @@ var localAllPayments = () => {
   }
   return [...byId.values()];
 };
+var localAllRows = (key) => {
+  const byId = /* @__PURE__ */ new Map();
+  try {
+    for (const r of loadDatabaseFromFile()?.[key] || []) if (r?.id) byId.set(r.id, r);
+  } catch {
+  }
+  for (const cached of userDatabases.values()) {
+    for (const r of cached?.[key] || []) if (r?.id && !byId.has(r.id)) byId.set(r.id, r);
+  }
+  return [...byId.values()];
+};
+var localAllAccounts = () => localAllRows("accounts");
+var localAllTrades = () => localAllRows("trades");
 var referralEarningsByReferrer = (users, payments) => {
   const referrerOf = {};
   for (const u of users || []) {
@@ -6851,19 +8606,24 @@ var referralEarningsByReferrer = (users, payments) => {
   return earned;
 };
 var localUserRows = (userId) => {
+  const seen = /* @__PURE__ */ new Set();
   const rows = [];
+  const add = (row) => {
+    if (!row || seen.has(row)) return;
+    seen.add(row);
+    rows.push(row);
+  };
   let fileDb = null;
   try {
     fileDb = loadDatabaseFromFile();
     const fileRow = (fileDb?.users || []).find((u) => u.id === userId);
-    if (fileRow) rows.push(fileRow);
+    if (fileRow) add(fileRow);
     else fileDb = null;
   } catch {
     fileDb = null;
   }
   for (const cached of userDatabases.values()) {
-    const row = (cached?.users || []).find((u) => u.id === userId);
-    if (row) rows.push(row);
+    add((cached?.users || []).find((u) => u.id === userId));
   }
   return { rows, fileDb };
 };
@@ -6892,7 +8652,7 @@ var generateReferralCode = (seed) => {
   const base = (seed || "PARTNER").replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 6) || "PARTNER";
   let suffix = "";
   for (let i = 0; i < 4; i++) {
-    suffix += CODE_ALPHABET[crypto2.randomInt(0, CODE_ALPHABET.length)];
+    suffix += CODE_ALPHABET[crypto4.randomInt(0, CODE_ALPHABET.length)];
   }
   return `${base}${suffix}`.slice(0, 16);
 };
@@ -6954,15 +8714,15 @@ async function getPartnerData(userId) {
       createdAt = profData?.created_at || createdAt;
       if (typeof profData?.offer_price === "number") {
         offerPrice = profData.offer_price;
-      } else if (typeof userPrefs?.partnerOfferPrice === "number") {
-        offerPrice = userPrefs.partnerOfferPrice;
+      } else if (typeof prefsValue(userPrefs, "partnerOfferPrice") === "number") {
+        offerPrice = prefsValue(userPrefs, "partnerOfferPrice");
       }
       if (Array.isArray(profData?.links)) {
         links = profData.links;
-      } else if (Array.isArray(userPrefs?.partnerLinks)) {
-        links = userPrefs.partnerLinks;
+      } else if (Array.isArray(prefsValue(userPrefs, "partnerLinks"))) {
+        links = prefsValue(userPrefs, "partnerLinks");
       }
-      payoutDetails = profData?.payout_details || userPrefs?.payoutDetails || null;
+      payoutDetails = profData?.payout_details || prefsValue(userPrefs, "payoutDetails") || null;
     } catch (err) {
       console.warn("[getPartnerData] Error loading partner data:", err);
     }
@@ -6981,7 +8741,7 @@ async function savePartnerLinks(userId, links) {
   }
   try {
     const { data: u } = await supabase.from("users").select("preferences").eq("id", userId).maybeSingle();
-    const nextPrefs = { ...u?.preferences || {}, partnerLinks: links };
+    const nextPrefs = setPrefsValue({ ...u?.preferences || {} }, "partnerLinks", links);
     await supabase.from("users").update({ preferences: nextPrefs }).eq("id", userId);
   } catch (err) {
     console.warn("[savePartnerLinks] Error updating users.preferences:", err);
@@ -7061,13 +8821,13 @@ var findPartnerByCode = async (rawCode) => {
   try {
     const { data: partnerUsers } = await supabase.from("users").select("id, preferences").eq("role", "PARTNER");
     for (const u of partnerUsers || []) {
-      const links = u.preferences?.partnerLinks || [];
+      const links = prefsValue(u.preferences, "partnerLinks") || [];
       const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
       if (link) {
         return {
           userId: u.id,
           code: link.code,
-          offerPrice: link.offerPrice || u.preferences?.partnerOfferPrice || 499,
+          offerPrice: link.offerPrice || prefsValue(u.preferences, "partnerOfferPrice") || 499,
           isActive: link.isActive !== false,
           linkId: link.id,
           label: link.label
@@ -7138,7 +8898,7 @@ async function linkReferral(req, userId, rawCode) {
     try {
       await supabase.from("sub_admin_assignments").upsert(
         {
-          id: `saa_${crypto2.randomUUID()}`,
+          id: `saa_${crypto4.randomUUID()}`,
           sub_admin_id: partner.userId,
           user_id: userId,
           assigned_by: null,
@@ -7239,9 +8999,9 @@ async function savePartnerProfile(userId, code, createdBy, offerPrice = 499, lin
     const { data: u } = await supabase.from("users").select("preferences").eq("id", userId).maybeSingle();
     const curPrefs = u?.preferences || {};
     const nextPrefs = { ...curPrefs };
-    if (offerPrice !== void 0) nextPrefs.partnerOfferPrice = offerPrice;
-    if (links !== void 0) nextPrefs.partnerLinks = links;
-    if (payoutDetails !== void 0) nextPrefs.payoutDetails = payoutDetails;
+    if (offerPrice !== void 0) setPrefsValue(nextPrefs, "partnerOfferPrice", offerPrice);
+    if (links !== void 0) setPrefsValue(nextPrefs, "partnerLinks", links);
+    if (payoutDetails !== void 0) setPrefsValue(nextPrefs, "payoutDetails", payoutDetails);
     await supabase.from("users").update({ preferences: nextPrefs }).eq("id", userId);
   } catch (err) {
     console.warn("[savePartnerProfile] Error syncing with users.preferences:", err);
@@ -7359,7 +9119,7 @@ app.post("/api/partner/links", async (req, res) => {
     }
   }
   const newLink = {
-    id: `link_${crypto2.randomUUID().slice(0, 8)}`,
+    id: `link_${crypto4.randomUUID().slice(0, 8)}`,
     code,
     label: label || "Custom Offer",
     offerPrice,
@@ -7423,7 +9183,7 @@ app.delete("/api/partner/links/:id", async (req, res) => {
   const userId = ctx.user?.id || "";
   const { id } = req.params;
   const { links: existingLinks } = await getPartnerData(userId);
-  const curLinks = (existingLinks || []).filter((l) => l.id !== id);
+  const curLinks = (existingLinks || []).filter((l) => l.id !== id && l.code !== id);
   await savePartnerLinks(userId, curLinks);
   res.json({ success: true, message: "Referral link removed." });
 });
@@ -7431,13 +9191,15 @@ app.patch("/api/user/partner-visibility", async (req, res) => {
   const currentUser = req.currentUser;
   if (!currentUser?.id) return res.status(401).json({ error: "Not signed in" });
   const allow = req.body?.allow === true;
+  const sections = allow ? null : { dashboard: false, analysis: false, accounts: [], calendar: false, liveCharts: false, journal: false, notebook: false };
   if (!useSupabase) {
     const patched = localPatchUser(currentUser.id, (row) => {
       row.allowPartnerTradeView = allow;
+      row.mentorAccess = sections;
     });
     if (!patched) return res.status(404).json({ error: "User not found" });
   } else {
-    const { error } = await supabase.from("users").update({ allow_partner_trade_view: allow }).eq("id", currentUser.id);
+    const { error } = await supabase.from("users").update({ allow_partner_trade_view: allow, mentor_access: sections }).eq("id", currentUser.id);
     if (error) {
       console.error("[PATCH /api/user/partner-visibility] error:", error);
       return res.status(500).json({ error: "Failed to update the setting." });
@@ -7526,10 +9288,13 @@ app.get("/api/user/partner-link", async (req, res) => {
     partnerUsername = p?.name || (p?.email || "").split("@")[0] || partnerName;
     referralCode = p?.referralCode || null;
   } else {
-    let { data } = await supabase.from("users").select("id, name, email, referral_code").eq("id", referredBy).maybeSingle();
+    let { data } = await supabase.from("users").select("id, name, email").eq("id", referredBy).maybeSingle();
     if (!data) {
-      const resCode = await supabase.from("users").select("id, name, email, referral_code").eq("referral_code", referredBy).maybeSingle();
-      data = resCode.data;
+      const { data: byCode } = await supabase.from("partner_profiles").select("user_id").ilike("referral_code", referredBy).maybeSingle();
+      if (byCode?.user_id) {
+        const resUser = await supabase.from("users").select("id, name, email").eq("id", byCode.user_id).maybeSingle();
+        data = resUser.data;
+      }
     }
     const partnerUserId = data?.id || referredBy;
     const { data: profile } = await supabase.from("partner_profiles").select("referral_code").eq("user_id", partnerUserId).maybeSingle();
@@ -7593,7 +9358,7 @@ app.post("/api/user/link-partner", async (req, res) => {
     try {
       await supabase.from("sub_admin_assignments").upsert(
         {
-          id: `saa_${crypto2.randomUUID()}`,
+          id: `saa_${crypto4.randomUUID()}`,
           sub_admin_id: partner.userId,
           user_id: currentUser.id,
           assigned_by: null,
@@ -7616,11 +9381,10 @@ app.post("/api/user/link-partner", async (req, res) => {
       partnerEmail = p?.email || null;
       partnerUsername = p?.name || (p?.email || "").split("@")[0] || partnerName;
     } else {
-      const { data } = await supabase.from("users").select("name, email, referral_code").eq("id", partner.userId).maybeSingle();
+      const { data } = await supabase.from("users").select("name, email").eq("id", partner.userId).maybeSingle();
       partnerName = data?.name || String(data?.email || "").split("@")[0] || partnerName;
       partnerEmail = data?.email || null;
       partnerUsername = data?.name || String(data?.email || "").split("@")[0] || partnerName;
-      if (data?.referral_code) referralCode = data.referral_code;
     }
   }
   res.json({
@@ -7708,6 +9472,26 @@ app.delete("/api/admin/users/:id/partner", async (req, res) => {
   await writeAuditLog(req, ctx, "partner.demote", "user", id, {});
   res.json({ message: "Partner access removed.", userId: id, role: "USER" });
 });
+var MAX_PARTNER_ADJUSTMENT_INR = 1e6;
+var asAdjustmentList = (raw) => Array.isArray(raw) ? raw.filter((a) => a && Number.isFinite(Number(a.amount))) : [];
+var sumAdjustments = (list) => list.reduce((sum, a) => sum + Number(a.amount), 0);
+var readPartnerAdjustments = async (userId) => {
+  if (!useSupabase) {
+    const row = localFindUser((u) => u.id === userId);
+    return asAdjustmentList(prefsValue(row?.preferences, "partnerAdjustments"));
+  }
+  const { data } = await supabase.from("users").select("preferences").eq("id", userId).maybeSingle();
+  return asAdjustmentList(prefsValue(data?.preferences, "partnerAdjustments"));
+};
+var adjustmentTotalsByPartner = async () => {
+  const out = {};
+  const rows = useSupabase ? (await supabase.from("users").select("id, preferences")).data || [] : localAllUsers();
+  for (const row of rows) {
+    const list = asAdjustmentList(prefsValue(row?.preferences, "partnerAdjustments"));
+    if (list.length) out[row.id] = sumAdjustments(list);
+  }
+  return out;
+};
 async function getPartnerPayoutData(userId, partnerCode) {
   let totalEarned = 0;
   if (!useSupabase) {
@@ -7741,6 +9525,9 @@ async function getPartnerPayoutData(userId, partnerCode) {
       console.warn("[getPartnerPayoutData] Supabase fetch error:", err);
     }
   }
+  const adjustments = await readPartnerAdjustments(userId);
+  const adjustmentTotal = sumAdjustments(adjustments);
+  totalEarned += adjustmentTotal;
   let allRequests = [];
   if (useSupabase) {
     try {
@@ -7764,8 +9551,9 @@ async function getPartnerPayoutData(userId, partnerCode) {
         }));
       } else {
         const { data: u } = await supabase.from("users").select("preferences").eq("id", userId).maybeSingle();
-        if (Array.isArray(u?.preferences?.payoutRequests)) {
-          allRequests = u.preferences.payoutRequests;
+        const stored = prefsValue(u?.preferences, "payoutRequests");
+        if (Array.isArray(stored)) {
+          allRequests = stored;
         } else {
           allRequests = readPayoutRequests().filter((r) => r.partnerId === userId);
         }
@@ -7785,6 +9573,8 @@ async function getPartnerPayoutData(userId, partnerCode) {
     totalWithdrawn,
     totalPending,
     availableBalance,
+    adjustmentTotal,
+    adjustments,
     minPayoutThreshold: 500,
     requests: allRequests
   };
@@ -7804,7 +9594,7 @@ app.get("/api/partner/payout", async (req, res) => {
       supabase.from("users").select("preferences").eq("id", userId).maybeSingle()
     ]);
     profile = profData ? toCamel(profData) : null;
-    payoutDetails = profile?.payoutDetails || userData?.preferences?.payoutDetails || null;
+    payoutDetails = profile?.payoutDetails || prefsValue(userData?.preferences, "payoutDetails") || null;
   }
   const partnerCode = profile?.referralCode || "";
   const payoutData = await getPartnerPayoutData(userId, partnerCode);
@@ -7815,8 +9605,12 @@ app.get("/api/partner/payout", async (req, res) => {
       totalWithdrawn: payoutData.totalWithdrawn,
       totalPending: payoutData.totalPending,
       availableBalance: payoutData.availableBalance,
-      minPayoutThreshold: payoutData.minPayoutThreshold
+      minPayoutThreshold: payoutData.minPayoutThreshold,
+      // Sent so a partner can see why their balance is not simply their
+      // referral count times the commission, rather than reading it as a bug.
+      adjustmentTotal: payoutData.adjustmentTotal
     },
+    adjustments: payoutData.adjustments,
     requests: payoutData.requests
   });
 });
@@ -7879,7 +9673,7 @@ app.post("/api/partner/payout-request", async (req, res) => {
       supabase.from("users").select("preferences").eq("id", userId).maybeSingle()
     ]);
     profile = profData ? toCamel(profData) : null;
-    payoutDetails = profile?.payoutDetails || userData?.preferences?.payoutDetails || null;
+    payoutDetails = profile?.payoutDetails || prefsValue(userData?.preferences, "payoutDetails") || null;
   }
   const method = req.body?.method === "BANK" ? "BANK" : "UPI";
   if (method === "UPI") {
@@ -7944,9 +9738,10 @@ app.post("/api/partner/payout-request", async (req, res) => {
     }
     try {
       const { data: u } = await supabase.from("users").select("preferences").eq("id", userId).maybeSingle();
-      const existingReqs = Array.isArray(u?.preferences?.payoutRequests) ? u.preferences.payoutRequests : [];
+      const storedReqs = prefsValue(u?.preferences, "payoutRequests");
+      const existingReqs = Array.isArray(storedReqs) ? storedReqs : [];
       existingReqs.unshift(newRequest);
-      const nextPrefs = { ...u?.preferences || {}, payoutRequests: existingReqs };
+      const nextPrefs = setPrefsValue({ ...u?.preferences || {} }, "payoutRequests", existingReqs);
       await supabase.from("users").update({ preferences: nextPrefs }).eq("id", userId);
     } catch {
     }
@@ -8001,8 +9796,9 @@ app.get("/api/admin/payouts", async (req, res) => {
         const pMap = new Map((profs || []).map((p) => [p.user_id, p.referral_code]));
         const prefReqs = [];
         for (const u of users || []) {
-          if (Array.isArray(u?.preferences?.payoutRequests)) {
-            for (const r of u.preferences.payoutRequests) {
+          const reqs = prefsValue(u?.preferences, "payoutRequests");
+          if (Array.isArray(reqs)) {
+            for (const r of reqs) {
               prefReqs.push({
                 ...r,
                 partnerName: r.partnerName || u.name || "Partner",
@@ -8077,8 +9873,9 @@ app.post("/api/admin/payouts/:id/process", async (req, res) => {
     try {
       const { data: users } = await supabase.from("users").select("id, preferences");
       for (const u of users || []) {
-        if (Array.isArray(u?.preferences?.payoutRequests)) {
-          const matched = u.preferences.payoutRequests.find((r) => r.id === id);
+        const reqs = prefsValue(u?.preferences, "payoutRequests");
+        if (Array.isArray(reqs)) {
+          const matched = reqs.find((r) => r.id === id);
           if (matched) {
             matched.status = action;
             matched.utrNumber = utrNumber || void 0;
@@ -8104,6 +9901,81 @@ app.post("/api/admin/payouts/:id/process", async (req, res) => {
     message: action === "PAID" ? `Payout marked as PAID (UTR: ${utrNumber})` : "Payout request rejected.",
     request: target
   });
+});
+app.post("/api/admin/partners/:id/adjustment", async (req, res) => {
+  const ctx = await requirePermission(req, res, "partner.manage");
+  if (!ctx) return;
+  const { id } = req.params;
+  const amount = Number(req.body?.amount);
+  const reason = String(req.body?.reason || "").trim();
+  if (!Number.isFinite(amount) || amount === 0) {
+    return res.status(400).json({ error: "Amount must be a non-zero number of rupees." });
+  }
+  if (Math.abs(amount) > MAX_PARTNER_ADJUSTMENT_INR) {
+    return res.status(400).json({
+      error: `A single adjustment is capped at \u20B9${MAX_PARTNER_ADJUSTMENT_INR.toLocaleString("en-IN")}.`
+    });
+  }
+  if (reason.length < 3) {
+    return res.status(400).json({
+      error: "A reason is required. It is shown in the payout history and the audit log."
+    });
+  }
+  const rounded = Math.round(amount * 100) / 100;
+  let target = null;
+  if (!useSupabase) {
+    target = localFindUser((u) => u.id === id);
+  } else {
+    const { data } = await supabase.from("users").select("id, email, name, role, preferences").eq("id", id).maybeSingle();
+    target = data;
+  }
+  if (!target) return res.status(404).json({ error: "User not found." });
+  if (String(target.role || "").toUpperCase() !== "PARTNER") {
+    return res.status(400).json({ error: "This user is not a partner, so they have no payout balance." });
+  }
+  const entry = {
+    id: `adj_${crypto4.randomUUID()}`,
+    amount: rounded,
+    reason: reason.slice(0, 500),
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    createdBy: ctx.user?.id || null,
+    createdByEmail: ctx.user?.email || null
+  };
+  if (!useSupabase) {
+    const patched = localPatchUser(id, (row) => {
+      const prefs = row.preferences && typeof row.preferences === "object" ? row.preferences : {};
+      setPrefsValue(prefs, "partnerAdjustments", [entry, ...asAdjustmentList(prefsValue(prefs, "partnerAdjustments"))]);
+      row.preferences = prefs;
+    });
+    if (!patched) return res.status(404).json({ error: "User not found." });
+  } else {
+    const prefs = target.preferences && typeof target.preferences === "object" ? target.preferences : {};
+    const next = setPrefsValue({ ...prefs }, "partnerAdjustments", [entry, ...asAdjustmentList(prefsValue(prefs, "partnerAdjustments"))]);
+    const { error } = await supabase.from("users").update({ preferences: next }).eq("id", id);
+    if (error) {
+      console.error("[admin/partners/adjustment] write failed:", error);
+      return res.status(500).json({ error: "Failed to save the adjustment." });
+    }
+  }
+  await writeAuditLog(req, ctx, "partner.balance_adjusted", "partner", id, {
+    amount: rounded,
+    reason: entry.reason,
+    partnerEmail: target.email
+  });
+  const adjustments = await readPartnerAdjustments(id);
+  res.json({
+    success: true,
+    message: rounded > 0 ? `Credited \u20B9${rounded.toLocaleString("en-IN")} to ${target.email}.` : `Deducted \u20B9${Math.abs(rounded).toLocaleString("en-IN")} from ${target.email}.`,
+    adjustment: entry,
+    adjustmentTotal: sumAdjustments(adjustments),
+    adjustments
+  });
+});
+app.get("/api/admin/partners/:id/adjustments", async (req, res) => {
+  const ctx = await requirePermission(req, res, "partner.manage");
+  if (!ctx) return;
+  const adjustments = await readPartnerAdjustments(req.params.id);
+  res.json({ adjustments, adjustmentTotal: sumAdjustments(adjustments) });
 });
 app.get("/api/admin/partners", async (req, res) => {
   const ctx = await requirePermission(req, res, "partner.manage");
@@ -8157,6 +10029,7 @@ app.get("/api/admin/partners", async (req, res) => {
       }
     }
   }
+  const adjustments = await adjustmentTotalsByPartner();
   res.json({
     partners: partners.map((p) => ({
       id: p.id,
@@ -8170,7 +10043,10 @@ app.get("/api/admin/partners", async (req, res) => {
       linkedUsers: counts[p.id] || 0,
       sharingTrades: sharing[p.id] || 0,
       paidReferrals: paidCounts[p.id] || 0,
-      referralIncome: Math.round((income[p.id] || 0) * 100) / 100
+      referralIncome: Math.round(((income[p.id] || 0) + (adjustments[p.id] || 0)) * 100) / 100,
+      // Split out so the roster can show "of which manual" rather than a
+      // figure that does not reconcile against paidReferrals.
+      adjustmentTotal: Math.round((adjustments[p.id] || 0) * 100) / 100
     })).sort((a, b) => b.referralIncome - a.referralIncome || b.linkedUsers - a.linkedUsers),
     totals: {
       partners: partners.length,
@@ -8205,17 +10081,17 @@ app.get("/api/admin/users", async (req, res) => {
       allUsers = ordered.data;
     }
     if (scope !== null) allUsers = (allUsers || []).filter((u) => scope.includes(u.id));
-    const { data: allAccounts } = await supabase.from("trading_accounts").select("*");
-    const { data: allTrades } = await supabase.from("trades").select("id, user_id, account_id");
+    const { data: allAccounts2 } = await supabase.from("trading_accounts").select("*");
+    const { data: allTrades2 } = await supabase.from("trades").select("id, user_id, account_id");
     const { data: allPays } = await supabase.from("payments").select("user_id, amount, status");
     const earnedByReferrer2 = referralEarningsByReferrer(
       (allUsers || []).map((u) => ({ id: u.id, referredBy: u.referred_by })),
       allPays || []
     );
     const usersWithStats2 = (allUsers || []).map((u) => {
-      const uAccounts = (allAccounts || []).filter((acc) => acc.user_id === u.id);
+      const uAccounts = (allAccounts2 || []).filter((acc) => acc.user_id === u.id);
       const accIds = new Set(uAccounts.map((a) => a.id));
-      const uTrades = (allTrades || []).filter((t) => t.user_id === u.id || accIds.has(t.account_id));
+      const uTrades = (allTrades2 || []).filter((t) => t.user_id === u.id || accIds.has(t.account_id));
       const refCode = u.referral_code || ("FX-" + (u.id || "").replace(/\D/g, "").slice(-4).padStart(4, "8") || "FX-100");
       const directReferrals = (allUsers || []).filter(
         (other) => other.referred_by && (other.referred_by === u.id || other.referred_by === refCode)
@@ -8236,10 +10112,12 @@ app.get("/api/admin/users", async (req, res) => {
   const everyone = localAllUsers();
   const visibleUsers = scope === null ? everyone : everyone.filter((u) => scope.includes(u.id));
   const earnedByReferrer = referralEarningsByReferrer(everyone, localAllPayments());
+  const allAccounts = localAllAccounts();
+  const allTrades = localAllTrades();
   const usersWithStats = visibleUsers.map((u) => {
-    const uAccounts = (db.accounts || []).filter((acc) => acc.userId === u.id);
-    const accIds = uAccounts.map((a) => a.id);
-    const uTrades = (db.trades || []).filter((t) => accIds.includes(t.accountId) || t.userId === u.id);
+    const uAccounts = allAccounts.filter((acc) => acc.userId === u.id);
+    const accIds = new Set(uAccounts.map((a) => a.id));
+    const uTrades = allTrades.filter((t) => t.userId === u.id || t.accountId && accIds.has(t.accountId));
     const refCode = u.referralCode || ("FX-" + (u.id || "").replace(/\D/g, "").slice(-4).padStart(4, "8") || "FX-100");
     const directReferrals = everyone.filter(
       (other) => other.referredBy && (other.referredBy === u.id || other.referredBy === refCode)
@@ -8361,7 +10239,7 @@ app.post("/api/admin/announcements", async (req, res) => {
   const { title, content } = req.body;
   if (!title || !content) return res.status(400).json({ error: "Title and content are required" });
   const newAnn = {
-    id: `ann_${crypto2.randomUUID()}`,
+    id: `ann_${crypto4.randomUUID()}`,
     title,
     content,
     date: (/* @__PURE__ */ new Date()).toISOString()
@@ -8441,7 +10319,10 @@ app.get("/api/admin/dashboard", async (req, res) => {
   const scope = await scopeUserIds(ctx.role, ctx.user?.id || null);
   if (useSupabase) {
     const [{ data: rawUsers }, { data: rawTrades }, { data: allTickets }, { data: rawPayments }] = await Promise.all([
-      supabase.from("users").select("id, status, created_at, is_pro, referral_code, referred_by"),
+      // referral_code is not a column on users and was never read out of this
+      // result — asking for it failed the whole select, so the admin dashboard
+      // loaded with no users, no counts and no revenue.
+      supabase.from("users").select("id, status, created_at, is_pro, referred_by"),
       supabase.from("trades").select("id, user_id"),
       supabase.from("support_tickets").select("id, status"),
       supabase.from("payments").select("user_id, amount, status")
@@ -8706,10 +10587,14 @@ app.get("/api/admin/billing", async (req, res) => {
       referralLeaderboard: referralLeaderboard2
     });
   }
-  const [{ data: payments }, { data: subs }, { data: users }] = await Promise.all([
+  const [{ data: payments }, { data: subs }, { data: users }, { data: partnerCodes }] = await Promise.all([
     supabase.from("payments").select("*").order("paid_at", { ascending: false }).limit(100),
     supabase.from("subscriptions").select("*").order("created_at", { ascending: false }).limit(200),
-    supabase.from("users").select("id, email, name, is_pro, referral_code, referred_by")
+    supabase.from("users").select("id, email, name, is_pro, referred_by"),
+    // The referral codes, from the table that has them. Selecting
+    // users.referral_code failed this whole query, so Billing & Payments
+    // loaded empty.
+    supabase.from("partner_profiles").select("user_id, referral_code")
   ]);
   const userMap = new Map((users || []).map((u) => [u.id, u]));
   const enrichedPayments = (payments || []).map((p) => {
@@ -8730,8 +10615,11 @@ app.get("/api/admin/billing", async (req, res) => {
     (users || []).map((u) => ({ id: u.id, referredBy: u.referred_by })),
     payments || []
   );
+  const codeByUser = new Map(
+    (partnerCodes || []).map((p) => [p.user_id, p.referral_code])
+  );
   const referralLeaderboard = (users || []).map((u) => {
-    const refCode = u.referral_code || ("FX-" + (u.id || "").replace(/\D/g, "").slice(-4).padStart(4, "8") || "FX-100");
+    const refCode = codeByUser.get(u.id) || ("FX-" + (u.id || "").replace(/\D/g, "").slice(-4).padStart(4, "8") || "FX-100");
     const directRefs = (users || []).filter((o) => o.referred_by && (o.referred_by === u.id || o.referred_by === refCode));
     const paidRefs = directRefs.filter((o) => !!o.is_pro).length;
     return {
@@ -8788,7 +10676,7 @@ app.post("/api/admin/payments/record", async (req, res) => {
   if (!targetUser) {
     return res.status(404).json({ error: "Trader account not found" });
   }
-  const paymentId = `pay_manual_${crypto2.randomUUID().slice(0, 8)}`;
+  const paymentId = `pay_manual_${crypto4.randomUUID().slice(0, 8)}`;
   const proUntilDate = new Date(Date.now() + days * 864e5);
   await applyProState(targetUser.id, proUntilDate);
   const paymentRecord = {
@@ -8798,7 +10686,7 @@ app.post("/api/admin/payments/record", async (req, res) => {
     // randomUUID, not Date.now(): provider_payment_id is UNIQUE, and it is
     // what claimPayment dedupes on. Two offline payments recorded in the same
     // millisecond would have collided on it.
-    provider_payment_id: `manual_${crypto2.randomUUID()}`,
+    provider_payment_id: `manual_${crypto4.randomUUID()}`,
     amount: Number(amount),
     currency: "INR",
     plan,
@@ -9153,42 +11041,145 @@ app.get("/api/chart/ohlc", async (req, res) => {
     res.json({ candles: [], symbol: req.query.symbol || "", timeframe: req.query.timeframe || "1d", error: "Chart data temporarily unavailable." });
   }
 });
+async function fetchLiveForexRss(limit = 30) {
+  const url = 'https://news.google.com/rss/search?q=forex+trading+OR+"currency+market"+OR+"central+bank"+OR+"forex"+OR+"currency"&hl=en-US&gl=US&ceid=US:en';
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+  });
+  if (!res.ok) throw new Error(`Forex RSS responded with ${res.status}`);
+  const text = await res.text();
+  const rawItems = text.split("<item>").slice(1);
+  const CURRENCY_LIST = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD", "CNY", "XAU", "BTC"];
+  const PAIRS_LIST = [
+    "EUR/USD",
+    "USD/JPY",
+    "GBP/USD",
+    "USD/CHF",
+    "AUD/USD",
+    "USD/CAD",
+    "NZD/USD",
+    "EUR/GBP",
+    "EUR/JPY",
+    "GBP/JPY",
+    "EUR/CHF",
+    "EUR/AUD",
+    "AUD/JPY",
+    "XAU/USD"
+  ];
+  const articles = [];
+  for (const raw of rawItems) {
+    if (articles.length >= limit) break;
+    let title = (raw.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/) || [])[1] || "";
+    const link = (raw.match(/<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/) || [])[1] || "";
+    const pubDate = (raw.match(/<pubDate>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/pubDate>/) || [])[1] || "";
+    let source = (raw.match(/<source[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/source>/) || [])[1] || "";
+    if (!title.trim()) continue;
+    if (title.includes(" - ") && !source) {
+      const parts = title.split(" - ");
+      source = parts.pop()?.trim() || "";
+      title = parts.join(" - ");
+    } else if (title.includes(" - ") && source) {
+      title = title.replace(new RegExp("\\s*-\\s*" + source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$"), "");
+    }
+    const clean = (str) => str.replace(/<[^>]+>/g, "").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").trim();
+    const cleanTitle = clean(title);
+    if (!cleanTitle) continue;
+    const upper = cleanTitle.toUpperCase();
+    const foundCurrencies = /* @__PURE__ */ new Set();
+    for (const c of CURRENCY_LIST) {
+      if (new RegExp(`\\b${c}\\b`).test(upper)) foundCurrencies.add(c);
+    }
+    if (foundCurrencies.size === 0) foundCurrencies.add("USD");
+    const foundPairs = /* @__PURE__ */ new Set();
+    for (const p of PAIRS_LIST) {
+      if (upper.includes(p) || upper.includes(p.replace("/", ""))) {
+        foundPairs.add(p);
+      }
+    }
+    let category = "Market Analysis";
+    if (/RATE|FED|FEDERAL RESERVE|FOMC|ECB|BOJ|BANK OF ENGLAND|CENTRAL BANK/i.test(upper)) {
+      category = "Central Banks";
+    } else if (/INFLATION|CPI|PPI|PCE|PRICE INDEX/i.test(upper)) {
+      category = "Inflation";
+    } else if (/JOB|PAYROLL|NFP|UNEMPLOYMENT|LABOR|EMPLOYMENT/i.test(upper)) {
+      category = "Employment";
+    } else if (/GOLD|XAU|SILVER|CRUDE|OIL|BRENT|WTI|COMMODIT/i.test(upper)) {
+      category = "Commodities";
+    } else if (/GDP|RECESSION|GROWTH|ECONOMIC EXPANSION/i.test(upper)) {
+      category = "GDP";
+    } else if (/WAR|SANCTION|ELECTION|GEOPOLITIC|TARIFF|TRADE WAR/i.test(upper)) {
+      category = "Geopolitics";
+    } else if (/FISCAL|BUDGET|DEBT CEILING|GOVERNMENT/i.test(upper)) {
+      category = "Government";
+    }
+    let sentimentScore = 0;
+    let sentimentLabel = "Neutral";
+    const primaryCurrency = Array.from(foundCurrencies)[0] || "USD";
+    if (/RALLY|SURGE|JUMP|GAIN|RECORD HIGH|BULLISH|CLIMB|BOOST|SOAR|STRENGTHEN|EXPAND/i.test(cleanTitle)) {
+      sentimentScore = 0.55;
+      sentimentLabel = `Bullish ${primaryCurrency}`;
+    } else if (/FALL|DROP|SLUMP|PLUNGE|DIP|BEARISH|WEAK|SINK|DECLINE|TUMBLE|SLIDE/i.test(cleanTitle)) {
+      sentimentScore = -0.55;
+      sentimentLabel = `Bearish ${primaryCurrency}`;
+    }
+    let publishedAt = (/* @__PURE__ */ new Date()).toISOString();
+    if (pubDate) {
+      const parsed = new Date(pubDate);
+      if (!isNaN(parsed.getTime())) publishedAt = parsed.toISOString();
+    }
+    articles.push({
+      id: link || cleanTitle,
+      title: cleanTitle,
+      summary: cleanTitle,
+      url: link || "#",
+      source: source || "Market Wire",
+      publishedAt,
+      category,
+      currencies: Array.from(foundCurrencies),
+      pairs: Array.from(foundPairs),
+      sentiment: { score: sentimentScore, label: sentimentLabel }
+    });
+  }
+  return articles;
+}
 app.get("/api/fx-news", async (req, res) => {
   const apiKey = process.env.ALPHA_VANTAGE_API_KEY?.trim();
   const limit = Math.min(Math.max(parseInt(String(req.query.limit || "25"), 10) || 25, 1), 50);
-  if (!apiKey) {
-    return res.status(503).json({
-      error: "FX news is not configured. Add ALPHA_VANTAGE_API_KEY to your environment.",
-      code: "NOT_CONFIGURED"
-    });
-  }
   const cacheKey = `fx-news:${limit}`;
   try {
     let articles = getCached(cacheKey);
+    let sourceName = "Global Forex Market Wire";
     if (!articles) {
-      const url = `${ALPHA_VANTAGE_BASE}/query?function=NEWS_SENTIMENT&topics=${FX_NEWS_TOPICS}&limit=${limit}&sort=LATEST&apikey=${encodeURIComponent(apiKey)}`;
-      const data = await fetchJson(url);
-      if (data?.Note || data?.Information || data?.Error) {
-        console.warn("[GET /api/fx-news] Provider rate limit or info message:", data?.Note || data?.Information || data?.Error);
-        return res.status(429).json({
-          error: "The news provider rate limit has been reached. Please try again later.",
-          code: "RATE_LIMITED"
-        });
+      if (apiKey) {
+        try {
+          const url = `${ALPHA_VANTAGE_BASE}/query?function=NEWS_SENTIMENT&topics=${FX_NEWS_TOPICS}&limit=${limit}&sort=LATEST&apikey=${encodeURIComponent(apiKey)}`;
+          const data = await fetchJson(url);
+          if (!data?.Note && !data?.Information && !data?.Error && Array.isArray(data?.feed) && data.feed.length > 0) {
+            articles = data.feed.map(normalizeNewsArticle).filter(Boolean);
+            sourceName = "Alpha Vantage News & Sentiment";
+          }
+        } catch (avErr) {
+          console.warn("[GET /api/fx-news] Alpha Vantage failed, using live RSS feed:", avErr?.message || avErr);
+        }
       }
-      const feed = Array.isArray(data?.feed) ? data.feed : [];
-      articles = feed.map(normalizeNewsArticle).filter(Boolean);
-      setCached(cacheKey, articles, 15 * 60 * 1e3);
+      if (!articles || articles.length === 0) {
+        articles = await fetchLiveForexRss(limit);
+        sourceName = "Global Forex Market Wire";
+      }
+      if (articles && articles.length > 0) {
+        setCached(cacheKey, articles, 10 * 60 * 1e3);
+      }
     }
-    let filtered = articles;
+    let filtered = articles || [];
     const topic = typeof req.query.topic === "string" ? req.query.topic : "";
     const currency = typeof req.query.currency === "string" ? req.query.currency.toUpperCase() : "";
-    if (topic) filtered = filtered.filter((a) => a.category === topic);
-    if (currency) filtered = filtered.filter((a) => a.currencies.includes(currency));
+    if (topic && topic !== "All") filtered = filtered.filter((a) => a.category === topic);
+    if (currency && currency !== "All") filtered = filtered.filter((a) => a.currencies.includes(currency));
     res.setHeader("Cache-Control", "public, max-age=300");
     res.json({
       articles: filtered,
       categories: NEWS_CATEGORY_ORDER,
-      source: "Alpha Vantage News & Sentiment",
+      source: sourceName,
       generatedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (err) {
@@ -9503,7 +11494,7 @@ app.post("/api/reminders/whatsapp", async (req, res) => {
     const idx = whatsappReminders.findIndex((r) => r.userId === currentUser.id && r.eventId === eventId);
     if (idx !== -1) whatsappReminders.splice(idx, 1);
     const reminder = {
-      id: crypto2.randomUUID(),
+      id: crypto4.randomUUID(),
       userId: currentUser.id,
       eventId: String(eventId),
       eventName: String(eventName),
@@ -9541,11 +11532,18 @@ app.get("/api/reminders/whatsapp", (req, res) => {
 });
 async function getUserSharedLinks(userId) {
   const links = [];
+  if (!useSupabase) {
+    const row = localFindUser((u) => u.id === userId);
+    const stored = prefsValue(row?.preferences, "sharedLinks");
+    if (Array.isArray(stored)) links.push(...stored);
+    return links;
+  }
   if (useSupabase) {
     try {
       const { data: u } = await supabase.from("users").select("preferences").eq("id", userId).maybeSingle();
-      if (Array.isArray(u?.preferences?.sharedLinks)) {
-        links.push(...u.preferences.sharedLinks);
+      const storedShared = prefsValue(u?.preferences, "sharedLinks");
+      if (Array.isArray(storedShared)) {
+        links.push(...storedShared);
       }
       const { data: rows } = await supabase.from("shared_journal_links").select("*").eq("user_id", userId);
       if (Array.isArray(rows)) {
@@ -9571,10 +11569,22 @@ async function getUserSharedLinks(userId) {
   return links;
 }
 async function saveUserSharedLink(userId, link) {
+  if (!useSupabase) {
+    localPatchUser(userId, (row) => {
+      const prefs = row.preferences && typeof row.preferences === "object" ? row.preferences : {};
+      const stored = prefsValue(prefs, "sharedLinks");
+      const existing = Array.isArray(stored) ? stored : [];
+      const idx = existing.findIndex((l) => l.token === link.token);
+      setPrefsValue(prefs, "sharedLinks", idx >= 0 ? existing.map((l, i) => i === idx ? { ...l, ...link } : l) : [link, ...existing]);
+      row.preferences = prefs;
+    });
+    return;
+  }
   if (useSupabase) {
     try {
       const { data: u } = await supabase.from("users").select("preferences").eq("id", userId).maybeSingle();
-      const existing = Array.isArray(u?.preferences?.sharedLinks) ? u.preferences.sharedLinks : [];
+      const storedShared = prefsValue(u?.preferences, "sharedLinks");
+      const existing = Array.isArray(storedShared) ? storedShared : [];
       const idx = existing.findIndex((l) => l.token === link.token);
       let updated;
       if (idx >= 0) {
@@ -9583,7 +11593,7 @@ async function saveUserSharedLink(userId, link) {
       } else {
         updated = [link, ...existing];
       }
-      const nextPrefs = { ...u?.preferences || {}, sharedLinks: updated };
+      const nextPrefs = setPrefsValue({ ...u?.preferences || {} }, "sharedLinks", updated);
       await supabase.from("users").update({ preferences: nextPrefs }).eq("id", userId);
       try {
         await supabase.from("shared_journal_links").upsert({
@@ -9606,6 +11616,15 @@ async function saveUserSharedLink(userId, link) {
 }
 async function findSharedLinkByToken(token) {
   if (!token) return null;
+  if (!useSupabase) {
+    for (const u of localAllUsers()) {
+      const stored = prefsValue(u?.preferences, "sharedLinks");
+      const links = Array.isArray(stored) ? stored : [];
+      const found = links.find((l) => l.token === token);
+      if (found) return { link: { ...found, userId: found.userId || u.id }, ownerUser: u };
+    }
+    return null;
+  }
   if (useSupabase) {
     try {
       const { data: row } = await supabase.from("shared_journal_links").select("*").eq("token", token).maybeSingle();
@@ -9628,7 +11647,8 @@ async function findSharedLinkByToken(token) {
       const { data: allUsers } = await supabase.from("users").select("id, name, email, preferences");
       if (Array.isArray(allUsers)) {
         for (const u of allUsers) {
-          const links = Array.isArray(u.preferences?.sharedLinks) ? u.preferences.sharedLinks : [];
+          const stored = prefsValue(u.preferences, "sharedLinks");
+          const links = Array.isArray(stored) ? stored : [];
           const found = links.find((l) => l.token === token);
           if (found) {
             return {
@@ -9647,6 +11667,77 @@ async function findSharedLinkByToken(token) {
   }
   return null;
 }
+var NOTEBOOK_MAX_BYTES = 1e6;
+var EMPTY_NOTEBOOK = { notes: [], folders: [], tags: [], updatedAt: null };
+var asNotebookDoc = (raw) => {
+  if (!raw || typeof raw !== "object") return { ...EMPTY_NOTEBOOK };
+  return {
+    notes: Array.isArray(raw.notes) ? raw.notes : [],
+    folders: Array.isArray(raw.folders) ? raw.folders.filter((f) => typeof f === "string") : [],
+    tags: Array.isArray(raw.tags) ? raw.tags.filter((t) => typeof t === "string") : [],
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : null
+  };
+};
+var readNotebook = async (userId) => {
+  if (!useSupabase) {
+    const row = localFindUser((u) => u.id === userId);
+    return asNotebookDoc(prefsValue(row?.preferences, "notebook"));
+  }
+  const { data } = await supabase.from("users").select("preferences").eq("id", userId).maybeSingle();
+  return asNotebookDoc(prefsValue(data?.preferences, "notebook"));
+};
+var writeNotebook = async (userId, doc) => {
+  if (!useSupabase) {
+    const patched = localPatchUser(userId, (row) => {
+      const prefs = row.preferences && typeof row.preferences === "object" ? row.preferences : {};
+      setPrefsValue(prefs, "notebook", doc);
+      row.preferences = prefs;
+    });
+    return patched ? null : "User not found";
+  }
+  const { data } = await supabase.from("users").select("preferences").eq("id", userId).maybeSingle();
+  const next = setPrefsValue({ ...data?.preferences || {} }, "notebook", doc);
+  const { error } = await supabase.from("users").update({ preferences: next }).eq("id", userId);
+  if (error) {
+    console.error("[notebook] write failed:", error);
+    return "Failed to save the notebook.";
+  }
+  return null;
+};
+app.get("/api/notebook", async (req, res) => {
+  if (!requirePro(req, res, "notebook")) return;
+  const userId = req.currentUser.id;
+  res.json(await readNotebook(userId));
+});
+app.put("/api/notebook", async (req, res) => {
+  if (!requirePro(req, res, "notebook")) return;
+  const userId = req.currentUser.id;
+  const body = req.body || {};
+  if (!Array.isArray(body.notes) || !Array.isArray(body.folders) || !Array.isArray(body.tags)) {
+    return res.status(400).json({ error: "notes, folders and tags must all be arrays." });
+  }
+  const doc = asNotebookDoc({ ...body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+  const size = Buffer.byteLength(JSON.stringify({ notes: doc.notes, folders: doc.folders, tags: doc.tags }), "utf8");
+  if (size > NOTEBOOK_MAX_BYTES) {
+    return res.status(413).json({
+      error: `This notebook is ${Math.round(size / 1024)} KB, over the ${Math.round(NOTEBOOK_MAX_BYTES / 1024)} KB limit. Delete or export a few long notes.`,
+      code: "NOTEBOOK_TOO_LARGE",
+      bytes: size
+    });
+  }
+  const current = await readNotebook(userId);
+  const base = typeof body.baseUpdatedAt === "string" ? body.baseUpdatedAt : null;
+  if (current.updatedAt && base && current.updatedAt > base) {
+    return res.status(409).json({
+      error: "This notebook was changed somewhere else since you loaded it.",
+      code: "NOTEBOOK_CONFLICT",
+      server: current
+    });
+  }
+  const failure = await writeNotebook(userId, doc);
+  if (failure) return res.status(500).json({ error: failure });
+  res.json({ success: true, updatedAt: doc.updatedAt, counts: { notes: doc.notes.length } });
+});
 app.get("/api/shared-links", async (req, res) => {
   const currentUser = req.currentUser;
   if (!currentUser) return res.status(401).json({ error: "Please log in to manage shared links." });
@@ -9677,7 +11768,7 @@ app.post("/api/shared-links", async (req, res) => {
       validMonths = 3;
     }
   }
-  const token = crypto2.randomBytes(9).toString("base64url");
+  const token = crypto4.randomBytes(9).toString("base64url");
   const newLink = {
     token,
     userId: currentUser.id,
@@ -9722,7 +11813,13 @@ app.get("/api/shared/:token", async (req, res) => {
   saveUserSharedLink(link.userId, link).catch(() => {
   });
   let allTrades = [];
-  if (useSupabase) {
+  if (!useSupabase) {
+    const ownerDb = await ensureUserDbLoaded(link.userId, match.ownerUser?.email || "");
+    const ownerAccountIds = new Set(
+      (ownerDb?.accounts || []).filter((a) => a.userId === link.userId).map((a) => a.id)
+    );
+    allTrades = (ownerDb?.trades || []).filter((t) => t.userId === link.userId || t.accountId && ownerAccountIds.has(t.accountId)).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  } else {
     try {
       const { data: rows } = await supabase.from("trades").select("*").eq("user_id", link.userId).order("date", { ascending: false });
       if (rows) allTrades = toCamel(rows);
@@ -9768,8 +11865,8 @@ app.get("/api/shared/:token", async (req, res) => {
     lotSize: t.lotSize ?? t.lots ?? 0,
     entryPrice: t.entryPrice ?? 0,
     exitPrice: t.exitPrice ?? 0,
-    date: t.date,
-    exitTime: t.exitTime || null,
+    date: t.date || t.openTime || t.open_time || null,
+    exitTime: t.exitTime || t.exit_time || t.closeTime || null,
     profit: Number(t.profit) || Number(t.pnl) || 0,
     pnl: Number(t.profit) || Number(t.pnl) || 0,
     sl: t.sl || null,
@@ -9783,8 +11880,8 @@ app.get("/api/shared/:token", async (req, res) => {
     id: t.id,
     symbol: t.symbol,
     type: t.type,
-    date: t.date,
-    exitTime: t.exitTime || null,
+    date: t.date || t.openTime || t.open_time || null,
+    exitTime: t.exitTime || t.exit_time || t.closeTime || null,
     profit: Number(t.profit) || Number(t.pnl) || 0,
     pnl: Number(t.profit) || Number(t.pnl) || 0
   })) : [];

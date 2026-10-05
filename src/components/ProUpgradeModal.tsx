@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   X, Check, Star, ShieldCheck, CreditCard, Sparkles,
-  Loader2, ArrowRight, Zap, RefreshCw, AlertCircle, CheckCircle2, Ticket
+  Loader2, ArrowRight, Zap, RefreshCw, AlertCircle, CheckCircle2, Ticket,
+  Bot, Layers, BarChart3, Download, Share2, BookOpen, Bell
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -49,15 +50,80 @@ const DEV_BYPASS = import.meta.env.DEV;
  * here charged ₹499 for something that could never arrive. It goes back in the
  * moment a sender exists.
  */
-const PRO_BENEFITS = [
-  'Unlimited trading accounts',
-  'MT5 automatic sync',
-  'HEYZA — AI Trading Mentor',
-  'Export full trade history',
-  'Live chart',
-  'Share Your Trading Insights',
-  'Trader Notebook',
-  'News reminders',
+interface ProFeature {
+  title: string;
+  desc: string;
+  icon: React.ComponentType<{ className?: string }>;
+  iconColor: string;
+  bgColor: string;
+  borderColor: string;
+}
+
+const PRO_FEATURES: ProFeature[] = [
+  {
+    title: 'Unlimited Accounts',
+    desc: 'Prop firms & personal brokers',
+    icon: Layers,
+    iconColor: 'text-indigo-400',
+    bgColor: 'bg-indigo-500/10',
+    borderColor: 'border-indigo-500/20',
+  },
+  {
+    title: 'MT5 Cloud Auto-Sync',
+    desc: 'Instant auto trade imports',
+    icon: RefreshCw,
+    iconColor: 'text-emerald-400',
+    bgColor: 'bg-emerald-500/10',
+    borderColor: 'border-emerald-500/20',
+  },
+  {
+    title: 'HEYZA — AI Mentor',
+    desc: 'Psychology & execution audit',
+    icon: Bot,
+    iconColor: 'text-violet-400',
+    bgColor: 'bg-violet-500/10',
+    borderColor: 'border-violet-500/20',
+  },
+  {
+    title: 'Historical Trade Export',
+    desc: 'One-click CSV & Excel logs',
+    icon: Download,
+    iconColor: 'text-cyan-400',
+    bgColor: 'bg-cyan-500/10',
+    borderColor: 'border-cyan-500/20',
+  },
+  {
+    title: 'Live TradingView Charts',
+    desc: 'Executions plotted on candles',
+    icon: BarChart3,
+    iconColor: 'text-amber-400',
+    bgColor: 'bg-amber-500/10',
+    borderColor: 'border-amber-500/20',
+  },
+  {
+    title: 'Share Trade Insights',
+    desc: 'Verified public setup cards',
+    icon: Share2,
+    iconColor: 'text-pink-400',
+    bgColor: 'bg-pink-500/10',
+    borderColor: 'border-pink-500/20',
+  },
+  {
+    title: 'Trader Notebook',
+    desc: 'Mindset & rule tracking',
+    icon: BookOpen,
+    iconColor: 'text-purple-400',
+    bgColor: 'bg-purple-500/10',
+    borderColor: 'border-purple-500/20',
+  },
+  {
+    title: 'Economic News Alerts',
+    desc: 'High-impact event warnings',
+    icon: Bell,
+    iconColor: 'text-rose-400',
+    bgColor: 'bg-rose-500/10',
+    borderColor: 'border-rose-500/20',
+  },
 ];
 
 /** Shown as chips so the long list of methods stops crowding a table row. */
@@ -341,91 +407,124 @@ export default function ProUpgradeModal({
       aria-labelledby="pro-upgrade-title"
     >
       <div
-        className="relative w-full max-w-md lg:max-w-4xl bg-[#0c0e15]/95 border border-white/[0.08] rounded-2xl sm:rounded-3xl shadow-[0_32px_80px_-20px_rgba(0,0,0,0.95)] max-h-[92vh] sm:max-h-none overflow-y-auto my-auto text-slate-200 animate-in zoom-in-95 duration-200"
+        className="relative w-full max-w-md lg:max-w-5xl bg-[#0c0e15]/95 border border-white/[0.08] rounded-2xl sm:rounded-3xl shadow-[0_32px_80px_-20px_rgba(0,0,0,0.95)] max-h-[92vh] sm:max-h-none overflow-y-auto my-auto text-slate-200 animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
 
-        {/* Top subtle hairline glow */}
+        {/* Top subtle hairline glow & ambient background light */}
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent" />
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-48 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-1/4 -left-12 w-60 h-60 bg-violet-600/[0.08] rounded-full blur-3xl pointer-events-none" />
 
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-3.5 top-3.5 z-20 h-7 w-7 rounded-full text-slate-400 hover:text-white bg-white/[0.06] hover:bg-red-600 hover:border-red-600 dark:hover:bg-red-600 dark:hover:border-red-600 active:bg-red-700 active:scale-90 flex items-center justify-center transition-all duration-150 shadow-xs cursor-pointer"
+          className="absolute right-4 top-4 sm:right-5 sm:top-5 z-30 h-8 w-8 rounded-full text-slate-400 hover:text-white bg-white/[0.08] hover:bg-slate-800 border border-white/10 active:scale-95 flex items-center justify-center transition-all duration-150 shadow-md cursor-pointer"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="h-4 w-4" />
         </button>
 
-        <div className="lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
+        <div className="lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.88fr)] lg:items-stretch">
           {/* Left on desktop / Top on mobile: The Plan Offer */}
-          <div className="lg:border-r lg:border-white/[0.06] lg:h-full px-4 sm:px-6 pt-3 sm:pt-6 pb-3 sm:pb-5">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-violet-500/15 to-indigo-500/15 border border-violet-500/25 text-violet-300 text-[10.5px] font-semibold uppercase tracking-wider mb-2">
-              <Sparkles className="h-3 w-3 text-violet-400" />
-              Pro Plan
-            </div>
+          <div className="lg:border-r lg:border-white/[0.07] px-5 sm:px-8 pt-5 pb-3 sm:py-8 flex flex-col justify-between h-full">
+            <div>
+              {/* Sleek Minimal Pill Badge */}
+              <div className="inline-flex self-start items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-300 text-[10.5px] sm:text-[11px] font-medium tracking-wide mb-2 sm:mb-2.5">
+                <Sparkles className="h-3 w-3 text-violet-400" />
+                <span>Unlock Pro Access</span>
+              </div>
 
-            <h2 id="pro-upgrade-title" className="text-xl sm:text-2xl font-bold text-white font-display tracking-tight leading-snug">
-              Everything in FX Journal Pro
-            </h2>
-            <p className="text-[12px] sm:text-[13px] text-slate-400 mt-1 leading-relaxed max-w-sm">
-              Automatic MT5 sync, AI trading mentor that reads your trade history, and unlimited accounts.
-            </p>
+              <h2 id="pro-upgrade-title" className="text-xl sm:text-2xl lg:text-3xl font-bold text-white font-display tracking-tight leading-snug">
+                Trade with an Unfair Edge
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1 leading-relaxed max-w-sm">
+                Automate your trade journaling, eliminate emotional pitfalls with AI mentor, and connect all your prop & live accounts.
+              </p>
 
-            {/* Apple-style Price block */}
-            <div className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5 mt-3 sm:mt-4">
-              {appliedCoupon && appliedCoupon.offerPrice < 499 ? (
-                <>
-                  <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-display tracking-tight tabular-nums">
-                    ₹{appliedCoupon.offerPrice}
+              {/* Clean Minimal Price Display */}
+              <div className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5 mt-2.5 sm:mt-4 pt-1">
+                {appliedCoupon && appliedCoupon.offerPrice < 499 ? (
+                  <>
+                    <span className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-emerald-400 font-display tracking-tight tabular-nums">
+                      ₹{appliedCoupon.offerPrice}
+                    </span>
+                    <span className="text-sm sm:text-base lg:text-lg font-semibold line-through text-slate-500 tabular-nums">
+                      ₹499
+                    </span>
+                    <span className="text-[10px] sm:text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                      Save ₹{appliedCoupon.discountAmount} ({appliedCoupon.discountPercent}% OFF)
+                    </span>
+                  </>
+                ) : appliedCoupon ? (
+                  <>
+                    <span className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white font-display tracking-tight tabular-nums">
+                      ₹499
+                    </span>
+                    <span className="text-[10px] sm:text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25">
+                      Mentor Code Applied
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white font-display tracking-tight tabular-nums">
+                    ₹{amountRupees}
                   </span>
-                  <span className="text-base sm:text-lg font-semibold line-through text-slate-500 tabular-nums">
-                    ₹499
-                  </span>
-                  <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
-                    Save ₹{appliedCoupon.discountAmount} ({appliedCoupon.discountPercent}% OFF)
-                  </span>
-                </>
-              ) : appliedCoupon ? (
-                <>
-                  <span className="text-2xl sm:text-3xl font-extrabold text-white font-display tracking-tight tabular-nums">
-                    ₹499
-                  </span>
-                  <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25">
-                    Mentor Code Applied
-                  </span>
-                </>
-              ) : (
-                <span className="text-2xl sm:text-3xl font-extrabold text-white font-display tracking-tight tabular-nums">
-                  ₹{amountRupees}
+                )}
+                <span className="text-xs sm:text-sm text-slate-400">
+                  / 30 days <span className="text-[10.5px] sm:text-[11px] text-slate-500">· about ₹16/day</span>
                 </span>
-              )}
-              <span className="text-xs sm:text-sm text-slate-400">
-                / 30 days <span className="text-[11px] text-slate-500">· about $4.90 (₹16/day)</span>
-              </span>
+              </div>
+
+              {/* Clean, Breathable Minimal Feature Grid */}
+              <div className="mt-3.5 sm:mt-5 grid grid-cols-2 gap-x-3 sm:gap-x-6 gap-y-2 sm:gap-y-3">
+                {PRO_FEATURES.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.title} className="flex items-start gap-2">
+                      <Icon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 mt-0.5 ${item.iconColor}`} />
+                      <div className="min-w-0">
+                        <div className="text-[11.5px] sm:text-xs font-medium text-slate-200 leading-snug">
+                          {item.title}
+                        </div>
+                        <div className="text-[10px] sm:text-[11px] text-slate-400 leading-tight hidden sm:block">
+                          {item.desc}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Apple-style Inset Grouped Benefits Card */}
-            <div className="mt-3 sm:mt-4 rounded-2xl bg-white/[0.025] border border-white/[0.06] p-2.5 sm:p-3.5 grid grid-cols-2 gap-x-3 gap-y-2">
-              {PRO_BENEFITS.map((benefit) => (
-                <div key={benefit} className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-300 leading-tight">
-                  <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-violet-500/20 text-violet-300">
-                    <Check className="h-2 w-2 text-violet-300" strokeWidth={3} />
-                  </span>
-                  <span className="truncate">{benefit}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Digital SaaS Subscription Notice */}
-            <div className="mt-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] p-2.5 sm:p-3 text-[11px] text-slate-300 leading-relaxed">
-              <span className="font-semibold text-violet-300 block mb-0.5">Digital SaaS Subscription</span>
-              Pro provides access to premium software features within FXJournalPro. Payment is for software access and does not represent an investment, trading deposit, brokerage service, or managed investment.
+            {/* Minimal Footnote Notice */}
+            <div className="mt-3.5 sm:mt-5 pt-2.5 sm:pt-3 border-t border-white/[0.04] flex items-center gap-1.5 sm:gap-2 text-[10.5px] sm:text-[11px] text-slate-400">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <span>30-day software access · No recurring auto-debit · Instant activation</span>
             </div>
           </div>
 
           {/* Right on desktop / Bottom on mobile: Checkout & Actions */}
-          <div className="px-4 sm:px-6 py-3 sm:py-6 lg:pt-8 space-y-3 relative z-10">
+          <div className="px-5 sm:px-8 pt-3 sm:pt-8 pb-5 sm:pb-8 border-t border-white/[0.07] lg:border-t-0 flex flex-col justify-between h-full relative z-10 w-full">
+            <div className="w-full max-w-sm mx-auto space-y-3 sm:space-y-4">
+              {/* Order Summary Header - Desktop Only to avoid mobile redundancy */}
+              <div className="hidden lg:block pb-3 border-b border-white/[0.06] space-y-1">
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Instant Pro Activation</span>
+                </div>
+                <div className="flex items-baseline justify-between mt-1">
+                  <h3 className="text-xl font-bold text-white tracking-tight">Order Summary</h3>
+                  <span className="text-xl font-black text-white tabular-nums">
+                    ₹{appliedCoupon && appliedCoupon.offerPrice < 499 ? appliedCoupon.offerPrice : amountRupees}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>FX Journal Pro (30 Days Pass)</span>
+                  {appliedCoupon && appliedCoupon.offerPrice < 499 && (
+                    <span className="text-emerald-400 font-medium">Save ₹{appliedCoupon.discountAmount}</span>
+                  )}
+                </div>
+              </div>
+
             {statusMessage && (
               <div className={`p-2.5 sm:p-3 rounded-xl text-xs flex items-start gap-2 border ${statusMessage.type === 'success'
                   ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
@@ -466,13 +565,13 @@ export default function ProUpgradeModal({
             )}
 
             {activeTab === 'gateway' && (
-              <div className="space-y-2.5 sm:space-y-3">
-                {/* Apple-style Primary CTA Button - Placed Prominently */}
+              <div className="space-y-3">
+                {/* Primary CTA Button - Centered & Balanced */}
                 <button
                   type="button"
                   onClick={handleGatewayCheckout}
                   disabled={loading || (configLoaded && !config.configured)}
-                  className="w-full h-11 sm:h-12 bg-gradient-to-r from-violet-600 via-indigo-600 to-violet-600 hover:brightness-110 active:scale-[0.98] text-white font-semibold text-sm rounded-xl sm:rounded-2xl transition-all shadow-md shadow-violet-600/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full h-12 bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 active:scale-[0.98] text-white font-bold text-sm rounded-xl transition-all shadow-[0_4px_24px_rgba(139,92,246,0.35)] hover:shadow-[0_6px_30px_rgba(139,92,246,0.5)] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer tracking-wide"
                 >
                   {loading ? (
                     <>
@@ -623,6 +722,7 @@ export default function ProUpgradeModal({
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
 

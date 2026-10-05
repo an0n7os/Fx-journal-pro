@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet,
+  Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet, Sparkles,
 } from 'lucide-react';
 import { SupportTicket, Announcement } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -119,6 +119,11 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
   const [recordNotes, setRecordNotes] = useState('');
   const [recordDays, setRecordDays] = useState('30');
   const [recordSubmitting, setRecordSubmitting] = useState(false);
+
+  // Super Admin: Grant / Manage Pro modal
+  const [grantProModalUser, setGrantProModalUser] = useState<any | null>(null);
+  const [grantProDays, setGrantProDays] = useState<string>('30');
+  const [grantProSubmitting, setGrantProSubmitting] = useState(false);
 
   // Team management form
   const [roleEmail, setRoleEmail] = useState('');
@@ -384,13 +389,43 @@ Their referral link stops working and ` +
       const res = await fetch(`/api/admin/users/${userId}/plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ isPro: !currentIsPro })
+        body: JSON.stringify({ isPro: !currentIsPro, days: 30 })
       });
       if (res.ok) {
         setUsers(prev => prev.map(u => u.id === userId ? { ...u, isPro: !currentIsPro } : u));
       }
     } catch (e) {
       alert('Failed to change user plan.');
+    }
+  };
+
+  const handleConfirmGrantPro = async (isPro: boolean) => {
+    if (!grantProModalUser) return;
+    setGrantProSubmitting(true);
+    try {
+      const days = Number(grantProDays) || 30;
+      const res = await fetch(`/api/admin/users/${grantProModalUser.id}/plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ isPro, days })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || (isPro ? `Pro activated for ${grantProModalUser.name || grantProModalUser.email} (${days} days)!` : 'Pro status revoked.'));
+        setUsers(prev => prev.map(u => u.id === grantProModalUser.id ? {
+          ...u,
+          isPro,
+          proUntil: data.proUntil || (isPro ? new Date(Date.now() + days * 86400000).toISOString() : null)
+        } : u));
+        setGrantProModalUser(null);
+        fetchData();
+      } else {
+        alert(data.error || 'Failed to update user plan.');
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Network error updating user plan.');
+    } finally {
+      setGrantProSubmitting(false);
     }
   };
 
@@ -882,9 +917,9 @@ Their referral link stops working and ` +
                         )}
                       </td>
 
-                      {/* Plan Tier with quick toggle */}
+                      {/* Plan Tier with Super Admin Action */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="flex flex-col items-start gap-1">
+                        <div className="flex flex-col items-start gap-1.5">
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap shadow-xs ${
                             u.isPro 
                               ? 'bg-amber-400/[0.08] text-amber-300 border border-amber-400/25' 
@@ -893,12 +928,39 @@ Their referral link stops working and ` +
                             {u.isPro ? <Crown className="h-3 w-3 text-amber-400 fill-amber-400/80 shrink-0" /> : null}
                             {u.isPro ? 'Pro Member' : 'Free Basic'}
                           </span>
-                          <button
-                            onClick={() => handleToggleUserPlan(u.id, !!u.isPro)}
-                            className="text-[10px] text-slate-500 hover:text-slate-300 underline decoration-dotted transition cursor-pointer"
-                          >
-                            {u.isPro ? 'Revoke Pro' : 'Grant Pro'}
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            {u.isPro ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setGrantProModalUser(u)}
+                                  className="text-[10.5px] text-amber-400 hover:text-amber-300 font-semibold hover:underline cursor-pointer"
+                                  title="Extend or manage Pro duration"
+                                >
+                                  Extend Pro
+                                </button>
+                                <span className="text-slate-600 text-xs">•</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleUserPlan(u.id, true)}
+                                  className="text-[10.5px] text-slate-400 hover:text-red-400 font-medium hover:underline cursor-pointer"
+                                  title="Revoke Pro"
+                                >
+                                  Revoke
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setGrantProModalUser(u)}
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25 text-[11px] font-semibold transition cursor-pointer active:scale-95 shadow-xs"
+                                title="Grant Pro access to this user"
+                              >
+                                <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                <span>Make Pro</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </td>
 
@@ -2540,6 +2602,108 @@ Their referral link stops working and ` +
         </div>
       )}
 
+      {/* Super Admin: Grant Pro Modal */}
+      {grantProModalUser && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="relative w-full max-w-md bg-[#0e111d] border border-amber-500/30 rounded-2xl shadow-2xl p-6 text-slate-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Crown className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Super Admin: Manage Pro Access</h3>
+                  <p className="text-[11px] text-slate-400">Set Pro subscription for this trader</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setGrantProModalUser(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4">
+              <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
+                <div className="text-xs font-semibold text-white">{grantProModalUser.name || 'Trader'}</div>
+                <div className="text-[11px] text-slate-400 font-mono">{grantProModalUser.email}</div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  Current Plan: <span className={grantProModalUser.isPro ? "text-amber-400 font-bold" : "text-slate-300 font-medium"}>
+                    {grantProModalUser.isPro ? "Pro Member" : "Free Basic"}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">
+                  Select Pro Duration:
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { days: '30', label: '30 Days (1 Mo)' },
+                    { days: '90', label: '90 Days (3 Mo)' },
+                    { days: '180', label: '180 Days (6 Mo)' },
+                    { days: '365', label: '365 Days (1 Yr)' },
+                    { days: '9999', label: 'Lifetime Access' },
+                  ].map((d) => (
+                    <button
+                      key={d.days}
+                      type="button"
+                      onClick={() => setGrantProDays(d.days)}
+                      className={`py-2 px-3 rounded-xl text-xs font-semibold border transition text-left cursor-pointer ${
+                        grantProDays === d.days
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                          : 'bg-white/[0.02] text-slate-400 border-white/5 hover:bg-white/[0.05]'
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
+              {grantProModalUser.isPro ? (
+                <button
+                  type="button"
+                  onClick={() => handleConfirmGrantPro(false)}
+                  disabled={grantProSubmitting}
+                  className="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 text-xs font-semibold transition cursor-pointer"
+                >
+                  Revoke Pro
+                </button>
+              ) : <div />}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setGrantProModalUser(null)}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmGrantPro(true)}
+                  disabled={grantProSubmitting}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer active:scale-95"
+                >
+                  {grantProSubmitting ? (
+                    <span>Saving...</span>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{grantProModalUser.isPro ? 'Update Pro' : 'Activate Pro'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -316,7 +316,6 @@ export const auth = betterAuth({
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'https://fx-journal-pro-pi.vercel.app',
-    'https://fxjournalp.netlify.app',
     'https://fxjournalpro.com',
     'https://www.fxjournalpro.com',
     ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL.trim()] : []),

@@ -823,17 +823,6 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     setActionLoading(true);
     setAuthError(null);
     try {
-      if (isSupabaseConfigured) {
-        try {
-          await supabase.auth.signUp({
-            email: authEmail,
-            password: authPassword,
-            options: { data: { full_name: authName } }
-          });
-        } catch (sErr) {
-          console.warn('[AxyFx] Supabase register warning:', sErr);
-        }
-      }
       persistAuthSession('');
       const res = await fetch('/api/auth/register', {
         method: 'POST',

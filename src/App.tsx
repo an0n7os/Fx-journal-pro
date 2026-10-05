@@ -2525,7 +2525,7 @@ export default function App() {
    * countdown would mean the plan already ended, and the flag would be off.
    */
   const proDaysLeft = (() => {
-    const end = subscription?.currentPeriodEnd;
+    const end = subscription?.currentPeriodEnd || (user as any)?.proUntil;
     if (!end) return null;
     const ms = new Date(end).getTime() - Date.now();
     if (Number.isNaN(ms)) return null;
@@ -5176,7 +5176,11 @@ export default function App() {
 
         {/* Main Content Area */}
         <main
-          className={`flex-1 overflow-y-auto bg-[#FBFBFA] dark:bg-slate-950 px-3.5 sm:px-4 md:px-12 pt-3 sm:pt-4 md:pt-8 ${activeTab === 'insights' ? 'pb-20 md:pb-6 space-y-0' : 'pb-32 md:pb-6 space-y-4 sm:space-y-6 md:space-y-8'}`}
+          className={`flex-1 ${
+            activeTab === 'insights'
+              ? 'overflow-hidden p-0 flex flex-col h-[calc(100dvh-60px)] pb-16 md:pb-0 bg-white dark:bg-[#090b14]'
+              : 'overflow-y-auto bg-[#FBFBFA] dark:bg-slate-950 px-3.5 sm:px-4 md:px-12 pt-3 sm:pt-4 md:pt-8 pb-32 md:pb-6 space-y-4 sm:space-y-6 md:space-y-8'
+          }`}
           onScroll={handleMainScroll}
         >
           <React.Suspense fallback={<TabLoading />}>
@@ -5226,9 +5230,10 @@ export default function App() {
               </div>
             )}
 
-            {/* Dynamic Title bar — hidden on mobile dashboard and insights (Heyza has dedicated assistant window) */}
-            <div className={`flex flex-col sm:flex-row items-stretch sm:items-start justify-between gap-3 sm:gap-4 w-full ${activeTab === 'dashboard' || activeTab === 'insights' ? 'hidden sm:flex' : ''
-              }`}>
+            {/* Dynamic Title bar — hidden on insights (dedicated full window), and hidden on mobile dashboard */}
+            <div className={`flex flex-col sm:flex-row items-stretch sm:items-start justify-between gap-3 sm:gap-4 w-full ${
+              activeTab === 'insights' ? 'hidden' : activeTab === 'dashboard' ? 'hidden sm:flex' : ''
+            }`}>
               <div className="flex-1 min-w-0">
                 <div>
                   <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white font-display sm:truncate">
@@ -5385,8 +5390,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Global Drawdown Risk alert strip if active */}
-            {activeAccount && maxDrawdownPercentage > 0 && dismissedDrawdownAccount !== activeAccount.id && (
+            {/* Global Drawdown Risk alert strip if active (hidden on dedicated Heyza AI page) */}
+            {activeTab !== 'insights' && activeAccount && maxDrawdownPercentage > 0 && dismissedDrawdownAccount !== activeAccount.id && (
               <div className="bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/25 text-amber-950 dark:text-amber-100 rounded-xl p-3 sm:p-4 flex items-start gap-3">
                 <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
