@@ -7619,15 +7619,27 @@ app.post('/api/verify-payment', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Payment signature verification failed. Invalid signature.' });
   }
 
-  // If user is authenticated, grant 30-day Pro access
+  // Grant 30-day Pro access to current user or user from order notes
   const currentUser = (req as any).currentUser;
-  if (currentUser) {
+  let targetUserId = currentUser?.id;
+  let targetUserEmail = currentUser?.email;
+  if (!targetUserId && razorpay_order_id) {
+    try {
+      const order = await razorpayFetch(`/orders/${encodeURIComponent(razorpay_order_id)}`);
+      targetUserId = order?.notes?.userId;
+      targetUserEmail = order?.notes?.email || targetUserEmail;
+    } catch (e) {
+      console.warn('[verify-payment] order lookup warning:', e);
+    }
+  }
+
+  if (targetUserId) {
     try {
       await grantProForPayment({
-        userId: currentUser.id,
+        userId: targetUserId,
         providerPaymentId: razorpay_payment_id,
         amountRupees: 499,
-        userEmail: currentUser.email,
+        userEmail: targetUserEmail,
         periodDays: 30,
       });
     } catch (e) {
@@ -7825,9 +7837,9 @@ app.post('/api/payments/webhook', async (req: any, res) => {
  */
 app.post('/api/payments/verify', async (req, res) => {
   const currentUser = (req as any).currentUser;
-  if (!currentUser) return res.status(401).json({ error: 'Not authenticated' });
 
   if (req.body?.isSandbox) {
+    if (!currentUser) return res.status(401).json({ error: 'Not authenticated' });
     if (!allowTestBilling()) {
       return res.status(400).json({ error: 'Payment verification failed.' });
     }
@@ -7867,20 +7879,27 @@ app.post('/api/payments/verify', async (req, res) => {
     .digest('hex');
 
   if (!safeTokenEqual(expected, razorpay_signature)) {
-    console.warn(`[payments/verify] signature mismatch for user ${currentUser.id}`);
+    console.warn(`[payments/verify] signature mismatch for user ${currentUser?.id || 'anonymous'}`);
     return res.status(400).json({ error: 'Payment verification failed.' });
   }
 
   let periodDays = 30;
   let amountRupees = PRO_PLAN_AMOUNT_PAISE / 100;
+  let targetUserId = currentUser?.id;
+  let targetUserEmail = currentUser?.email;
 
   // If order_id is present, look up the order from Razorpay to verify user ownership and exact amount
   if (razorpay_order_id) {
     try {
       const order = await razorpayFetch(`/orders/${encodeURIComponent(razorpay_order_id)}`);
-      if (order?.notes?.userId && order.notes.userId !== currentUser.id) {
-        console.warn(`[payments/verify] order ${razorpay_order_id} belongs to ${order.notes.userId}, not ${currentUser.id}`);
-        return res.status(400).json({ error: 'Payment verification failed.' });
+      const orderUserId = order?.notes?.userId;
+      if (orderUserId) {
+        if (currentUser && orderUserId !== currentUser.id) {
+          console.warn(`[payments/verify] order ${razorpay_order_id} belongs to ${orderUserId}, not ${currentUser.id}`);
+          return res.status(400).json({ error: 'Payment verification failed.' });
+        }
+        targetUserId = orderUserId;
+        targetUserEmail = order?.notes?.email || targetUserEmail;
       }
       if (order?.amount) {
         amountRupees = order.amount / 100;
@@ -7893,19 +7912,23 @@ app.post('/api/payments/verify', async (req, res) => {
     }
   }
 
+  if (!targetUserId) {
+    return res.status(401).json({ error: 'Not authenticated — session expired and order user not found.' });
+  }
+
   const { granted, proUntil } = await grantProForPayment({
-    userId: currentUser.id,
+    userId: targetUserId,
     providerPaymentId: razorpay_payment_id,
     amountRupees,
-    userEmail: currentUser.email,
+    userEmail: targetUserEmail,
     periodDays,
   });
 
   if (!granted) {
     return res.json({
       success: true,
-      active: !!currentUser.isPro,
-      proUntil: currentUser.proUntil || null,
+      active: true,
+      proUntil: currentUser?.proUntil || null,
       alreadyApplied: true,
       message: 'This payment was already applied to your account.',
     });

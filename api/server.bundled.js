@@ -1573,6 +1573,7 @@ function createMt5Router(deps) {
 // server.ts
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import Razorpay from "razorpay";
 import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 
 // auth.ts
@@ -2062,9 +2063,42 @@ async function sendOtpEmail(email, otp, subject = "Your FX Journal Pro Verificat
   const resendKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.SENDGRID_FROM_EMAIL || process.env.SENDER_EMAIL || "noreply@fxjournalpro.com";
   const isReset = subject.toLowerCase().includes("reset");
-  const heading = isReset ? "Reset your password" : "Verify your email address";
-  const bodyText = isReset ? "You requested a password reset for your FX Journal Pro account. Use the code below to set a new password. This code expires in 10 minutes." : "Thank you for registering with FX Journal Pro. Please use the following one-time password (OTP) to activate your account. This code is valid for 10 minutes.";
-  const emailHtml = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;"><h2 style="color: #0f172a; text-align: center;">${heading}</h2><p>${bodyText}</p><div style="text-align: center; margin: 30px 0;"><span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #2563eb; background-color: #f1f5f9; padding: 10px 20px; border-radius: 8px;">${otp}</span></div><p>If you did not request this code, please ignore this email.</p></div>`;
+  const heading = isReset ? "Reset your password" : "Verify your email";
+  const subheading = isReset ? "Use the code below to reset your FX Journal Pro password." : "Use the code below to verify your FX Journal Pro account.";
+  const footerNote = isReset ? "This code expires in 10 minutes. If you did not request a password reset, you can safely ignore this email." : "This code expires in 10 minutes. If you did not create an account with FX Journal Pro, you can safely ignore this email.";
+  const emailHtml = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${subject}</title></head>
+<body style="margin:0;padding:0;background-color:#0a0f1e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0f1e;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:560px;background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%);border-radius:16px;border:1px solid rgba(139,92,246,0.2);overflow:hidden;">
+        <!-- Header -->
+        <tr><td style="padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(139,92,246,0.15);">
+          <div style="display:inline-flex;align-items:center;gap:8px;">
+            <span style="font-size:22px;font-weight:800;background:linear-gradient(135deg,#a78bfa,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;color:#a78bfa;">FX Journal Pro</span>
+          </div>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:36px 40px;">
+          <h1 style="margin:0 0 12px;font-size:24px;font-weight:700;color:#f1f5f9;text-align:center;">${heading}</h1>
+          <p style="margin:0 0 32px;font-size:15px;color:#94a3b8;text-align:center;line-height:1.6;">${subheading}</p>
+          <!-- OTP Code Box -->
+          <div style="background:rgba(139,92,246,0.08);border:1.5px solid rgba(139,92,246,0.3);border-radius:12px;padding:28px;text-align:center;margin-bottom:32px;">
+            <p style="margin:0 0 8px;font-size:12px;font-weight:600;letter-spacing:2px;color:#8b5cf6;text-transform:uppercase;">Verification Code</p>
+            <div style="font-size:40px;font-weight:800;letter-spacing:12px;color:#f1f5f9;font-variant-numeric:tabular-nums;">${otp}</div>
+          </div>
+          <p style="margin:0;font-size:13px;color:#64748b;text-align:center;line-height:1.6;">${footerNote}</p>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:20px 40px 28px;border-top:1px solid rgba(139,92,246,0.15);text-align:center;">
+          <p style="margin:0;font-size:12px;color:#475569;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} FX Journal Pro \xB7 <a href="https://fxjournalpro.com" style="color:#7c3aed;text-decoration:none;">fxjournalpro.com</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
   if (sendgridKey && sendgridKey !== "YOUR_SENDGRID_API_KEY" && !sendgridKey.startsWith("SG.xxxx")) {
     try {
       console.log(`[SendGrid] Attempting to send OTP email to ${email} from ${fromEmail}...`);
@@ -2114,7 +2148,7 @@ async function sendOtpEmail(email, otp, subject = "Your FX Journal Pro Verificat
       console.warn("[Resend] RESEND_FROM_EMAIL is not set \u2014 sending from the shared sandbox domain. Expect codes to land in spam.");
     }
     try {
-      console.log(`[Resend] Attempting to send OTP email to ${email}...`);
+      console.log(`[Resend] Sending OTP email to ${email} from ${resendFrom}...`);
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -2130,9 +2164,12 @@ async function sendOtpEmail(email, otp, subject = "Your FX Journal Pro Verificat
       });
       const data = await response.json();
       if (!response.ok) {
-        console.error("[Resend Email Error]", data);
+        console.error(`[Resend Email Error] HTTP ${response.status}:`, JSON.stringify(data));
+        if (data?.name === "validation_error") {
+          console.error("[Resend] Validation error \u2014 check that RESEND_FROM_EMAIL is a verified sender domain.");
+        }
       } else {
-        console.log("[Resend] Email OTP sent successfully to " + email);
+        console.log(`[Resend] OTP sent successfully to ${email} (id: ${data.id})`);
         return { success: true, provider: "Resend" };
       }
     } catch (error) {
@@ -4726,6 +4763,27 @@ app.post("/api/auth/verify-otp", otpRateLimiter, async (req, res) => {
         return res.status(500).json({ error: "Server error confirming email." });
       }
       const verifiedUser = toCamel({ ...row, is_email_verified: true, email_otp: null, otp_expires_at: null });
+      if (useSupabase && supabase?.auth?.admin) {
+        try {
+          const { data: authList } = await supabase.auth.admin.listUsers({ perPage: 1e3 });
+          const existingAuthUser = authList?.users?.find((u) => u.email === normalizedEmail);
+          if (existingAuthUser) {
+            await supabase.auth.admin.updateUserById(existingAuthUser.id, {
+              email_confirm: true
+            });
+          } else {
+            await supabase.auth.admin.createUser({
+              email: normalizedEmail,
+              email_confirm: true,
+              password: crypto4.randomBytes(32).toString("hex"),
+              user_metadata: { name: row.name || normalizedEmail.split("@")[0] }
+            });
+          }
+          console.log(`[verify-otp] Supabase Auth synced for ${normalizedEmail} (email_confirm=true)`);
+        } catch (authErr) {
+          console.warn("[verify-otp] Supabase Auth upsert skipped:", authErr?.message || authErr);
+        }
+      }
       try {
         const otpDb = await ensureUserDbLoaded(verifiedUser.id, normalizedEmail);
         await ensureDefaultPortfolioAccount(otpDb, verifiedUser.id, normalizedEmail);
@@ -6976,9 +7034,21 @@ app.post("/api/ai/mentor", async (req, res) => {
   }
   const targetAcc = db.accounts?.find((a) => a.id === accountId);
   const accountName = targetAcc ? targetAcc.name : "Primary Portfolio";
-  const accountTrades = db.trades.filter(
-    (t) => t.accountId === accountId && t.type !== "Deposit" && t.type !== "Withdrawal"
-  );
+  const scope = req.body?.scope || "account";
+  const accountTrades = (db.trades || []).filter((t) => {
+    if (t.type === "Deposit" || t.type === "Withdrawal") return false;
+    if (scope === "all") return true;
+    if (scope === "today") {
+      const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      return t.accountId === accountId && (t.date || "").startsWith(todayStr);
+    }
+    return t.accountId === accountId;
+  });
+  const startingBal = parseFloat(targetAcc?.startingBalance || targetAcc?.starting_balance || 0);
+  const currentBal = parseFloat(targetAcc?.currentBalance || targetAcc?.current_balance || targetAcc?.balance || startingBal);
+  const equityBal = parseFloat(targetAcc?.equity || currentBal);
+  const netPnLVal = (currentBal - startingBal).toFixed(2);
+  const drawdownPctVal = startingBal > 0 && currentBal < startingBal ? ((startingBal - currentBal) / startingBal * 100).toFixed(2) : "0";
   const recentTrades = accountTrades.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 50);
   const digest = recentTrades.map((t) => ({
     date: t.date.split("T")[0],
@@ -7213,31 +7283,49 @@ I'm here to support your full trading journey! You can ask me things like:
 What's on your mind today?`;
   };
   const openRouterKey = process.env.OPENROUTER_API_KEY || "";
-  const systemInstruction = `You are ${traderName}'s personal trading mentor, coach, and companion on FX Journal Pro. Your name is "AI Mentor".
+  const systemInstruction = `You are ${traderName}'s personal AI trading mentor, coach, and companion on FX Journal Pro. Your name is "Heyza AI" (also known as AI Mentor).
 
-Personality & Vibe:
-- Extremely warm, friendly, encouraging, and approachable \u2014 like a trusted mentor, brother, and trading companion who truly wants to see ${traderName} succeed!
-- Always greet warmly and enthusiastically ("Hey ${traderName}! \u{1F44B} Really great to see you!", "Welcome back, my friend! \u{1F60A}").
-- Speak in a natural, conversational, and supportive first-person tone: "I'm right here with you", "Let's work through this together", "I'm proud of your discipline".
-- Never sound robotic, cold, bureaucratic, or dismissive.
-- If ${traderName} has 0 or few trades logged, warmly welcome them, reassure them that every great trader started with trade #1, and offer to chat about mindset, discipline, setups, or risk rules.
-- When ${traderName} expresses fear, doubt, loss, or FOMO, lead with heartfelt empathy FIRST before offering constructive guidance.
-- Celebrate small milestones and positive habits, not just profits.
-- Use uplifting emojis naturally to bring warmth (\u{1F44B}, \u{1F60A}, \u{1F680}, \u{1F4AA}, \u{1F3AF}, \u{1F4C8}, \u{1F9D8}, \u{1F64F}).
+Language & Communication:
+- ${traderName} speaks English, Malayalam, and Manglish (Malayalam written phonetically using the English alphabet).
+- Common Manglish phrases and their exact meanings:
+  * "ente trading engane und" / "engane und" -> "How is my trading performing?"
+  * "ethraya loss aayath" / "ethra loss aayi" -> "How much loss did I make?"
+  * "win rate ethraya" -> "What is my win rate?"
+  * "rpy onum crct allalo" / "reply crct alla" -> "Your replies are not accurate or not answering my question"
+  * "ai work avunondo" -> "Is the AI working?"
+  * "trade edukkatte" -> "Should I enter a trade?"
+  * "njan profit aano" -> "Am I in profit?"
+- If ${traderName} writes in Malayalam or Manglish, you MUST understand their exact question and reply in friendly, conversational Malayalam or Manglish.
+- NEVER give generic textbook definitions when asked conversational questions like "ente trading engane und". Always answer about their real account balance ($${currentBal.toFixed(2)}), net P/L (${parseFloat(netPnLVal) >= 0 ? "+" : ""}$${netPnLVal}), and drawdown (${drawdownPctVal}%)!
 
-Trader Profile:
-- Name: ${traderName}
-- Account: ${accountName}
-- Total Trades Logged: ${accountTrades.length}
+Account Live Overview:
+- Trader Name: ${traderName}
+- Account Name: ${accountName}
+- Broker & Platform: ${targetAcc?.broker || "Exness"} (${targetAcc?.platform || "MT5"})
+- Starting Capital: $${startingBal.toFixed(2)}
+- Current Live Balance: $${currentBal.toFixed(2)}
+- Live Equity: $${equityBal.toFixed(2)}
+- Net P/L: ${parseFloat(netPnLVal) >= 0 ? "+" : ""}$${netPnLVal}
+- Drawdown: ${drawdownPctVal}%
+- Detected MT5 Sync Trades: ${targetAcc?.eaSyncTradeCount || 0}
+- Detailed Journal Trades Logged: ${accountTrades.length}
 
-Trading History Digest (Last 50 trades):
+Trading History Digest (Latest ${digest.length} closed trades in journal):
 ${JSON.stringify(digest)}
 
-RESTRICTIONS:
-- ONLY discuss trading, trading psychology, risk management, discipline, emotional control, performance improvement, and journal insights.
-- If asked about unrelated topics, kindly redirect: "That's outside my expertise as your trading mentor \u2014 but I'm always here to talk trading, mindset, and strategy!"
-- NEVER promise profits or guarantee outcomes.
-- NEVER be dismissive or harsh. Always be encouraging and constructive.`;
+Personality & Guidance Rules:
+- Extremely warm, approachable, realistic, and disciplined \u2014 like an experienced prop firm risk manager who genuinely cares about ${traderName}'s growth.
+- MANDATORY LANGUAGE MATCHING: If ${traderName} speaks in Malayalam or Manglish, you MUST answer in Malayalam (or natural conversational Manglish).
+- MANDATORY ACCOUNT METRICS: Whenever ${traderName} asks about their performance, account, profits, or losses, ALWAYS directly mention their live numbers:
+  \u2022 Account: "${accountName}" (${targetAcc?.broker || "Exness"} ${targetAcc?.platform || "MT5"})
+  \u2022 Starting Capital: $${startingBal.toFixed(2)}
+  \u2022 Current Live Balance: $${currentBal.toFixed(2)}
+  \u2022 Net P/L: ${parseFloat(netPnLVal) >= 0 ? "+" : ""}$${netPnLVal} (${drawdownPctVal}% drawdown)
+  \u2022 Journaled Trades: ${accountTrades.length} trades
+  If detailed closed trade records are 0 in the journal (even though MT5 is connected), explain that their live balance is $${currentBal.toFixed(2)} (${drawdownPctVal}% drawdown), and once trades are synced or closed in MT5, win rate and setup stats will automatically show up.
+- Always encourage strict risk management (1-2% risk per trade, stop losses, avoiding revenge trading).
+- Use helpful emojis naturally (\u{1F4CA}, \u{1F3AF}, \u{1F680}, \u{1F4A1}, \u{1F6E1}\uFE0F, \u{1F4AA}, \u{1F64F}).
+- NEVER guarantee profits or make financial promises.`;
   const firstUserIdx = messages.findIndex((m) => m.role === "user");
   const validMessages = firstUserIdx !== -1 ? messages.slice(firstUserIdx) : messages;
   if (openRouterKey && !openRouterKey.includes("MY_KEY")) {
@@ -7671,6 +7759,94 @@ app.post(["/api/payments/order", "/api/payments/create-order"], async (req, res)
     res.status(502).json({ error: err?.message || "Could not initiate Razorpay order. Please try again." });
   }
 });
+app.post("/api/create-order", async (req, res) => {
+  const auth2 = razorpayAuth();
+  if (!auth2) {
+    return res.status(401).json({ error: "Razorpay credentials not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET." });
+  }
+  const rawAmount = req.body?.amount !== void 0 ? Number(req.body.amount) : PRO_PLAN_AMOUNT_PAISE;
+  const currency = String(req.body?.currency || "INR").toUpperCase();
+  const receipt = String(req.body?.receipt || `rcpt_${Date.now().toString(36)}`);
+  if (isNaN(rawAmount) || rawAmount < 100) {
+    return res.status(400).json({ error: "Invalid amount. Minimum amount is 100 paise." });
+  }
+  const amount = Math.round(rawAmount);
+  try {
+    const razorpay = new Razorpay({
+      key_id: auth2.keyId,
+      key_secret: auth2.keySecret
+    });
+    const currentUser = req.currentUser;
+    const order = await razorpay.orders.create({
+      amount,
+      currency,
+      receipt,
+      notes: {
+        userId: currentUser?.id || "",
+        email: currentUser?.email || "",
+        plan: "pro"
+      }
+    });
+    return res.json({
+      order_id: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      key_id: auth2.keyId
+    });
+  } catch (err) {
+    console.error("[create-order] Razorpay API error:", err?.message || err);
+    return res.status(500).json({ error: err?.message || "Failed to create Razorpay order" });
+  }
+});
+app.post("/api/verify-payment", async (req, res) => {
+  const auth2 = razorpayAuth();
+  if (!auth2) {
+    return res.status(401).json({ error: "Razorpay credentials not configured." });
+  }
+  const razorpay_order_id = String(req.body?.razorpay_order_id || req.body?.order_id || req.body?.orderId || "").trim();
+  const razorpay_payment_id = String(req.body?.razorpay_payment_id || req.body?.payment_id || req.body?.paymentId || "").trim();
+  const razorpay_signature = String(req.body?.razorpay_signature || req.body?.signature || "").trim();
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    return res.status(400).json({ error: "Missing required payment verification fields (order_id, payment_id, signature)." });
+  }
+  const textToSign = `${razorpay_order_id}|${razorpay_payment_id}`;
+  const generatedSignature = crypto4.createHmac("sha256", auth2.keySecret).update(textToSign).digest("hex");
+  if (!safeTokenEqual2(generatedSignature, razorpay_signature)) {
+    console.warn(`[verify-payment] Signature mismatch. expected=${generatedSignature} got=${razorpay_signature}`);
+    return res.status(400).json({ success: false, error: "Payment signature verification failed. Invalid signature." });
+  }
+  const currentUser = req.currentUser;
+  let targetUserId = currentUser?.id;
+  let targetUserEmail = currentUser?.email;
+  if (!targetUserId && razorpay_order_id) {
+    try {
+      const order = await razorpayFetch(`/orders/${encodeURIComponent(razorpay_order_id)}`);
+      targetUserId = order?.notes?.userId;
+      targetUserEmail = order?.notes?.email || targetUserEmail;
+    } catch (e) {
+      console.warn("[verify-payment] order lookup warning:", e);
+    }
+  }
+  if (targetUserId) {
+    try {
+      await grantProForPayment({
+        userId: targetUserId,
+        providerPaymentId: razorpay_payment_id,
+        amountRupees: 499,
+        userEmail: targetUserEmail,
+        periodDays: 30
+      });
+    } catch (e) {
+      console.warn("[verify-payment] grantPro error:", e);
+    }
+  }
+  return res.json({
+    success: true,
+    message: "Payment verified successfully.",
+    order_id: razorpay_order_id,
+    payment_id: razorpay_payment_id
+  });
+});
 app.post("/api/payments/subscribe", async (req, res) => {
   const currentUser = req.currentUser;
   if (!currentUser) return res.status(401).json({ error: "Not authenticated" });
@@ -7807,8 +7983,8 @@ app.post("/api/payments/webhook", async (req, res) => {
 });
 app.post("/api/payments/verify", async (req, res) => {
   const currentUser = req.currentUser;
-  if (!currentUser) return res.status(401).json({ error: "Not authenticated" });
   if (req.body?.isSandbox) {
+    if (!currentUser) return res.status(401).json({ error: "Not authenticated" });
     if (!allowTestBilling()) {
       return res.status(400).json({ error: "Payment verification failed." });
     }
@@ -7839,17 +8015,24 @@ app.post("/api/payments/verify", async (req, res) => {
   const textToSign = razorpay_order_id ? `${razorpay_order_id}|${razorpay_payment_id}` : `${razorpay_payment_id}|${razorpay_subscription_id}`;
   const expected = crypto4.createHmac("sha256", auth2.keySecret).update(textToSign).digest("hex");
   if (!safeTokenEqual2(expected, razorpay_signature)) {
-    console.warn(`[payments/verify] signature mismatch for user ${currentUser.id}`);
+    console.warn(`[payments/verify] signature mismatch for user ${currentUser?.id || "anonymous"}`);
     return res.status(400).json({ error: "Payment verification failed." });
   }
   let periodDays = 30;
   let amountRupees = PRO_PLAN_AMOUNT_PAISE / 100;
+  let targetUserId = currentUser?.id;
+  let targetUserEmail = currentUser?.email;
   if (razorpay_order_id) {
     try {
       const order = await razorpayFetch(`/orders/${encodeURIComponent(razorpay_order_id)}`);
-      if (order?.notes?.userId && order.notes.userId !== currentUser.id) {
-        console.warn(`[payments/verify] order ${razorpay_order_id} belongs to ${order.notes.userId}, not ${currentUser.id}`);
-        return res.status(400).json({ error: "Payment verification failed." });
+      const orderUserId = order?.notes?.userId;
+      if (orderUserId) {
+        if (currentUser && orderUserId !== currentUser.id) {
+          console.warn(`[payments/verify] order ${razorpay_order_id} belongs to ${orderUserId}, not ${currentUser.id}`);
+          return res.status(400).json({ error: "Payment verification failed." });
+        }
+        targetUserId = orderUserId;
+        targetUserEmail = order?.notes?.email || targetUserEmail;
       }
       if (order?.amount) {
         amountRupees = order.amount / 100;
@@ -7861,18 +8044,21 @@ app.post("/api/payments/verify", async (req, res) => {
       console.warn("[payments/verify] order fetch warning (offline fallback allowed if signature valid):", e);
     }
   }
+  if (!targetUserId) {
+    return res.status(401).json({ error: "Not authenticated \u2014 session expired and order user not found." });
+  }
   const { granted, proUntil } = await grantProForPayment({
-    userId: currentUser.id,
+    userId: targetUserId,
     providerPaymentId: razorpay_payment_id,
     amountRupees,
-    userEmail: currentUser.email,
+    userEmail: targetUserEmail,
     periodDays
   });
   if (!granted) {
     return res.json({
       success: true,
-      active: !!currentUser.isPro,
-      proUntil: currentUser.proUntil || null,
+      active: true,
+      proUntil: currentUser?.proUntil || null,
       alreadyApplied: true,
       message: "This payment was already applied to your account."
     });
@@ -10426,11 +10612,14 @@ app.post("/api/admin/users/:id/plan", async (req, res) => {
   const ctx = await requirePermission(req, res, "users.manage");
   if (!ctx) return;
   const { id } = req.params;
-  const { isPro } = req.body;
+  const { isPro, days } = req.body;
+  const durationDays = Number(days) || 30;
+  const proUntil = isPro ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1e3) : null;
   if (useSupabase) {
     const { error } = await supabase.from("users").update({
       is_pro: !!isPro,
-      pro_until: isPro ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3).toISOString() : null
+      pro_until: proUntil ? proUntil.toISOString() : null,
+      plan: isPro ? "pro" : "free"
     }).eq("id", id);
     if (error) {
       console.error("Error updating user plan:", error);
@@ -10438,13 +10627,21 @@ app.post("/api/admin/users/:id/plan", async (req, res) => {
     }
     userDatabases.delete(id);
     await writeAuditLog(req, ctx, isPro ? "user.grant_pro" : "user.revoke_pro", "user", id);
-    return res.json({ message: `User plan updated to ${isPro ? "Pro" : "Free"}` });
+    return res.json({
+      message: `User plan updated to ${isPro ? `Pro (${durationDays} days)` : "Free"}`,
+      isPro: !!isPro,
+      proUntil: proUntil ? proUntil.toISOString() : null
+    });
   }
   const target = localFindUser((u) => u.id === id);
   if (!target) return res.status(404).json({ error: "User not found" });
-  await applyProState(id, isPro ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3) : null);
+  await applyProState(id, proUntil);
   await writeAuditLog(req, ctx, isPro ? "user.grant_pro" : "user.revoke_pro", "user", id);
-  res.json({ message: `User plan updated to ${isPro ? "Pro" : "Free"}` });
+  res.json({
+    message: `User plan updated to ${isPro ? `Pro (${durationDays} days)` : "Free"}`,
+    isPro: !!isPro,
+    proUntil: proUntil ? proUntil.toISOString() : null
+  });
 });
 app.get("/api/admin/bugs", async (req, res) => {
   const ctx = await requirePermission(req, res, "tickets.read");
