@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -170,6 +171,19 @@ def complete(job: Job, ok: bool, error: str = "", code: str = "", imported: int 
 # ── terminal ──────────────────────────────────────────────────────────────
 
 
+def kill_terminal_process() -> None:
+    """Force kill this worker's terminal process if it is hung or in an IPC error state."""
+    try:
+        if TERMINAL_PATH and os.path.exists(TERMINAL_PATH):
+            escaped_path = TERMINAL_PATH.replace("'", "''")
+            cmd = f"Get-Process -Name 'terminal64' -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq '{escaped_path}' }} | Stop-Process -Force"
+            subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, timeout=10)
+        else:
+            subprocess.run(["taskkill", "/F", "/IM", "terminal64.exe"], capture_output=True, timeout=5)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("failed to kill terminal process: %s", exc)
+
+
 def terminal_login(job: Job) -> None:
     """Start this worker's terminal and log it into the customer's account."""
     init_kwargs: dict[str, Any] = {}
@@ -179,11 +193,15 @@ def terminal_login(job: Job) -> None:
     # Initialize terminal IPC first
     if not mt5.initialize(**init_kwargs):
         code, message = mt5.last_error()
+        if code in (-10001, -10005):
+            kill_terminal_process()
         raise SyncFailed(f"MT5 terminal IPC init failed ({code}): {message}", "MT5_INIT_FAILED")
 
     # Authorize account with broker
     if not mt5.login(job.login, password=job.password, server=job.server):
         code, message = mt5.last_error()
+        if code in (-10001, -10005):
+            kill_terminal_process()
         raise SyncFailed(
             f"MT5 login failed ({code}): {message}. Verify server '{job.server}' is scanned in MT5.",
             "MT5_LOGIN_FAILED",
@@ -280,7 +298,10 @@ def account_snapshot() -> dict[str, Any] | None:
 
 
 def run_job(job: Job) -> None:
-    log.info("job %s: account=%s action=%s sinceDeal=%s", job.id, job.account_id, job.action, job.since_deal)
+    log.info(
+        "job %s: account=%s action=%s login=%s server=%s sinceDeal=%s",
+        job.id, job.account_id, job.action, job.login, job.server, job.since_deal,
+    )
     imported = 0
     try:
         terminal_login(job)
@@ -333,6 +354,7 @@ def main() -> None:
                     "Set it explicitly once you run more than one worker.")
 
     log.info("worker starting: api=%s poll=%ss", API_URL, POLL_SECONDS)
+    kill_terminal_process()
     idle_logged = False
 
     while True:
