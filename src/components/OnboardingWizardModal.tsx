@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import {
   Compass, TrendingUp, Trophy, Flame, Clock,
   BarChart3, Globe, Sparkles, LineChart, Cpu,

@@ -111,6 +111,22 @@ export default function RazorpayCheckoutButton({
           color: themeColor,
           backdrop_color: '#090b14',
         },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: 'Pay using UPI / QR',
+                instruments: [
+                  { method: 'upi' }
+                ]
+              }
+            },
+            sequence: ['block.upi', 'block.default'],
+            preferences: {
+              show_default_blocks: true
+            }
+          }
+        },
         modal: {
           backdropclose: true,
           ondismiss: () => {

@@ -355,6 +355,22 @@ export default function ProUpgradeModal({
           color: '#7c3aed',
           backdrop_color: '#0c0e15',
         },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: 'Pay using UPI / QR',
+                instruments: [
+                  { method: 'upi' }
+                ]
+              }
+            },
+            sequence: ['block.upi', 'block.default'],
+            preferences: {
+              show_default_blocks: true
+            }
+          }
+        },
         modal: {
           backdropclose: true,
           ondismiss: () => {
