@@ -40,6 +40,7 @@ import {
 import { Search, RefreshCw, Maximize2, AlertCircle, TrendingUp, X, SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
 import { Trade } from '../types';
 import { TradeLinePrimitive } from './TradeLinePrimitive';
+import ChartDrawingTools from './ChartDrawingTools';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -188,6 +189,7 @@ const TradingViewChart = memo(function TradingViewChart({
   const [filterMode, setFilterMode] = useState<'all'|'wins'|'losses'|'buy'|'sell'>('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [containerDimensions, setContainerDimensions] = useState<{ width: number; height: number }>({ width: 800, height: 500 });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -215,10 +217,14 @@ const TradingViewChart = memo(function TradingViewChart({
     if (!containerRef.current) return;
     destroyChart();
 
+    const width = containerRef.current.clientWidth || 800;
+    const height = containerRef.current.clientHeight || 500;
+    setContainerDimensions({ width, height });
+
     const chart = createChart(containerRef.current, {
       ...getChartOptions(theme),
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight,
+      width,
+      height,
       handleScroll: true,
       handleScale: true,
     });
@@ -257,10 +263,13 @@ const TradingViewChart = memo(function TradingViewChart({
     // Resize observer for responsive behaviour
     resizeObserverRef.current = new ResizeObserver(() => {
       if (containerRef.current && chartRef.current) {
+        const w = containerRef.current.clientWidth;
+        const h = containerRef.current.clientHeight;
         chartRef.current.applyOptions({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
+          width: w,
+          height: h,
         });
+        setContainerDimensions({ width: w, height: h });
       }
     });
     resizeObserverRef.current.observe(containerRef.current);
@@ -931,6 +940,14 @@ const TradingViewChart = memo(function TradingViewChart({
       {/* ── Chart area ──────────────────────────────────────────────────── */}
       <div className="relative flex-1 min-h-0">
         <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+
+        {/* Interactive TradingView Drawing Tools Toolbar & Canvas Overlay */}
+        <ChartDrawingTools
+          symbol={symbol}
+          isDark={isDark}
+          containerWidth={containerDimensions.width}
+          containerHeight={containerDimensions.height}
+        />
 
 
         {/* Note popup */}

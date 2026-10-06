@@ -2723,6 +2723,22 @@ function collectAllInMemoryTickets(): any[] {
 }
 
 const app = express();
+// Remove fingerprinting header so attackers cannot tell this is an Express server
+app.disable('x-powered-by');
+
+// Security headers middleware: anti-clickjacking, strict transport, MIME protection
+app.use((_req, res, next) => {
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (IS_PRODUCTION_LIKE) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
+  next();
+});
+
 // Honour the port the host assigns. Render, Railway, Fly and Heroku all inject
 // PORT and expect the app to bind it; hardcoding 3000 meant the app would bind
 // the wrong port there and the platform would report it as unhealthy. It also
