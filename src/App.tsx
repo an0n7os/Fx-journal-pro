@@ -1797,37 +1797,46 @@ export default function App() {
     }
   };
 
-  const handleDeleteAccount = async () => {
+  const handleDeleteAccount = () => {
     if (!editingAccount) return;
-    if (!window.confirm(`Are you sure you want to delete "${editingAccount.name}"? All associated trades and risk settings will be permanently removed.`)) {
-      return;
-    }
-    setActionLoading(true);
-    try {
-      const res = await authFetch(`/api/accounts/${editingAccount.id}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setShowEditAccountModal(false);
-        setEditingAccount(null);
-        const remaining = accounts.filter(a => a.id !== editingAccount.id);
-        if (selectedAccountId === editingAccount.id) {
-          const nextId = remaining.length > 0 ? remaining[0].id : '';
-          setSelectedAccountId(nextId);
-          persistSelectedAccount(nextId);
-          await fetchAccountData(nextId);
-        } else {
-          await fetchAccountData();
+    const targetAccount = editingAccount;
+    showAlert(
+      `Are you sure you want to delete "${targetAccount.name}"? All associated trades, performance analytics, and risk settings will be permanently removed. This action cannot be undone.`,
+      {
+        title: 'Delete Trading Portfolio?',
+        type: 'error',
+        confirmText: 'Yes, Delete Portfolio',
+        cancelText: 'Cancel',
+        onConfirm: async () => {
+          setActionLoading(true);
+          try {
+            const res = await authFetch(`/api/accounts/${targetAccount.id}`, {
+              method: 'DELETE'
+            });
+            const data = await res.json();
+            if (res.ok) {
+              setShowEditAccountModal(false);
+              setEditingAccount(null);
+              const remaining = accounts.filter(a => a.id !== targetAccount.id);
+              if (selectedAccountId === targetAccount.id) {
+                const nextId = remaining.length > 0 ? remaining[0].id : '';
+                setSelectedAccountId(nextId);
+                persistSelectedAccount(nextId);
+                await fetchAccountData(nextId);
+              } else {
+                await fetchAccountData();
+              }
+            } else if (data.error) {
+              showAlert(data.error, { title: 'Delete Failed', type: 'error' });
+            }
+          } catch (err: any) {
+            showAlert('Error deleting account: ' + (err?.message || err), { title: 'Delete Failed', type: 'error' });
+          } finally {
+            setActionLoading(false);
+          }
         }
-      } else if (data.error) {
-        alert(data.error);
       }
-    } catch (err) {
-      alert('Error deleting account');
-    } finally {
-      setActionLoading(false);
-    }
+    );
   };
 
   /**
@@ -2686,8 +2695,37 @@ export default function App() {
     e.target.value = '';
   };
 
-  const handleRemoveAvatar = async () => {
-    if (!window.confirm('Are you sure you want to remove your profile picture?')) return;
+  const handleRemoveAvatar = () => {
+    showAlert('Are you sure you want to remove your profile picture?', {
+      title: 'Remove Profile Picture?',
+      type: 'warning',
+      confirmText: 'Remove',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        setAvatarUploading(true);
+        setSettingsAvatar('');
+        try {
+          const res = await authFetch('/api/auth/update-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: settingsName || user?.name || 'Trader', avatar: '' }),
+          });
+          const data = await res.json();
+          if (res.ok && data.user) {
+            setUser(data.user);
+            if (data.user?.id) {
+              persistAuthSession(data.user.id, data.user.email || user?.email || '');
+            }
+          }
+        } catch (err) {
+          console.error('[handleRemoveAvatar] exception:', err);
+        } finally {
+          setAvatarUploading(false);
+        }
+      }
+    });
+  };
+  const _unusedRemoveAvatar = async () => {
     setAvatarUploading(true);
     setSettingsAvatar('');
     try {
@@ -5474,26 +5512,38 @@ export default function App() {
 
                   {/* Balance & Growth — Apple-style inline balance */}
                   {(() => {
-                    const _startBal = (activeAccount?.startingBalance && activeAccount.startingBalance > 0)
+                    const _startingCapital = (activeAccount?.startingBalance && activeAccount.startingBalance > 0)
                       ? activeAccount.startingBalance
-                      : (activeAccount?.currentBalance ?? 1);
+                      : (activeAccount?.currentBalance !== undefined && netProfit !== undefined && (activeAccount.currentBalance - netProfit) > 0)
+                        ? (activeAccount.currentBalance - netProfit)
+                        : (activeAccount?.currentBalance ?? 0);
+                    const _startBal = _startingCapital > 0 ? _startingCapital : (activeAccount?.currentBalance ?? 1);
                     const _curBal = activeAccount?.currentBalance ?? _startBal;
                     const growthPct = _startBal > 0 ? parseFloat((((_curBal - _startBal) / _startBal) * 100).toFixed(2)) : 0;
                     const netPnL = parseFloat((_curBal - _startBal).toFixed(2));
                     return (
                       <>
-                        <div className="my-2">
-                          <p className="text-[10px] font-medium text-white/50 uppercase tracking-wider mb-0.5">Current Balance</p>
-                          <div className="flex items-baseline gap-2">
-                            <p className="font-display text-2xl xs:text-[26px] leading-none font-black text-white tracking-tight tabular-nums truncate">
-                              {activeAccount ? formatValue(activeAccount.currentBalance ?? activeAccount.startingBalance) : '—'}
+                        <div className="my-2.5 flex items-baseline justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-medium text-white/50 uppercase tracking-wider mb-0.5">Current Balance</p>
+                            <div className="flex items-baseline gap-2">
+                              <p className="font-display text-2xl xs:text-[26px] leading-none font-black text-white tracking-tight tabular-nums truncate">
+                                {activeAccount ? formatValue(activeAccount.currentBalance ?? activeAccount.startingBalance) : '—'}
+                              </p>
+                              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9.5px] font-bold border ${growthPct >= 0
+                                  ? 'bg-emerald-400/15 border-emerald-300/30 text-emerald-200'
+                                  : 'bg-rose-400/15 border-rose-300/30 text-rose-200'
+                                }`}>
+                                {growthPct >= 0 ? '↑' : '↓'} {Math.abs(growthPct).toFixed(2)}%
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <p className="text-[10px] font-medium text-white/50 uppercase tracking-wider mb-0.5">Starting Capital</p>
+                            <p className="font-display text-base xs:text-lg font-bold text-white/90 tabular-nums">
+                              {activeAccount ? formatValue(_startBal) : '—'}
                             </p>
-                            <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${growthPct >= 0
-                                ? 'bg-emerald-400/15 border-emerald-300/30 text-emerald-200'
-                                : 'bg-rose-400/15 border-rose-300/30 text-rose-200'
-                              }`}>
-                              {growthPct >= 0 ? '↑' : '↓'} {Math.abs(growthPct).toFixed(2)}%
-                            </span>
                           </div>
                         </div>
 

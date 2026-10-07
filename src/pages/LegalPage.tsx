@@ -133,9 +133,7 @@ export default function LegalPage({ initialKey }: LegalPageProps) {
                 <Mail className="h-3.5 w-3.5 shrink-0" />
                 contact@fxjournalpro.com
               </a>
-              <div className="text-[11px] text-slate-500 pt-1 border-t border-white/[0.04]">
-                Operating in Kasaragod, Kerala, India
-              </div>
+              
             </div>
           </aside>
 
@@ -207,7 +205,7 @@ export default function LegalPage({ initialKey }: LegalPageProps) {
 
             {/* Bottom Quick-Switch Links */}
             <div className="mt-12 pt-6 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
-              <span className="font-mono text-slate-500">FXJournalPro &middot; Kasaragod, Kerala, India</span>
+              <span className="font-mono text-slate-500">FXJournalPro</span>
               <div className="flex flex-wrap items-center gap-3">
                 {DOC_NAV.filter(n => n.key !== activeKey).slice(0, 3).map(n => (
                   <button
@@ -230,7 +228,7 @@ export default function LegalPage({ initialKey }: LegalPageProps) {
         <p className="mb-2 text-slate-400 text-[11px] leading-relaxed max-w-4xl mx-auto">
           FXJournalPro is a software and analytics platform only and does not provide financial advice, broker services, or managed accounts. Trading financial instruments involves substantial risk.
         </p>
-        <p>&copy; {new Date().getFullYear()} FXJournalPro. Operated by Akshayraj (FXJournalPro). All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} FXJournalPro. All rights reserved.</p>
       </footer>
     </div>
   );

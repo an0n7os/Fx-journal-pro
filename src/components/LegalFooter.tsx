@@ -43,7 +43,7 @@ export default function LegalFooter() {
 
         {/* Copyright & Attribution Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-white/[0.04]">
-          <span>&copy; {new Date().getFullYear()} FXJournalPro. Operated by Akshayraj (FXJournalPro). Kasaragod, Kerala, India. All rights reserved.</span>
+          <span>&copy; {new Date().getFullYear()} FXJournalPro. All rights reserved.</span>
           <span className="inline-flex items-center gap-1 shrink-0">
             Built by{' '}
             <a

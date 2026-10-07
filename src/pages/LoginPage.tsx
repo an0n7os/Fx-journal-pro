@@ -1901,38 +1901,6 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                       <p className="text-[11px] text-slate-400 mt-0.5">Direct Telegram chat &amp; community</p>
                     </div>
                   </div>
-
-                  {/* Hours */}
-                  <div className="flex items-start gap-4 group">
-                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 group-hover:bg-sky-500/20 transition-all">
-                      <Clock className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block">
-                        Working Hours
-                      </span>
-                      <p className="text-sm font-semibold text-white">
-                        9:00 AM – 6:00 PM IST
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Monday to Saturday</p>
-                    </div>
-                  </div>
-
-                  {/* Address */}
-                  <div className="flex items-start gap-4 group">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 group-hover:bg-indigo-500/20 transition-all">
-                      <MapPin className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block">
-                        Operating Address
-                      </span>
-                      <p className="text-sm font-semibold text-white">
-                        Kasaragod, Kerala, India
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Registered Entity Address</p>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-slate-400">
@@ -2062,7 +2030,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
                 <div className="pt-3 border-t border-white/[0.06] mt-4 flex items-center justify-center text-xs text-slate-400">
                   <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                    <span>🔒</span> Direct dispatch to <span className="text-slate-300 font-mono font-medium">{CONTACT_EMAIL}</span>
+                    <Lock className="h-3 w-3 text-amber-400/90" /> Direct dispatch to <span className="text-slate-300 font-mono font-medium">{CONTACT_EMAIL}</span>
                   </span>
                 </div>
               </div>
@@ -2279,7 +2247,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
           {/* Bottom Copyright & Sessions Bar */}
           <div className="border-t border-white/[0.06] pt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
-            <p>&copy; {new Date().getFullYear()} FXJournalPro. Operated by Akshayraj (FXJournalPro). Kasaragod, Kerala, India. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} FXJournalPro. All rights reserved.</p>
             <div className="flex items-center gap-4 text-[11px] font-mono">
               <span className="text-slate-400">
                 Built by{' '}
