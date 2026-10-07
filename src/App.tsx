@@ -8,7 +8,7 @@ import {
   Clock, Heart, Edit3, Image as ImageIcon, Eye, EyeOff, RefreshCw,
   Terminal, Globe, Bell, CreditCard, Info, Activity, Sun, Moon, Upload,
   FileSpreadsheet, FileText, Mail, Wrench, X, Newspaper, Trophy, Lock, MessageSquare, MoreHorizontal, Users,
-  Settings, Instagram, Phone, GraduationCap, Share2, Loader2, ShieldCheck, CheckCheck
+  Settings, Instagram, Phone, GraduationCap, Share2, Loader2, ShieldCheck, CheckCheck, Camera
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -905,6 +905,9 @@ export default function App() {
   // Interactive settings inputs
   const [settingsName, setSettingsName] = useState('');
   const [settingsEmail, setSettingsEmail] = useState('');
+  const [settingsAvatar, setSettingsAvatar] = useState('');
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [settingsCurrPassword, setSettingsCurrPassword] = useState('');
   const [settingsNewPassword, setSettingsNewPassword] = useState('');
@@ -1019,6 +1022,7 @@ export default function App() {
     if (user) {
       setSettingsName(user.name);
       setSettingsEmail(user.email);
+      setSettingsAvatar(user.avatar || (user as any)?.preferences?.avatar || '');
       // Check admin status from server (accounts for role updates in Supabase after login)
       authFetch('/api/admin/check')
         .then(res => res.json())
@@ -1026,6 +1030,7 @@ export default function App() {
         .catch(() => setIsAdmin(false));
     } else {
       setIsAdmin(false);
+      setSettingsAvatar('');
     }
   }, [user]);
 
@@ -2606,6 +2611,98 @@ export default function App() {
 
 
   // Custom Settings Handlers
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload a valid image file (PNG, JPG, WebP).');
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      alert('Image file size should be less than 8MB.');
+      return;
+    }
+
+    setAvatarUploading(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = async () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const size = Math.min(img.width, img.height);
+          const targetDim = Math.min(size, 256);
+          canvas.width = targetDim;
+          canvas.height = targetDim;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            setAvatarUploading(false);
+            return;
+          }
+
+          // Center crop
+          const startX = (img.width - size) / 2;
+          const startY = (img.height - size) / 2;
+          ctx.drawImage(img, startX, startY, size, size, 0, 0, targetDim, targetDim);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          setSettingsAvatar(dataUrl);
+
+          // Save immediately to profile
+          const res = await authFetch('/api/auth/update-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: settingsName || user?.name || 'Trader', avatar: dataUrl }),
+          });
+          const data = await res.json();
+          if (res.ok && data.user) {
+            setUser(data.user);
+            if (data.user?.id) {
+              persistAuthSession(data.user.id, data.user.email || user?.email || '');
+            }
+          }
+        } catch (err) {
+          console.error('Failed to save avatar:', err);
+        } finally {
+          setAvatarUploading(false);
+        }
+      };
+      img.onerror = () => {
+        setAvatarUploading(false);
+        alert('Could not process this image. Please try another one.');
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!window.confirm('Are you sure you want to remove your profile picture?')) return;
+    setAvatarUploading(true);
+    setSettingsAvatar('');
+    try {
+      const res = await authFetch('/api/auth/update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: settingsName || user?.name || 'Trader', avatar: '' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.user) {
+        setUser(data.user);
+        if (data.user?.id) {
+          persistAuthSession(data.user.id, data.user.email || user?.email || '');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to remove avatar:', err);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!settingsName) return;
@@ -2616,7 +2713,7 @@ export default function App() {
       const res = await authFetch('/api/auth/update-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: settingsName })
+        body: JSON.stringify({ name: settingsName, avatar: settingsAvatar })
       });
       const data = await res.json();
       if (res.ok) {
@@ -4828,11 +4925,19 @@ export default function App() {
               aria-haspopup="menu"
               aria-expanded={showMobileNavProfile}
               aria-label="Account menu"
-              className="avatar-ring group relative h-9 w-9 rounded-full p-[1.5px] transition-transform duration-200 hover:scale-105 active:scale-95"
+              className="avatar-ring group relative h-9 w-9 rounded-full p-[1.5px] transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer"
             >
-              <span className="flex h-full w-full items-center justify-center rounded-full bg-violet-50 text-violet-700 dark:bg-[#0c0e15] dark:text-violet-100 text-[11px] font-bold tracking-wide">
-                {userInitials}
-              </span>
+              {(user?.avatar || (user as any)?.preferences?.avatar) ? (
+                <img
+                  src={user?.avatar || (user as any)?.preferences?.avatar}
+                  alt={user?.name || 'User avatar'}
+                  className="h-full w-full rounded-full object-cover"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center rounded-full bg-violet-50 text-violet-700 dark:bg-[#0c0e15] dark:text-violet-100 text-[11px] font-bold tracking-wide">
+                  {userInitials}
+                </span>
+              )}
               {/* Pro indicator dot on avatar */}
               {user?.isPro && (
                 <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-400 rounded-full border-2 border-[#FBFBFA] dark:border-slate-950" />
@@ -4847,14 +4952,36 @@ export default function App() {
                 className="profile-menu absolute right-0 mt-3 w-[278px] rounded-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2"
               >
                 <div className="flex items-center gap-3 p-4 border-b border-slate-100 dark:border-white/[0.07]">
-                  <span className="avatar-ring h-10 w-10 shrink-0 rounded-full p-[1.5px] relative">
-                    <span className="flex h-full w-full items-center justify-center rounded-full bg-violet-50 text-violet-700 dark:bg-[#0c0e15] dark:text-violet-100 text-xs font-bold">
-                      {userInitials}
+                  <div className="relative group shrink-0">
+                    <span className="avatar-ring h-11 w-11 shrink-0 rounded-full p-[1.5px] relative block">
+                      {(user?.avatar || (user as any)?.preferences?.avatar) ? (
+                        <img
+                          src={user?.avatar || (user as any)?.preferences?.avatar}
+                          alt={user?.name || 'User avatar'}
+                          className="h-full w-full rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center rounded-full bg-violet-50 text-violet-700 dark:bg-[#0c0e15] dark:text-violet-100 text-xs font-bold">
+                          {userInitials}
+                        </span>
+                      )}
+                      {user?.isPro && (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-400 rounded-full border-2 border-white dark:border-slate-900" />
+                      )}
                     </span>
-                    {user?.isPro && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-400 rounded-full border-2 border-white dark:border-slate-900" />
-                    )}
-                  </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('settings');
+                        setSettingsTab('general');
+                        setShowMobileNavProfile(false);
+                      }}
+                      title="Change Profile Picture"
+                      className="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4" />
+                    </button>
+                  </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className="font-semibold text-sm text-slate-900 dark:text-white truncate">{user?.name || 'Trader'}</p>
@@ -5398,8 +5525,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Global Drawdown Risk alert strip if active (hidden on dedicated Heyza AI page) */}
-            {activeTab !== 'insights' && activeAccount && maxDrawdownPercentage > 0 && dismissedDrawdownAccount !== activeAccount.id && (
+            {/* Portfolio Drawdown Risk alert strip — shown on Dashboard only */}
+            {activeTab === 'dashboard' && activeAccount && maxDrawdownPercentage > 0 && dismissedDrawdownAccount !== activeAccount.id && (
               <div className="bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/25 text-amber-950 dark:text-amber-100 rounded-xl p-3 sm:p-4 flex items-start gap-3">
                 <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
@@ -7799,6 +7926,71 @@ export default function App() {
                     {/* General sub-tab */}
                     {settingsTab === 'general' && user && (
                       <div className="space-y-5 sm:space-y-6">
+
+                        {/* 0. Profile Photo Uploader Card */}
+                        <div className="dx-panel p-4 sm:p-6 rounded-2xl flex flex-col sm:flex-row items-center sm:items-start gap-5">
+                          <div className="relative group shrink-0">
+                            <div className="avatar-ring h-20 w-20 rounded-full p-[2px] shadow-lg shadow-violet-500/10 relative">
+                              {(settingsAvatar || user?.avatar || (user as any)?.preferences?.avatar) ? (
+                                <img
+                                  src={settingsAvatar || user?.avatar || (user as any)?.preferences?.avatar}
+                                  alt="Profile"
+                                  className="h-full w-full rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center rounded-full bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-200 text-2xl font-black tracking-wider">
+                                  {userInitials}
+                                </div>
+                              )}
+                            </div>
+                            {user?.isPro && (
+                              <span className="absolute bottom-0 right-0 w-5 h-5 bg-amber-400 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center shadow" title="Pro Member">
+                                <Star className="w-2.5 h-2.5 text-slate-900 fill-slate-900" />
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex-1 text-center sm:text-left space-y-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                              <h4 className="text-sm font-bold text-slate-900 dark:text-white">Profile Photo</h4>
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400">JPG, PNG, or WebP (max 8MB)</span>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              Personalize your trading journal with an avatar photo. It shows in the top navigation bar, account menu, and comments.
+                            </p>
+
+                            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1">
+                              <input
+                                ref={avatarFileInputRef}
+                                type="file"
+                                accept="image/png,image/jpeg,image/jpg,image/webp"
+                                className="hidden"
+                                onChange={handleAvatarFileChange}
+                              />
+                              <button
+                                type="button"
+                                disabled={avatarUploading}
+                                onClick={() => avatarFileInputRef.current?.click()}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold shadow-sm transition cursor-pointer disabled:opacity-50"
+                              >
+                                <Camera className="w-3.5 h-3.5" />
+                                <span>{avatarUploading ? 'Uploading...' : (settingsAvatar || user?.avatar ? 'Change Photo' : 'Upload Photo')}</span>
+                              </button>
+
+                              {(settingsAvatar || user?.avatar || (user as any)?.preferences?.avatar) && (
+                                <button
+                                  type="button"
+                                  disabled={avatarUploading}
+                                  onClick={handleRemoveAvatar}
+                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 text-xs font-semibold transition cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Remove</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
 
                         {/* 1. Profile Details Form */}
                         <form onSubmit={handleSaveProfile} className="dx-panel p-4 sm:p-6 space-y-4 rounded-2xl">

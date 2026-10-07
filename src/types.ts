@@ -2,6 +2,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  avatar?: string;
   password?: string;
   experience?: 'Beginner' | 'Intermediate' | 'Professional';
   tradingStyle?: 'Scalping' | 'Day Trading' | 'Swing Trading';

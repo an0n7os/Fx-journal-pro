@@ -2475,6 +2475,9 @@ function sanitizeUser(user) {
   if (clone.onboarding_completed !== void 0 && clone.onboardingCompleted === void 0) {
     clone.onboardingCompleted = clone.onboarding_completed;
   }
+  if (!clone.avatar && clone.preferences?.avatar) {
+    clone.avatar = clone.preferences.avatar;
+  }
   return clone;
 }
 function canExposeOtp() {
@@ -3544,6 +3547,7 @@ async function saveDatabase(data, overrideUserId, overrideEmail, previousAliases
         "id",
         "email",
         "name",
+        "avatar",
         "password",
         "experience",
         "trading_style",
@@ -5017,12 +5021,17 @@ app.post("/api/auth/update-profile", async (req, res) => {
   let currentUser = req.currentUser;
   const authEmail = currentUser?.email;
   if (!currentUser || !db) return res.status(401).json({ error: "Not authenticated" });
-  const { name } = req.body;
+  const { name, avatar } = req.body;
   const userIdx = db.users.findIndex((u) => u.id === currentUser?.id);
   if (userIdx !== -1) {
     const previousUserId = db.users[userIdx].id;
     const previousEmail = db.users[userIdx].email;
     if (name) db.users[userIdx].name = name;
+    if (avatar !== void 0) {
+      db.users[userIdx].avatar = avatar;
+      if (!db.users[userIdx].preferences) db.users[userIdx].preferences = {};
+      db.users[userIdx].preferences.avatar = avatar;
+    }
     await saveDatabase(db, db.users[userIdx].id, db.users[userIdx].email, { userId: previousUserId, email: previousEmail });
     currentUser = db.users[userIdx];
     res.json({ message: "Profile updated successfully", user: sanitizeUser(currentUser) });

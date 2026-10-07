@@ -23,3 +23,7 @@ END $$;
 -- to drop it into — so the setting never survived a cold start and the app kept
 -- asking. JSONB so new settings need no further migration.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}'::jsonb;
+
+-- avatar: optional profile picture URL or compressed data-URI
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;
+

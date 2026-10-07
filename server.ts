@@ -907,6 +907,9 @@ function sanitizeUser<T>(user: T): T {
   if (clone.onboarding_completed !== undefined && clone.onboardingCompleted === undefined) {
     clone.onboardingCompleted = clone.onboarding_completed;
   }
+  if (!clone.avatar && clone.preferences?.avatar) {
+    clone.avatar = clone.preferences.avatar;
+  }
   return clone;
 }
 
@@ -2309,7 +2312,7 @@ async function saveDatabase(
       // — update-profile takes `name` alone and preferences are confined to
       // their own object — so a client cannot reach role or is_pro through it.
       const validUserCols = new Set([
-        'id', 'email', 'name', 'password', 'experience', 'trading_style',
+        'id', 'email', 'name', 'avatar', 'password', 'experience', 'trading_style',
         'main_markets', 'is_pro', 'is_email_verified', 'created_at',
         'email_otp', 'otp_expires_at', 'otp_attempts', 'otp_sent_at',
         'reset_otp', 'reset_otp_expires_at',
@@ -4036,13 +4039,18 @@ app.post('/api/auth/update-profile', async (req, res) => {
   // `isPro` is deliberately ignored — the plan level is only ever set by a
   // signature-verified payment. `email` is ignored too: it is the account's
   // identity, so changing it here would allow taking over another account.
-  const { name } = req.body;
+  const { name, avatar } = req.body;
 
   const userIdx = db.users.findIndex((u: any) => u.id === currentUser?.id);
   if (userIdx !== -1) {
     const previousUserId = db.users[userIdx].id;
     const previousEmail = db.users[userIdx].email;
     if (name) db.users[userIdx].name = name;
+    if (avatar !== undefined) {
+      db.users[userIdx].avatar = avatar;
+      if (!db.users[userIdx].preferences) db.users[userIdx].preferences = {};
+      db.users[userIdx].preferences.avatar = avatar;
+    }
 
     await saveDatabase(db, db.users[userIdx].id, db.users[userIdx].email, { userId: previousUserId, email: previousEmail });
     currentUser = db.users[userIdx];
