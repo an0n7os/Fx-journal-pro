@@ -17,6 +17,13 @@ import { signIn } from '../lib/auth-client';
 import { useScrollLock } from '../lib/useScrollLock';
 
 /**
+ * Leo Messi tribute badge duration — active for 3 days only.
+ * Auto-hides after 2026-10-10 23:59:59 IST.
+ */
+const MESSI_BADGE_EXPIRY_MS = new Date('2026-10-10T23:59:59+05:30').getTime();
+const isMessiBadgeActive = Date.now() <= MESSI_BADGE_EXPIRY_MS;
+
+/**
  * Reveals `[data-reveal]` elements as they scroll into view.
  *
  * The hidden state lives behind `.js-reveal` on <html>, which this hook adds —
@@ -971,14 +978,16 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             <a href="/" onClick={(e) => handleNavClick(e, '/', 'top')} className="flex items-center gap-2 min-w-0 group py-1">
               <Logo size={25} />
             </a>
-            <div
-              title="Gracias Leo Messi — The Greatest Of All Time 🐐🇦🇷"
-              className="messi-badge inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/80 border border-sky-400/40 text-[11px] sm:text-xs font-semibold select-none cursor-default"
-            >
-              <span className="messi-badge-icon text-xs">🐐</span>
-              <span className="messi-badge-text font-bold tracking-tight">Gracias Leo</span>
-              <span className="text-[9px] font-mono px-1 rounded bg-amber-400/20 text-amber-300 font-black border border-amber-400/30">10</span>
-            </div>
+            {isMessiBadgeActive && (
+              <div
+                title="Gracias Leo Messi — The Greatest Of All Time 🐐🇦🇷"
+                className="messi-badge inline-flex items-center gap-1 sm:gap-1.5 h-6 sm:h-7 px-2 sm:px-2.5 rounded-full bg-slate-900/90 dark:bg-slate-950/90 border border-sky-400/35 text-[10.5px] sm:text-xs font-semibold select-none cursor-default shadow-xs shrink-0"
+              >
+                <span className="messi-badge-icon text-[11px] sm:text-xs leading-none">🐐</span>
+                <span className="messi-badge-text font-extrabold tracking-tight">Gracias Leo</span>
+                <span className="messi-badge-num text-[9px] sm:text-[9.5px] font-mono px-1 sm:px-1.5 py-0.5 rounded-full font-black leading-none">10</span>
+              </div>
+            )}
           </div>
           <nav className="lp-navgroup hidden lg:flex">
             {navLinks.map((l) => {

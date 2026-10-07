@@ -3948,12 +3948,12 @@ svg:focus-visible {
  * ------------------------------------------------------------------ */
 @keyframes messiGlow {
   0%, 100% {
-    box-shadow: 0 0 10px 1px rgba(56, 189, 248, 0.3), 0 0 3px rgba(251, 191, 36, 0.2);
+    box-shadow: 0 0 8px -1px rgba(56, 189, 248, 0.35), 0 0 2px rgba(251, 191, 36, 0.2);
     border-color: rgba(56, 189, 248, 0.45);
   }
   50% {
-    box-shadow: 0 0 18px 3px rgba(251, 191, 36, 0.4), 0 0 6px rgba(56, 189, 248, 0.35);
-    border-color: rgba(251, 191, 36, 0.55);
+    box-shadow: 0 0 14px 1px rgba(251, 191, 36, 0.4), 0 0 4px rgba(56, 189, 248, 0.3);
+    border-color: rgba(251, 191, 36, 0.6);
   }
 }
 
@@ -3974,10 +3974,10 @@ svg:focus-visible {
     transform: translateY(0px) rotate(0deg);
   }
   25% {
-    transform: translateY(-1.5px) rotate(-4deg);
+    transform: translateY(-1px) rotate(-3deg);
   }
   75% {
-    transform: translateY(1px) rotate(4deg);
+    transform: translateY(0.5px) rotate(3deg);
   }
 }
 
@@ -3991,18 +3991,37 @@ svg:focus-visible {
 }
 
 .messi-badge {
-  animation: messiGlow 3s ease-in-out infinite;
+  animation: messiGlow 3.5s ease-in-out infinite;
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.messi-badge:hover {
+  transform: translateY(-0.5px) scale(1.02);
+}
+
+.messi-badge:active {
+  transform: scale(0.97);
 }
 
 .messi-badge-text {
-  background: linear-gradient(90deg, #7dd3fc, #fef08a, #38bdf8, #fbbf24, #7dd3fc);
-  background-size: 300% 300%;
+  background: linear-gradient(90deg, #fef08a 0%, #fbbf24 35%, #93c5fd 65%, #fef08a 100%);
+  background-size: 250% auto;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: messiTextShimmer 4s ease infinite;
+  animation: messiTextShimmer 4s linear infinite;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.messi-badge-num {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #020617;
+  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.4);
 }
 
 .messi-badge-icon {
@@ -4018,8 +4037,8 @@ svg:focus-visible {
   left: 0;
   width: 45%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-  animation: messiShine 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+  animation: messiShine 4.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   pointer-events: none;
 }
 
