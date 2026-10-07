@@ -4567,6 +4567,14 @@ export default function App() {
           */}
           <div className="flex items-center gap-2.5">
             <Logo size={24} />
+            <div
+              title="Gracias Leo Messi — The Greatest Of All Time 🐐🇦🇷"
+              className="messi-badge inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full bg-slate-900/80 border border-sky-400/40 text-[10px] sm:text-xs font-semibold select-none cursor-default"
+            >
+              <span className="messi-badge-icon text-xs">🐐</span>
+              <span className="messi-badge-text font-bold tracking-tight">Gracias Leo</span>
+              <span className="text-[9px] font-mono px-1 rounded bg-amber-400/20 text-amber-300 font-black border border-amber-400/30">10</span>
+            </div>
           </div>
         </div>
 

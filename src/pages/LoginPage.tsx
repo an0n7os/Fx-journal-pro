@@ -967,9 +967,19 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
       {/* ── Navbar ── */}
       <header className="lp-nav fixed top-0 inset-x-0 z-50" data-scrolled={navScrolled}>
         <div className="lp-navbar max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[58px] sm:h-[68px] flex items-center justify-between gap-3 sm:gap-4">
-          <a href="/" onClick={(e) => handleNavClick(e, '/', 'top')} className="flex items-center gap-2 min-w-0 group py-1">
-            <Logo size={25} />
-          </a>
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <a href="/" onClick={(e) => handleNavClick(e, '/', 'top')} className="flex items-center gap-2 min-w-0 group py-1">
+              <Logo size={25} />
+            </a>
+            <div
+              title="Gracias Leo Messi — The Greatest Of All Time 🐐🇦🇷"
+              className="messi-badge inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/80 border border-sky-400/40 text-[11px] sm:text-xs font-semibold select-none cursor-default"
+            >
+              <span className="messi-badge-icon text-xs">🐐</span>
+              <span className="messi-badge-text font-bold tracking-tight">Gracias Leo</span>
+              <span className="text-[9px] font-mono px-1 rounded bg-amber-400/20 text-amber-300 font-black border border-amber-400/30">10</span>
+            </div>
+          </div>
           <nav className="lp-navgroup hidden lg:flex">
             {navLinks.map((l) => {
               const isActive = isNavLinkActive(l.id, activeSection);

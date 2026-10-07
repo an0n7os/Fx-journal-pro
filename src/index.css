@@ -3942,3 +3942,84 @@ svg:focus-visible {
 *:focus:not(:focus-visible) {
   outline: none !important;
 }
+
+/* ------------------------------------------------------------------
+ * Messi Tribute Badge Animations
+ * ------------------------------------------------------------------ */
+@keyframes messiGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px 1px rgba(56, 189, 248, 0.3), 0 0 3px rgba(251, 191, 36, 0.2);
+    border-color: rgba(56, 189, 248, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 18px 3px rgba(251, 191, 36, 0.4), 0 0 6px rgba(56, 189, 248, 0.35);
+    border-color: rgba(251, 191, 36, 0.55);
+  }
+}
+
+@keyframes messiTextShimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes messiFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-1.5px) rotate(-4deg);
+  }
+  75% {
+    transform: translateY(1px) rotate(4deg);
+  }
+}
+
+@keyframes messiShine {
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+  }
+  30%, 100% {
+    transform: translateX(300%) skewX(-20deg);
+  }
+}
+
+.messi-badge {
+  animation: messiGlow 3s ease-in-out infinite;
+  position: relative;
+  overflow: hidden;
+}
+
+.messi-badge-text {
+  background: linear-gradient(90deg, #7dd3fc, #fef08a, #38bdf8, #fbbf24, #7dd3fc);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: messiTextShimmer 4s ease infinite;
+}
+
+.messi-badge-icon {
+  display: inline-block;
+  animation: messiFloat 3s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.messi-badge::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: messiShine 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
