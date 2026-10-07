@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   Download,
   RefreshCw,
@@ -281,6 +281,10 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const host = typeof window !== 'undefined' ? window.location.host : 'www.fxjournalpro.com';
   const apiUrl = `${window.location.protocol}//${host}/api/mt5`;
 
+  const prevSyncCountRef = useRef<number | null>(null);
+  const prevSyncTimeRef = useRef<string | null>(null);
+  const prevStatusRef = useRef<string | null>(null);
+
   const pollStatus = useCallback(async () => {
     if (!account) return;
     try {
@@ -289,11 +293,31 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
         const data = await res.json();
         setStatus(data);
         setError('');
+
+        const isFirstPoll = prevStatusRef.current === null;
+        const countChanged = prevSyncCountRef.current !== null && data.syncTradeCount !== prevSyncCountRef.current;
+        const statusBecameConnected = prevStatusRef.current !== null && prevStatusRef.current !== 'Connected' && data.status === 'Connected';
+        const syncTimeChanged = prevSyncTimeRef.current !== null && data.lastSyncTime && data.lastSyncTime !== prevSyncTimeRef.current;
+
+        prevSyncCountRef.current = data.syncTradeCount ?? 0;
+        prevStatusRef.current = data.status ?? '';
+        prevSyncTimeRef.current = data.lastSyncTime ?? '';
+
+        // Auto-refresh the entire dashboard & profile when MT5 syncs trades or connects
+        if (!isFirstPoll && (countChanged || statusBecameConnected || syncTimeChanged)) {
+          onRefresh();
+        } else if (isFirstPoll && (
+          (data.syncTradeCount > 0 && !(account as any).eaSyncTradeCount) ||
+          (data.status === 'Connected' && (account as any).connectionStatus !== 'Connected') ||
+          (data.currentBalance && data.currentBalance !== account.currentBalance)
+        )) {
+          onRefresh();
+        }
       }
     } catch {
       // keep last known status on transient failures
     }
-  }, [account, authFetch]);
+  }, [account, authFetch, onRefresh]);
 
   useEffect(() => {
     if (!account) return;
