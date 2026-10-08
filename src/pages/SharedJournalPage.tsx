@@ -102,6 +102,7 @@ export default function SharedJournalPage({
           setError(data.error || 'This shared journal link has expired or was disabled by the trader.');
         } else {
           setSharedData(data);
+          document.title = `${data.ownerName ? `${data.ownerName}'s Trading Journal` : 'Shared Trading Journal'} | FXJournalPro`;
           // Set initial tab to first available section
           if (Array.isArray(data.sections) && data.sections.length > 0) {
             setActiveSection(data.sections[0]);

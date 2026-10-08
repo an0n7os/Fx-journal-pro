@@ -38,6 +38,12 @@ export default function LegalPage({ initialKey }: LegalPageProps) {
 
   const doc = LEGAL_DOCS[activeKey] || LEGAL_DOCS.terms;
 
+  useEffect(() => {
+    if (doc?.title) {
+      document.title = `${doc.title} | FXJournalPro – Best Trading Journal`;
+    }
+  }, [doc]);
+
   const handleSelectDoc = (key: LegalDocKey) => {
     setActiveKey(key);
     const pathMap: Record<LegalDocKey, string> = {

@@ -124,21 +124,21 @@ const navLinks: NavLinkItem[] = [
 ];
 
 const SECTION_METADATA: Record<string, { title: string; path: string }> = {
-  top: { title: 'FX Journal Pro - #1 Best Trading Journal for Forex & Prop Firm Traders', path: '/' },
-  home: { title: 'FX Journal Pro - #1 Best Trading Journal for Forex & Prop Firm Traders', path: '/' },
-  features: { title: 'Features | FX Journal Pro', path: '/features' },
-  'fx-news': { title: 'FX News & Calendar | FX Journal Pro', path: '/fx-news' },
-  'mt5-sync': { title: 'MT5 Auto Sync | FX Journal Pro', path: '/mt5-sync' },
-  analytics: { title: 'Performance Analytics | FX Journal Pro', path: '/analytics' },
-  'ai-mentor': { title: 'AI Trade Mentor | FX Journal Pro', path: '/ai-mentor' },
-  security: { title: 'Security & Privacy | FX Journal Pro', path: '/security' },
-  about: { title: 'About Us | FX Journal Pro', path: '/about-us' },
-  faq: { title: 'FAQ | FX Journal Pro', path: '/faq' },
-  'about-us': { title: 'About Us | FX Journal Pro', path: '/about-us' },
-  'how-it-works': { title: 'How It Works | FX Journal Pro', path: '/how-it-works' },
-  why: { title: 'Why FX Journal Pro | FX Journal Pro', path: '/why' },
-  pricing: { title: 'Pricing - Free & Pro Plans | FX Journal Pro', path: '/pricing' },
-  contact: { title: 'Contact | FX Journal Pro', path: '/contact' },
+  top: { title: 'FXJournalPro – #1 Best Trading Journal & Trade Analytics Platform (MT5 Sync)', path: '/' },
+  home: { title: 'FXJournalPro – #1 Best Trading Journal & Trade Analytics Platform (MT5 Sync)', path: '/' },
+  features: { title: 'Features & Tools | FXJournalPro – Best Trading Journal', path: '/features' },
+  'fx-news': { title: 'Forex News & Economic Calendar | FXJournalPro', path: '/fx-news' },
+  'mt5-sync': { title: 'MT5 Auto Sync – Real-Time Trade Journaling | FXJournalPro', path: '/mt5-sync' },
+  analytics: { title: 'Trading Performance Analytics & Win-Rate Tracker | FXJournalPro', path: '/analytics' },
+  'ai-mentor': { title: 'AI Trade Mentor & Journal Insights | FXJournalPro', path: '/ai-mentor' },
+  security: { title: 'Security, Encryption & Privacy | FXJournalPro', path: '/security' },
+  about: { title: 'About Us | FXJournalPro – Best Trading Website & Journal', path: '/about-us' },
+  faq: { title: 'Frequently Asked Questions & Support | FXJournalPro', path: '/faq' },
+  'about-us': { title: 'About Us | FXJournalPro – Best Trading Website & Journal', path: '/about-us' },
+  'how-it-works': { title: 'How It Works – Automated MT5 Trading Journal | FXJournalPro', path: '/how-it-works' },
+  why: { title: 'Why Traders Choose FXJournalPro – Best Trading Journal', path: '/why' },
+  pricing: { title: 'Pricing & Free Plan | FXJournalPro Trading Journal', path: '/pricing' },
+  contact: { title: 'Contact & Customer Support | FXJournalPro', path: '/contact' },
 };
 
 function WhatsAppIcon({ className = 'h-4 w-4' }: { className?: string }) {
@@ -488,10 +488,10 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     setAuthError(null);
     setIsAuthModalOpen(true);
     if (mode === 'register') {
-      document.title = 'Create Account | FX Journal Pro';
+      document.title = 'Create Account | FXJournalPro – Best Trading Journal';
       if (location.pathname !== '/register') navigate('/register');
     } else {
-      document.title = 'Sign In | FX Journal Pro';
+      document.title = 'Sign In | FXJournalPro – Best Trading Journal';
       if (location.pathname !== '/login') navigate('/login');
     }
   };
@@ -599,15 +599,15 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
     // Handle dedicated auth modal routes
     if (location.pathname === '/login') {
-      document.title = 'Sign In | FX Journal Pro';
+      document.title = 'Sign In | FXJournalPro – Best Trading Journal';
       openAuthModal('login');
       return;
     } else if (location.pathname === '/register') {
-      document.title = 'Create Account | FX Journal Pro';
+      document.title = 'Create Account | FXJournalPro – Best Trading Journal';
       openAuthModal('register');
       return;
     } else if (location.pathname === '/forgot-password') {
-      document.title = 'Reset Password | FX Journal Pro';
+      document.title = 'Reset Password | FXJournalPro – Best Trading Journal';
       setIsForgotPassword(true);
       setIsAuthModalOpen(true);
       return;
@@ -1117,20 +1117,20 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             <div className="animate-fade-up">
               <div className="lp-pill mb-5 sm:mb-6">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_2px_rgba(52,211,153,.55)]" />
-                <span className="lp-eyebrow">#1 Best Trading Journal</span>
+                <span className="lp-eyebrow">FXJournalPro &bull; #1 Best Trading Journal &amp; Analytics Platform</span>
               </div>
 
               <h1 className="font-display text-[30px] xs:text-[36px] sm:text-[48px] xl:text-[60px] font-bold text-white leading-[1.08] tracking-[-0.03em] text-balance">
-                Know Your
-                <span className="block bg-gradient-to-r from-violet-300 via-violet-400 to-indigo-300 bg-clip-text text-transparent">Trades.</span>
+                The Best Trading Journal
+                <span className="block bg-gradient-to-r from-violet-300 via-violet-400 to-indigo-300 bg-clip-text text-transparent">for MT5 &amp; Forex Traders.</span>
               </h1>
 
               <p className="mt-4 sm:mt-5 font-display text-base sm:text-xl font-semibold text-slate-200 tracking-[-0.01em]">
-                The trading journal for forex &amp; prop firm traders.
+                Know your trades, master your edge, and scale your accounts with FXJournalPro.
               </p>
 
               <p className="mt-4 sm:mt-6 text-sm sm:text-[17px] text-slate-400 leading-relaxed max-w-xl">
-                A simple way to journal, analyze, and review your trading. Auto-sync MetaTrader 5 trades, get AI mentor insights, and track every metric that matters.
+                The ultimate trading journal and analytics website. Auto-sync MetaTrader 5 trades in real time, get AI mentor insights, protect prop firm limits, and track every metric that drives profitability.
               </p>
 
               <div className="mt-6 sm:mt-7 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 sm:gap-y-3">

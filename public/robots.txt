@@ -1,19 +1,41 @@
 User-agent: *
-Allow: /$
+# Public Landing & Product Pages
+Allow: /
+Allow: /features
+Allow: /pricing
+Allow: /faq
+Allow: /how-it-works
+Allow: /about-us
+Allow: /about
+Allow: /why
+Allow: /mt5-sync
+Allow: /analytics
+Allow: /ai-mentor
+Allow: /security
+Allow: /contact
 Allow: /login
+Allow: /register
 
-# The app itself is behind auth and has nothing to index.
+# Legal & Compliance Pages
+Allow: /terms
+Allow: /terms-and-conditions
+Allow: /privacy
+Allow: /privacy-policy
+Allow: /refund
+Allow: /cancellation-and-refund-policy
+Allow: /shipping-and-delivery
+Allow: /risk-disclosure
+
+# Disallow private user-authenticated dashboard routes
 Disallow: /dashboard
 Disallow: /journal
 Disallow: /accounts
-Disallow: /analytics
 Disallow: /calendar
 Disallow: /live-chart
-Disallow: /fx-news
-Disallow: /mt5-sync
 Disallow: /tools
 Disallow: /settings
 Disallow: /admin
 Disallow: /api/
 
 Sitemap: https://fxjournalpro.com/sitemap.xml
+
