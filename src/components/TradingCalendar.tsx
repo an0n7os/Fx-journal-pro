@@ -77,19 +77,47 @@ export default function TradingCalendar({ trades, currency }: TradingCalendarPro
     return `${y}-${m}-${day}`;
   };
 
+  // Helper to format day P&L with sign and currency symbol (e.g. +$60, -$25)
+  const formatDayProfit = (val: number) => {
+    const sym = getCurrencySymbol(currency);
+    const sign = val > 0 ? '+' : val < 0 ? '-' : '';
+    const abs = Math.abs(val);
+    const numStr = abs >= 1000
+      ? abs.toLocaleString('en-US', { maximumFractionDigits: 0 })
+      : Number.isInteger(abs)
+        ? abs.toString()
+        : abs.toFixed(2).replace(/\.?0+$/, '');
+    return `${sign}${sym}${numStr}`;
+  };
+
   // Group trades by day using local date to align with local calendar cells perfectly
   // Re-reduced the whole trade history on every render, including the 1s
   // countdown ticks elsewhere on the page.
   const tradesByDay = useMemo(
-    () => tradingTrades.reduce((acc: { [key: string]: { trades: Trade[]; netProfit: number } }, trade) => {
+    () => tradingTrades.reduce((acc: { 
+      [key: string]: { 
+        trades: Trade[]; 
+        netProfit: number;
+        winCount: number;
+        lossCount: number;
+        breakEvenCount: number;
+      } 
+    }, trade) => {
       const dStr = getLocalDateString(trade.date);
       if (!dStr) return acc;
       if (!acc[dStr]) {
-        acc[dStr] = { trades: [], netProfit: 0 };
+        acc[dStr] = { trades: [], netProfit: 0, winCount: 0, lossCount: 0, breakEvenCount: 0 };
       }
       acc[dStr].trades.push(trade);
       const net = trade.profit + (trade.commission || 0) + (trade.swap || 0);
       acc[dStr].netProfit += net;
+      if (net > 0) {
+        acc[dStr].winCount++;
+      } else if (net < 0) {
+        acc[dStr].lossCount++;
+      } else {
+        acc[dStr].breakEvenCount++;
+      }
       return acc;
     }, {}),
     [tradingTrades]
@@ -324,39 +352,38 @@ export default function TradingCalendar({ trades, currency }: TradingCalendarPro
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
             {cells.map((cell, idx) => {
               if (cell.isPadding) {
-                return <div key={`pad-${idx}`} className="h-16 md:h-20 calendar-day-box opacity-40 rounded-lg"></div>;
+                return <div key={`pad-${idx}`} className="min-h-[76px] sm:min-h-[86px] md:min-h-[96px] calendar-day-box opacity-40 rounded-xl"></div>;
               }
 
               const formattedDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`;
               const dayData = tradesByDay[formattedDay];
               const isSelected = selectedDayKey === formattedDay;
-              // Today had no marker at all, so the current date was
-              // indistinguishable from every other cell in the grid.
               const todayKey = (() => {
                 const n = new Date();
                 return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
               })();
               const isToday = formattedDay === todayKey;
               
-              let cellBg = "bg-white dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800/70";
-              let borderClass = "border border-slate-200 dark:border-slate-700/50";
+              let cellBg = "bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800/70";
+              let borderClass = "border border-slate-200 dark:border-slate-800/80";
               let textAccent = "text-slate-500 dark:text-slate-400 font-medium";
-              let amountText = "";
 
               if (dayData) {
                 if (dayData.netProfit > 0) {
-                  cellBg = "bg-gradient-to-br from-emerald-50/50 to-emerald-100/50 dark:from-emerald-950/20 dark:to-emerald-900/20 hover:from-emerald-100/80 hover:to-emerald-200/50 dark:hover:from-emerald-900/40 dark:hover:to-emerald-800/40";
-                  borderClass = "border border-emerald-200 dark:border-emerald-800/50";
-                  textAccent = "text-emerald-700 dark:text-emerald-400 font-extrabold";
-                  amountText = `+${dayData.netProfit.toFixed(0)}`;
+                  cellBg = "bg-emerald-500/10 dark:bg-emerald-950/30 hover:bg-emerald-500/15 dark:hover:bg-emerald-950/45";
+                  borderClass = "border-emerald-200";
+                  textAccent = "text-emerald-600 dark:text-emerald-400 font-black";
                 } else if (dayData.netProfit < 0) {
-                  cellBg = "bg-gradient-to-br from-rose-50/50 to-rose-100/50 dark:from-rose-950/20 dark:to-rose-900/20 hover:from-rose-100/80 hover:to-rose-200/50 dark:hover:from-rose-900/40 dark:hover:to-rose-800/40";
-                  borderClass = "border border-rose-200 dark:border-rose-800/50";
-                  textAccent = "text-rose-700 dark:text-rose-400 font-extrabold";
-                  amountText = dayData.netProfit.toFixed(0);
+                  cellBg = "bg-rose-500/10 dark:bg-rose-950/30 hover:bg-rose-500/15 dark:hover:bg-rose-950/45";
+                  borderClass = "border-rose-200";
+                  textAccent = "text-rose-600 dark:text-rose-400 font-black";
+                } else {
+                  cellBg = "bg-slate-50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800/50";
+                  borderClass = "border border-slate-200 dark:border-slate-700/50";
+                  textAccent = "text-slate-600 dark:text-slate-300 font-bold";
                 }
               }
 
@@ -366,17 +393,45 @@ export default function TradingCalendar({ trades, currency }: TradingCalendarPro
                   onClick={() => handleDayClick(cell.day)}
                   data-today={isToday ? 'true' : undefined}
                   aria-current={isToday ? 'date' : undefined}
-                  className={`calendar-day-box h-16 md:h-20 p-1 sm:p-2 text-left rounded-xl flex flex-col justify-between group relative transition-all duration-300 ${cellBg} ${borderClass} ${
+                  className={`calendar-day-box min-h-[76px] sm:min-h-[86px] md:min-h-[96px] p-1.5 sm:p-2 text-left rounded-xl flex flex-col justify-between group relative transition-all duration-200 ${cellBg} ${borderClass} ${
                     isSelected 
-                      ? 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-slate-900 scale-[1.03] z-10 shadow-md' 
-                      : 'hover:scale-[1.03] hover:shadow-sm hover:z-10'
+                      ? 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-slate-900 scale-[1.02] z-10 shadow-md' 
+                      : 'hover:scale-[1.02] hover:shadow-sm hover:z-10'
                   }`}
                 >
-                  <span className="text-[10px] sm:text-xs font-bold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{cell.day}</span>
-                  {amountText && (
-                    <span className={`text-[8px] min-[360px]:text-[9px] min-[400px]:text-[10px] sm:text-xs md:text-sm font-semibold tracking-tighter sm:tracking-normal block mt-auto leading-none ${textAccent}`}>
-                      {getCurrencySymbol(currency)}{Math.abs(Number(amountText))}
+                  <div className="flex items-center justify-between w-full leading-none">
+                    <span className="calendar-day-number text-[11px] sm:text-xs font-bold text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+                      {cell.day}
                     </span>
+                    {isToday && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 ring-2 ring-indigo-500/20" title="Today"></span>
+                    )}
+                  </div>
+
+                  {dayData ? (
+                    <>
+                      {/* P&L Display in center */}
+                      <div className="my-auto py-0.5 text-center w-full">
+                        <span className={`text-[11px] min-[390px]:text-xs sm:text-sm md:text-base font-black tracking-tight leading-tight block ${textAccent}`}>
+                          {formatDayProfit(dayData.netProfit)}
+                        </span>
+                      </div>
+
+                      {/* Trade counts row: L: 1  T: 5  W: 4 */}
+                      <div className="flex items-center justify-between w-full px-0.5 text-[8px] min-[380px]:text-[9px] sm:text-[10px] md:text-[11px] font-bold leading-none select-none">
+                        <span className="text-rose-500 dark:text-rose-400">
+                          L:<span className="ml-0.5">{dayData.lossCount}</span>
+                        </span>
+                        <span className="text-slate-600 dark:text-slate-300">
+                          T:<span className="ml-0.5">{dayData.trades.length}</span>
+                        </span>
+                        <span className="text-emerald-500 dark:text-emerald-400">
+                          W:<span className="ml-0.5">{dayData.winCount}</span>
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex-1"></div>
                   )}
                 </button>
               );
