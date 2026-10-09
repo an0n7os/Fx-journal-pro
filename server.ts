@@ -1942,20 +1942,21 @@ const ENTRY_OUT = 1;
 const ENTRY_INOUT = 2;
 
 function normalizeDeal(raw: any): any {
+  const d = (raw && raw.deal && typeof raw.deal === 'object') ? raw.deal : (raw || {});
   return {
-    ticket: Number(raw.ticket),
-    positionId: Number(raw.positionId) || 0,
-    time: Number(raw.time),
-    type: Number(raw.type),
-    entry: Number(raw.entry),
-    magic: Number(raw.magic) || 0,
-    symbol: String(raw.symbol || '').toUpperCase(),
-    volume: parseFloat(raw.volume) || 0,
-    price: parseFloat(raw.price) || 0,
-    profit: parseFloat(raw.profit) || 0,
-    commission: parseFloat(raw.commission) || 0,
-    swap: parseFloat(raw.swap) || 0,
-    comment: String(raw.comment || '')
+    ticket: Number(d.ticket ?? raw?.ticket ?? 0),
+    positionId: Number(d.positionId ?? d.position_id ?? raw?.positionId ?? raw?.position_id ?? 0) || 0,
+    time: Number(d.time ?? raw?.time ?? 0),
+    type: Number(d.type ?? raw?.type ?? 0),
+    entry: Number(d.entry ?? raw?.entry ?? 0),
+    magic: Number(d.magic ?? raw?.magic ?? 0) || 0,
+    symbol: String(d.symbol ?? raw?.symbol ?? '').toUpperCase(),
+    volume: parseFloat(d.volume ?? raw?.volume) || 0,
+    price: parseFloat(d.price ?? raw?.price) || 0,
+    profit: parseFloat(d.profit ?? raw?.profit) || 0,
+    commission: parseFloat(d.commission ?? raw?.commission) || 0,
+    swap: parseFloat(d.swap ?? raw?.swap) || 0,
+    comment: String(d.comment ?? raw?.comment ?? '')
   };
 }
 
@@ -4239,13 +4240,15 @@ app.get('/api/accounts', async (req, res) => {
 
         // Auto-calibrate starting balance for MT5 synced accounts, and clear 10000 placeholder on starter demo
         for (const acc of accounts) {
-          if (acc.isMt5Sync && (acc.startingBalance === 10000 || !acc.startingBalance || acc.startingBalance === 0)) {
+          const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 || !!acc.eaLastSyncTime);
+          const isUncalibratedMt5 = acc.isMt5Sync && !hasEstablishedStartingBalance && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000);
+          if (isUncalibratedMt5) {
             try {
               const { data: dealRows } = await supabase
                 .from('mt5_deals')
                 .select('*')
                 .eq('account_id', acc.id);
-              const accountDeals = dealRows || [];
+              const accountDeals = (dealRows || []).map(normalizeDeal);
               const deposits = accountDeals
                 .filter((d: any) => d.type === DEAL_TYPE_BALANCE && (d.profit || 0) > 0)
                 .sort((a: any, b: any) => a.time - b.time);
@@ -4312,10 +4315,12 @@ app.get('/api/accounts', async (req, res) => {
     }
   }
 
-  // Auto-calibrate starting balance for MT5 synced accounts from actual MT5 deposits or trades if still at 10000 placeholder
+  // Auto-calibrate starting balance for MT5 synced accounts from actual MT5 deposits or trades if still uncalibrated
   for (const acc of userAccounts) {
-    if (acc.isMt5Sync && (acc.startingBalance === 10000 || !acc.startingBalance || acc.startingBalance === 0)) {
-      const accountDeals = (db.mt5Deals || []).filter((d: any) => d.accountId === acc.id);
+    const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 || !!acc.eaLastSyncTime);
+    const isUncalibratedMt5 = acc.isMt5Sync && !hasEstablishedStartingBalance && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000);
+    if (isUncalibratedMt5) {
+      const accountDeals = (db.mt5Deals || []).filter((d: any) => (d.accountId || d.account_id) === acc.id).map(normalizeDeal);
       const deposits = accountDeals
         .filter((d: any) => d.type === DEAL_TYPE_BALANCE && (d.profit || 0) > 0)
         .sort((a: any, b: any) => a.time - b.time);
@@ -4324,7 +4329,7 @@ app.get('/api/accounts', async (req, res) => {
         acc.startingBalanceLocked = true;
       } else if (acc.currentBalance > 0 && acc.currentBalance !== 10000) {
         const closedPnl = (db.trades || [])
-          .filter((t: any) => t.accountId === acc.id && t.type !== 'Deposit' && t.type !== 'Withdrawal')
+          .filter((t: any) => (t.accountId || t.account_id) === acc.id && t.type !== 'Deposit' && t.type !== 'Withdrawal')
           .reduce((sum: number, t: any) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
         acc.startingBalance = parseFloat(Math.max(0, acc.currentBalance - closedPnl).toFixed(2));
         acc.startingBalanceLocked = true;
@@ -5515,7 +5520,9 @@ function applyEaSyncPayload(db: any, acc: any, deals: any[], moneyFlows: any[], 
   //    legacy flat stream and the account-scoped mt5_deals_v2 stream
   if (!Array.isArray(db.mt5Deals)) db.mt5Deals = [];
   const seen = new Set<number>(
-    db.mt5Deals.filter((d: any) => d.accountId === accountId).map((d: any) => d.ticket)
+    db.mt5Deals
+      .filter((d: any) => (d.accountId || d.account_id) === accountId)
+      .map((d: any) => Number(d.ticket ?? d.deal?.ticket))
   );
   let added = 0;
   let maxTicket = acc.eaLastDealId || 0;
@@ -5554,7 +5561,9 @@ function applyEaSyncPayload(db: any, acc: any, deals: any[], moneyFlows: any[], 
   }
 
   // 2. Recompute journal trades from the full deal stream and upsert
-  const accountDeals = db.mt5Deals.filter((d: any) => d.accountId === accountId);
+  const accountDeals = db.mt5Deals
+    .filter((d: any) => (d.accountId || d.account_id) === accountId)
+    .map(normalizeDeal);
 
   // 2a. MT5 sync accounts: determine authentic initial/starting capital from MT5.
   // The first deposit in the MT5 history represents the authentic starting capital.
@@ -5564,14 +5573,17 @@ function applyEaSyncPayload(db: any, acc: any, deals: any[], moneyFlows: any[], 
       .filter((d: any) => d.type === DEAL_TYPE_BALANCE && (d.profit || 0) > 0)
       .sort((a: any, b: any) => a.time - b.time);
 
-    const isPlaceholderOrUnset = !acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000 || acc.isDefaultDemo;
-
     if (deposits.length > 0) {
       skipBalanceTicket = deposits[0].ticket;
-      if (isPlaceholderOrUnset || !acc.startingBalanceLocked) {
-        acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
-        acc.startingBalanceLocked = true;
-      }
+    }
+
+    // Required Fix: The starting capital should remain unchanged after the first MT5 sync.
+    // Clicking Sync Now should only update the trade history, current balance, and trading statistics.
+    // It must NEVER change the original starting capital once established.
+    const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 || !!acc.eaLastSyncTime);
+    if (!hasEstablishedStartingBalance && deposits.length > 0) {
+      acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
+      acc.startingBalanceLocked = true;
     }
   }
 
@@ -5610,7 +5622,9 @@ function applyEaSyncPayload(db: any, acc: any, deals: any[], moneyFlows: any[], 
 
   // 3b. If no initial deposit deal was in the MT5 history (e.g. broker history limits),
   // deduce starting capital from live balance minus closed trades net PnL:
-  if (acc.isMt5Sync && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000 || acc.isDefaultDemo || !acc.startingBalanceLocked)) {
+  // ONLY on the very first sync if starting balance has never been established. Once set, it must NEVER change.
+  const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 || !!acc.eaLastSyncTime);
+  if (acc.isMt5Sync && !hasEstablishedStartingBalance) {
     const netTradingProfit = recomputed
       .filter((t: any) => t.type !== 'Deposit' && t.type !== 'Withdrawal')
       .reduce((sum: number, t: any) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);

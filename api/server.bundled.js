@@ -3306,20 +3306,21 @@ var ENTRY_IN2 = 0;
 var ENTRY_OUT2 = 1;
 var ENTRY_INOUT2 = 2;
 function normalizeDeal(raw) {
+  const d = raw && raw.deal && typeof raw.deal === "object" ? raw.deal : raw || {};
   return {
-    ticket: Number(raw.ticket),
-    positionId: Number(raw.positionId) || 0,
-    time: Number(raw.time),
-    type: Number(raw.type),
-    entry: Number(raw.entry),
-    magic: Number(raw.magic) || 0,
-    symbol: String(raw.symbol || "").toUpperCase(),
-    volume: parseFloat(raw.volume) || 0,
-    price: parseFloat(raw.price) || 0,
-    profit: parseFloat(raw.profit) || 0,
-    commission: parseFloat(raw.commission) || 0,
-    swap: parseFloat(raw.swap) || 0,
-    comment: String(raw.comment || "")
+    ticket: Number(d.ticket ?? raw?.ticket ?? 0),
+    positionId: Number(d.positionId ?? d.position_id ?? raw?.positionId ?? raw?.position_id ?? 0) || 0,
+    time: Number(d.time ?? raw?.time ?? 0),
+    type: Number(d.type ?? raw?.type ?? 0),
+    entry: Number(d.entry ?? raw?.entry ?? 0),
+    magic: Number(d.magic ?? raw?.magic ?? 0) || 0,
+    symbol: String(d.symbol ?? raw?.symbol ?? "").toUpperCase(),
+    volume: parseFloat(d.volume ?? raw?.volume) || 0,
+    price: parseFloat(d.price ?? raw?.price) || 0,
+    profit: parseFloat(d.profit ?? raw?.profit) || 0,
+    commission: parseFloat(d.commission ?? raw?.commission) || 0,
+    swap: parseFloat(d.swap ?? raw?.swap) || 0,
+    comment: String(d.comment ?? raw?.comment ?? "")
   };
 }
 function recomputeMt5TradesForAccount(account, deals, skipBalanceTicket) {
@@ -5143,10 +5144,12 @@ app.get("/api/accounts", async (req, res) => {
           }
         }
         for (const acc of accounts) {
-          if (acc.isMt5Sync && (acc.startingBalance === 1e4 || !acc.startingBalance || acc.startingBalance === 0)) {
+          const hasEstablishedStartingBalance = typeof acc.startingBalance === "number" && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 1e4 || !!acc.eaLastSyncTime);
+          const isUncalibratedMt5 = acc.isMt5Sync && !hasEstablishedStartingBalance && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 1e4);
+          if (isUncalibratedMt5) {
             try {
               const { data: dealRows } = await supabase.from("mt5_deals").select("*").eq("account_id", acc.id);
-              const accountDeals = dealRows || [];
+              const accountDeals = (dealRows || []).map(normalizeDeal);
               const deposits = accountDeals.filter((d) => d.type === DEAL_TYPE_BALANCE2 && (d.profit || 0) > 0).sort((a, b) => a.time - b.time);
               if (deposits.length > 0) {
                 acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
@@ -5200,14 +5203,16 @@ app.get("/api/accounts", async (req, res) => {
     }
   }
   for (const acc of userAccounts) {
-    if (acc.isMt5Sync && (acc.startingBalance === 1e4 || !acc.startingBalance || acc.startingBalance === 0)) {
-      const accountDeals = (db.mt5Deals || []).filter((d) => d.accountId === acc.id);
+    const hasEstablishedStartingBalance = typeof acc.startingBalance === "number" && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 1e4 || !!acc.eaLastSyncTime);
+    const isUncalibratedMt5 = acc.isMt5Sync && !hasEstablishedStartingBalance && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 1e4);
+    if (isUncalibratedMt5) {
+      const accountDeals = (db.mt5Deals || []).filter((d) => (d.accountId || d.account_id) === acc.id).map(normalizeDeal);
       const deposits = accountDeals.filter((d) => d.type === DEAL_TYPE_BALANCE2 && (d.profit || 0) > 0).sort((a, b) => a.time - b.time);
       if (deposits.length > 0) {
         acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
         acc.startingBalanceLocked = true;
       } else if (acc.currentBalance > 0 && acc.currentBalance !== 1e4) {
-        const closedPnl = (db.trades || []).filter((t) => t.accountId === acc.id && t.type !== "Deposit" && t.type !== "Withdrawal").reduce((sum, t) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
+        const closedPnl = (db.trades || []).filter((t) => (t.accountId || t.account_id) === acc.id && t.type !== "Deposit" && t.type !== "Withdrawal").reduce((sum, t) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
         acc.startingBalance = parseFloat(Math.max(0, acc.currentBalance - closedPnl).toFixed(2));
         acc.startingBalanceLocked = true;
       }
@@ -6129,7 +6134,7 @@ function applyEaSyncPayload(db, acc, deals, moneyFlows, account) {
   const accountId = String(acc.id);
   if (!Array.isArray(db.mt5Deals)) db.mt5Deals = [];
   const seen = new Set(
-    db.mt5Deals.filter((d) => d.accountId === accountId).map((d) => d.ticket)
+    db.mt5Deals.filter((d) => (d.accountId || d.account_id) === accountId).map((d) => Number(d.ticket ?? d.deal?.ticket))
   );
   let added = 0;
   let maxTicket = acc.eaLastDealId || 0;
@@ -6164,17 +6169,17 @@ function applyEaSyncPayload(db, acc, deals, moneyFlows, account) {
     }
     if (db.mt5MoneyFlows.length > 2e4) db.mt5MoneyFlows = db.mt5MoneyFlows.slice(-2e4);
   }
-  const accountDeals = db.mt5Deals.filter((d) => d.accountId === accountId);
+  const accountDeals = db.mt5Deals.filter((d) => (d.accountId || d.account_id) === accountId).map(normalizeDeal);
   let skipBalanceTicket;
   if (acc.isMt5Sync) {
     const deposits = accountDeals.filter((d) => d.type === DEAL_TYPE_BALANCE2 && (d.profit || 0) > 0).sort((a, b) => a.time - b.time);
-    const isPlaceholderOrUnset = !acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 1e4 || acc.isDefaultDemo;
     if (deposits.length > 0) {
       skipBalanceTicket = deposits[0].ticket;
-      if (isPlaceholderOrUnset || !acc.startingBalanceLocked) {
-        acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
-        acc.startingBalanceLocked = true;
-      }
+    }
+    const hasEstablishedStartingBalance2 = typeof acc.startingBalance === "number" && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 1e4 || !!acc.eaLastSyncTime);
+    if (!hasEstablishedStartingBalance2 && deposits.length > 0) {
+      acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
+      acc.startingBalanceLocked = true;
     }
   }
   const recomputed = recomputeMt5TradesForAccount(acc, accountDeals, skipBalanceTicket);
@@ -6203,7 +6208,8 @@ function applyEaSyncPayload(db, acc, deals, moneyFlows, account) {
     if (account.equity !== void 0) acc.equity = parseFloat(account.equity) || acc.equity;
     if (account.currency !== void 0 && account.currency) acc.currency = String(account.currency);
   }
-  if (acc.isMt5Sync && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 1e4 || acc.isDefaultDemo || !acc.startingBalanceLocked)) {
+  const hasEstablishedStartingBalance = typeof acc.startingBalance === "number" && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 1e4 || !!acc.eaLastSyncTime);
+  if (acc.isMt5Sync && !hasEstablishedStartingBalance) {
     const netTradingProfit = recomputed.filter((t) => t.type !== "Deposit" && t.type !== "Withdrawal").reduce((sum, t) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
     const effCurBalance = acc.currentBalance || (account?.balance ? parseFloat(account.balance) : 0);
     if (effCurBalance > 0) {

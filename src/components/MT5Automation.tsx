@@ -793,7 +793,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
             <p className="font-medium opacity-90">
               The broker rejected the password for MT5 login{' '}
               {status?.terminalLogin || account?.eaTerminalLogin ? `#${status?.terminalLogin || account?.eaTerminalLogin}` : ''}.
-              {' '}Please make sure you are using the read-only <strong>Investor password</strong>, not your main trading password.
+              {' '}Please make sure you are using the read-only <strong>Investor password</strong>, not your main account password.
               Re-enter your credentials below and try again.
             </p>
           </div>
@@ -1084,7 +1084,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                 <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
                 <span>
                   <strong className="text-slate-700 dark:text-slate-200">Investor password only — read-only.</strong> Use your
-                  MT5 Investor password, not your main trading password. We cannot place or modify any trades.
+                  MT5 Investor password, not your main account password. We cannot place or modify any trades.
                   Your password is AES-256-GCM encrypted before it is stored.
                 </span>
               </div>

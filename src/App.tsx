@@ -9630,7 +9630,7 @@ export default function App() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-slate-800 dark:text-white text-sm group-hover:text-violet-400 transition-colors">MT5 Sync Account</div>
-                      <div className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">Connect directly using MT5 Login, Server, and Trading or Investor Password.</div>
+                      <div className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">Connect directly using MT5 Login, Server, and Account or Investor Password.</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
                   </button>
@@ -9836,7 +9836,7 @@ export default function App() {
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-1.5">
                       <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
-                        {newAccInstitutionType === 'Broker' ? 'Trading Password' : 'Investor Password'}
+                        {newAccInstitutionType === 'Broker' ? 'Account Password' : 'Investor Password'}
                       </label>
                       <button
                         type="button"
@@ -9864,7 +9864,7 @@ export default function App() {
                       <div>
                         {newAccInstitutionType === 'Broker' ? (
                           <>
-                            Enter your <strong>trading password</strong>. Your credentials are securely encrypted to sync your trade history directly from your broker.
+                            Enter your <strong>account password</strong>. Your credentials are securely encrypted to sync your trade history directly from your broker.
                           </>
                         ) : (
                           <>
@@ -9892,7 +9892,7 @@ export default function App() {
                       style={{ WebkitTextSecurity: showInvestorPassword ? 'none' : 'disc' } as any}
                       value={newAccMt5InvestorPassword}
                       onChange={(e) => setNewAccMt5InvestorPassword(e.target.value)}
-                      placeholder={newAccInstitutionType === 'Broker' ? "Enter your MT5 trading password" : "Enter your MT5 investor password"}
+                      placeholder={newAccInstitutionType === 'Broker' ? "Enter your MT5 account password" : "Enter your MT5 investor password"}
                       className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs rounded-lg p-2.5 pr-10 w-full focus:ring-violet-500 focus:border-violet-500 font-mono tracking-wider placeholder:font-sans placeholder:tracking-normal"
                     />
                     <button
@@ -9911,7 +9911,7 @@ export default function App() {
                     <div>
                       {newAccInstitutionType === 'Broker' ? (
                         <>
-                          Enter your <strong className="text-emerald-200 font-semibold">trading password</strong>. Your credentials are fully encrypted and only used to sync your trade history.
+                          Enter your <strong className="text-emerald-200 font-semibold">account password</strong>. Your credentials are fully encrypted and only used to sync your trade history.
                         </>
                       ) : (
                         <>
