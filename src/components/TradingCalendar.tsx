@@ -401,7 +401,7 @@ export default function TradingCalendar({ trades, currency }: TradingCalendarPro
                   onClick={() => handleDayClick(cell.day)}
                   data-today={isToday ? 'true' : undefined}
                   aria-current={isToday ? 'date' : undefined}
-                  className={`calendar-day-box min-h-[64px] min-[390px]:min-h-[72px] sm:min-h-[84px] md:min-h-[96px] p-1 min-[390px]:p-1.5 sm:p-2 text-left rounded-lg sm:rounded-xl flex flex-col justify-between group relative transition-all duration-200 overflow-hidden ${statusClass} ${cellBg} ${borderClass} ${
+                  className={`calendar-day-box min-h-[64px] min-[390px]:min-h-[72px] sm:min-h-[84px] md:min-h-[96px] px-1 py-1 sm:p-2 text-left rounded-lg sm:rounded-xl flex flex-col justify-between group relative transition-all duration-200 overflow-hidden ${statusClass} ${cellBg} ${borderClass} ${
                     isSelected 
                       ? 'ring-2 ring-indigo-500 ring-offset-1 sm:ring-offset-2 dark:ring-offset-slate-900 scale-[1.02] z-10 shadow-md' 
                       : 'hover:scale-[1.02] hover:shadow-sm hover:z-10'
@@ -426,11 +426,11 @@ export default function TradingCalendar({ trades, currency }: TradingCalendarPro
                       </div>
 
                       {/* Trade statistics inside each date rectangle: T, W, L */}
-                      <div className="w-full pt-0.5 min-[390px]:pt-1 border-t border-slate-200/50 dark:border-white/[0.06] select-none overflow-hidden">
-                        <div className="flex items-center justify-center gap-1 min-[440px]:gap-2 text-[7.5px] min-[360px]:text-[8px] min-[440px]:text-[9px] sm:text-[10px] font-bold leading-none truncate w-full text-center">
-                          <span className="text-slate-500 dark:text-slate-400 font-mono">T:<span className="text-slate-700 dark:text-slate-200">{dayData.trades.length}</span></span>
-                          <span className="calendar-win-text text-emerald-600 dark:text-emerald-400 font-mono">W:{dayData.winCount}</span>
-                          <span className="calendar-loss-stat-text text-rose-600 dark:text-rose-400 font-mono">L:{dayData.lossCount}</span>
+                      <div className="w-full pt-0.5 min-[390px]:pt-1 border-t border-slate-200/50 dark:border-white/[0.08] select-none">
+                        <div className="grid grid-cols-3 items-center text-center w-full text-[7px] min-[350px]:text-[7.5px] min-[380px]:text-[8px] sm:text-[9.5px] md:text-[10px] font-bold leading-none tabular-nums tracking-tighter sm:tracking-tight">
+                          <span className="text-slate-500 dark:text-slate-400 whitespace-nowrap">T:<span className="text-slate-700 dark:text-slate-200">{dayData.trades.length}</span></span>
+                          <span className="calendar-win-text text-emerald-600 dark:text-emerald-400 whitespace-nowrap">W:{dayData.winCount}</span>
+                          <span className="calendar-loss-stat-text text-rose-600 dark:text-rose-400 whitespace-nowrap">L:{dayData.lossCount}</span>
                         </div>
                       </div>
                     </>
