@@ -755,17 +755,27 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     const email = sessionUser?.email || '';
     const name = sessionUser?.user_metadata?.full_name || sessionUser?.user_metadata?.name || (email ? email.split('@')[0] : 'Trader');
     const authProvider = sessionUser?.app_metadata?.provider || 'email';
+    const localAvatar = (typeof window !== 'undefined' && userId) ? (localStorage.getItem(`user_avatar_${userId}`) || '') : '';
     persistAuthSession(userId, email);
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-auth-user-id': userId, 'x-auth-email': email },
-        body: JSON.stringify({ id: userId, email, name, provider: authProvider, supabaseAccessToken: accessToken, referralCode: referralCode || undefined })
+        body: JSON.stringify({ id: userId, email, name, avatar: localAvatar || undefined, provider: authProvider, supabaseAccessToken: accessToken, referralCode: referralCode || undefined })
       });
       if (res.ok) {
         const data = await res.json();
         if (data.user) {
+          if (!data.user.avatar && (data.user as any)?.preferences?.avatar) {
+            data.user.avatar = (data.user as any).preferences.avatar;
+          }
+          if (!data.user.avatar && localAvatar) {
+            data.user.avatar = localAvatar;
+          }
+          if (data.user.avatar && userId) {
+            try { localStorage.setItem(`user_avatar_${userId}`, data.user.avatar); } catch {}
+          }
           // Keep sessionStorage in sync with the server's canonical user id
           persistAuthSession(data.user.id || userId, data.user.email || email, data.sessionToken);
           onLoginSuccess();

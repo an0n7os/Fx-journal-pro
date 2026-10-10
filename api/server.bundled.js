@@ -3425,7 +3425,12 @@ async function ensureUserDbLoaded(userId, email) {
           supabase.from("mt5_deals").select("*").eq("user_id", uid)
         ]);
         return {
-          users: toCamel(users || []),
+          users: toCamel(users || []).map((u) => {
+            if (!u.avatar && u.preferences?.avatar) {
+              u.avatar = u.preferences.avatar;
+            }
+            return u;
+          }),
           accounts: toCamel(accounts || []),
           trades: toCamel(trades || []).map((t) => {
             if (typeof t.screenshot === "string" && t.screenshot.startsWith("[") && t.screenshot.endsWith("]")) {
@@ -3494,6 +3499,11 @@ async function ensureUserDbLoaded(userId, email) {
         if (cached2.users && cached2.users.length > 0 && loadedDb.users.length > 0) {
           const cachedUser = cached2.users[0];
           const loadedUser = loadedDb.users[0];
+          if (!loadedUser.avatar && cachedUser.avatar) loadedUser.avatar = cachedUser.avatar;
+          if (!loadedUser.preferences?.avatar && cachedUser.preferences?.avatar) {
+            if (!loadedUser.preferences) loadedUser.preferences = {};
+            loadedUser.preferences.avatar = cachedUser.preferences.avatar;
+          }
           if (cachedUser.resetOtp) loadedUser.resetOtp = cachedUser.resetOtp;
           if (cachedUser.resetOtpExpiresAt) loadedUser.resetOtpExpiresAt = cachedUser.resetOtpExpiresAt;
           if (cachedUser.emailOtp) loadedUser.emailOtp = cachedUser.emailOtp;
@@ -3593,9 +3603,26 @@ async function saveDatabase(data, overrideUserId, overrideEmail, previousAliases
             clean[key] = u[key];
           }
         }
+        if (clean.avatar) {
+          clean.preferences = { ...clean.preferences || {}, avatar: clean.avatar };
+        } else if (clean.preferences?.avatar && !clean.avatar) {
+          clean.avatar = clean.preferences.avatar;
+        }
         return clean;
       });
-      const { error: err1 } = await supabase.from("users").upsert(sanitizedUsers, { onConflict: "id" });
+      let { error: err1 } = await supabase.from("users").upsert(sanitizedUsers, { onConflict: "id" });
+      if (err1 && /avatar/i.test(err1.message || "")) {
+        const retryUsers = sanitizedUsers.map((u) => {
+          const c = { ...u };
+          if (c.avatar) {
+            c.preferences = { ...c.preferences || {}, avatar: c.avatar };
+          }
+          delete c.avatar;
+          return c;
+        });
+        const retryRes = await supabase.from("users").upsert(retryUsers, { onConflict: "id" });
+        err1 = retryRes.error;
+      }
       if (err1) {
         console.error("[saveDatabase] users upsert error:", err1);
         return { usersError: err1 };
@@ -4530,10 +4557,15 @@ app.post("/api/auth/register", authIpBackstopLimiter, authRateLimiter, async (re
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1e3).toISOString();
     if (isSso) {
       const uid2 = existingUserRow?.id || authUserId || `user_${crypto4.randomUUID()}`;
+      const existingAvatar2 = existingUserRow?.avatar || existingUserRow?.preferences?.avatar || req.body?.avatar || "";
+      const existingPrefs2 = existingUserRow?.preferences && typeof existingUserRow.preferences === "object" ? { ...existingUserRow.preferences } : {};
+      if (existingAvatar2 && !existingPrefs2.avatar) {
+        existingPrefs2.avatar = existingAvatar2;
+      }
       const userRecord2 = {
         id: uid2,
         email: normalizedEmail,
-        name: name || existingUserRow?.name || normalizedEmail.split("@")[0],
+        name: existingUserRow?.name || name || normalizedEmail.split("@")[0],
         password: existingUserRow?.password || "",
         experience: existingUserRow?.experience || "Intermediate",
         trading_style: existingUserRow?.trading_style || "Day Trading",
@@ -4541,24 +4573,39 @@ app.post("/api/auth/register", authIpBackstopLimiter, authRateLimiter, async (re
         onboarding_completed: existingUserRow?.onboarding_completed || false,
         is_pro: existingUserRow?.is_pro || false,
         is_email_verified: true,
-        auth_provider: provider || "google",
-        last_login: (/* @__PURE__ */ new Date()).toISOString()
+        auth_provider: provider || existingUserRow?.auth_provider || "google",
+        last_login: (/* @__PURE__ */ new Date()).toISOString(),
+        role: existingUserRow?.role || "USER",
+        status: existingUserRow?.status || "ACTIVE",
+        plan: existingUserRow?.plan || "free",
+        pro_until: existingUserRow?.pro_until || null,
+        preferences: existingPrefs2
       };
+      if (existingAvatar2) {
+        userRecord2.avatar = existingAvatar2;
+      }
       if (useSupabase) {
-        const { error: upsertErr } = await supabase.from("users").upsert(userRecord2, { onConflict: "id" });
+        let { error: upsertErr } = await supabase.from("users").upsert(userRecord2, { onConflict: "id" });
+        if (upsertErr && /avatar/i.test(upsertErr.message || "")) {
+          const retryRecord = { ...userRecord2 };
+          delete retryRecord.avatar;
+          const retryRes = await supabase.from("users").upsert(retryRecord, { onConflict: "id" });
+          upsertErr = retryRes.error;
+        }
         if (upsertErr) {
           console.warn("[Register SSO] Full upsert failed, retrying with base columns:", upsertErr.message);
           const baseRecord = {
             id: uid2,
             email: normalizedEmail,
-            name: name || existingUserRow?.name || normalizedEmail.split("@")[0],
+            name: existingUserRow?.name || name || normalizedEmail.split("@")[0],
             password: existingUserRow?.password || "",
             experience: existingUserRow?.experience || "Intermediate",
             trading_style: existingUserRow?.trading_style || "Day Trading",
             main_markets: existingUserRow?.main_markets || ["Forex", "Gold"],
             onboarding_completed: existingUserRow?.onboarding_completed || false,
             is_pro: existingUserRow?.is_pro || false,
-            is_email_verified: true
+            is_email_verified: true,
+            preferences: existingPrefs2
           };
           const { error: baseErr } = await supabase.from("users").upsert(baseRecord, { onConflict: "id" });
           if (baseErr) {
@@ -4575,6 +4622,9 @@ app.post("/api/auth/register", authIpBackstopLimiter, authRateLimiter, async (re
         } else {
           Object.assign(user, toCamel(userRecord2));
         }
+        if (existingAvatar2) {
+          user.avatar = existingAvatar2;
+        }
         userDatabases.set(normalizedEmail, db);
         userDatabases.set(uid2, db);
       }
@@ -4586,15 +4636,23 @@ app.post("/api/auth/register", authIpBackstopLimiter, authRateLimiter, async (re
       }
       if (referralCode) await linkReferral(req, uid2, String(referralCode));
       const camelUser2 = toCamel(userRecord2);
+      if (existingAvatar2) {
+        camelUser2.avatar = existingAvatar2;
+      }
       const sessionToken = issueSession(res, { id: uid2, email: normalizedEmail });
       return res.json({ message: "Registration successful.", user: sanitizeUser(camelUser2), requiresOtp: false, sessionToken });
     }
     const uid = existingUserRow?.id || authUserId || `user_${crypto4.randomUUID()}`;
     const hashedPassword = password ? await bcrypt.hash(password, 10) : existingUserRow?.password || "";
+    const existingAvatar = existingUserRow?.avatar || existingUserRow?.preferences?.avatar || req.body?.avatar || "";
+    const existingPrefs = existingUserRow?.preferences && typeof existingUserRow.preferences === "object" ? { ...existingUserRow.preferences } : {};
+    if (existingAvatar && !existingPrefs.avatar) {
+      existingPrefs.avatar = existingAvatar;
+    }
     const userRecord = {
       id: uid,
       email: normalizedEmail,
-      name: name || existingUserRow?.name || normalizedEmail.split("@")[0],
+      name: existingUserRow?.name || name || normalizedEmail.split("@")[0],
       password: hashedPassword,
       experience: existingUserRow?.experience || "Intermediate",
       trading_style: existingUserRow?.trading_style || "Day Trading",
@@ -4610,10 +4668,20 @@ app.post("/api/auth/register", authIpBackstopLimiter, authRateLimiter, async (re
       email_otp: otp,
       otp_expires_at: otpExpiresAt,
       otp_attempts: 0,
-      otp_sent_at: (/* @__PURE__ */ new Date()).toISOString()
+      otp_sent_at: (/* @__PURE__ */ new Date()).toISOString(),
+      preferences: existingPrefs
     };
+    if (existingAvatar) {
+      userRecord.avatar = existingAvatar;
+    }
     if (useSupabase) {
-      const { error: upsertErr } = await supabase.from("users").upsert(userRecord, { onConflict: "id" });
+      let { error: upsertErr } = await supabase.from("users").upsert(userRecord, { onConflict: "id" });
+      if (upsertErr && /avatar/i.test(upsertErr.message || "")) {
+        const retryRecord = { ...userRecord };
+        delete retryRecord.avatar;
+        const retryRes = await supabase.from("users").upsert(retryRecord, { onConflict: "id" });
+        upsertErr = retryRes.error;
+      }
       if (upsertErr) {
         console.warn("[Register] Full upsert failed, retrying with base columns:", upsertErr.message);
         const baseRecord = {

@@ -988,6 +988,7 @@ export default function App() {
       (email ? email.split('@')[0] : 'Trader');
 
     const authProvider = sessionUser?.app_metadata?.provider || 'email';
+    const localAvatar = (typeof window !== 'undefined' && userId) ? (localStorage.getItem(`user_avatar_${userId}`) || '') : '';
 
     // FIX #1 (applied): persistAuthSession now correctly writes to sessionStorage.
     // This ensures authFetch includes x-auth-user-id on all subsequent calls.
@@ -1004,11 +1005,20 @@ export default function App() {
         },
         // The server verifies this token with Supabase and derives the identity
         // from it. It no longer trusts a client-asserted "already verified" flag.
-        body: JSON.stringify({ id: userId, email, name, provider: authProvider, supabaseAccessToken: accessToken })
+        body: JSON.stringify({ id: userId, email, name, avatar: localAvatar || undefined, provider: authProvider, supabaseAccessToken: accessToken })
       });
       if (res.ok) {
         const data = await res.json();
         if (data.user) {
+          if (!data.user.avatar && (data.user as any)?.preferences?.avatar) {
+            data.user.avatar = (data.user as any).preferences.avatar;
+          }
+          if (!data.user.avatar && localAvatar) {
+            data.user.avatar = localAvatar;
+          }
+          if (data.user.avatar && userId) {
+            try { localStorage.setItem(`user_avatar_${userId}`, data.user.avatar); } catch {}
+          }
           // Keep sessionStorage in sync with the server's canonical user id
           persistAuthSession(data.user.id || userId, data.user.email || email, data.sessionToken);
           setUser(data.user);
@@ -1040,6 +1050,7 @@ export default function App() {
       id: userId || `user_${Date.now()}`,
       email,
       name,
+      avatar: localAvatar || '',
       experience: 'Intermediate',
       tradingStyle: 'Day Trading',
       mainMarkets: ['Forex', 'Gold'],
@@ -1069,7 +1080,11 @@ export default function App() {
     if (user) {
       setSettingsName(user.name);
       setSettingsEmail(user.email);
-      setSettingsAvatar(user.avatar || (user as any)?.preferences?.avatar || '');
+      const savedAvatar = user.avatar || (user as any)?.preferences?.avatar || (user.id ? (localStorage.getItem(`user_avatar_${user.id}`) || '') : '') || '';
+      setSettingsAvatar(savedAvatar);
+      if (savedAvatar && !user.avatar) {
+        user.avatar = savedAvatar;
+      }
       // Check admin status from server (accounts for role updates in Supabase after login)
       authFetch('/api/admin/check')
         .then(res => res.json())
@@ -1410,6 +1425,17 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data.user) {
+            const uid = data.user.id || storedId;
+            const localAv = (typeof window !== 'undefined' && uid) ? (localStorage.getItem(`user_avatar_${uid}`) || '') : '';
+            if (!data.user.avatar && (data.user as any)?.preferences?.avatar) {
+              data.user.avatar = (data.user as any).preferences.avatar;
+            }
+            if (!data.user.avatar && localAv) {
+              data.user.avatar = localAv;
+            }
+            if (data.user.avatar && uid) {
+              try { localStorage.setItem(`user_avatar_${uid}`, data.user.avatar); } catch {}
+            }
             // Persist the canonical IDs resolved by the server (cookie-based restore)
             // before we call fetchAccountData so authFetch has them available.
             persistAuthSession(data.user.id, data.user.email, data.sessionToken);
@@ -2759,6 +2785,13 @@ export default function App() {
           });
           const data = await res.json();
           if (res.ok && data.user) {
+            const uid = data.user.id || user?.id;
+            if (dataUrl && uid) {
+              try { localStorage.setItem(`user_avatar_${uid}`, dataUrl); } catch {}
+            }
+            if (!data.user.avatar && dataUrl) {
+              data.user.avatar = dataUrl;
+            }
             setUser(data.user);
             if (data.user?.id) {
               persistAuthSession(data.user.id, data.user.email || user?.email || '');
@@ -2789,6 +2822,9 @@ export default function App() {
       onConfirm: async () => {
         setAvatarUploading(true);
         setSettingsAvatar('');
+        if (user?.id) {
+          try { localStorage.removeItem(`user_avatar_${user.id}`); } catch {}
+        }
         try {
           const res = await authFetch('/api/auth/update-profile', {
             method: 'POST',
@@ -2797,6 +2833,7 @@ export default function App() {
           });
           const data = await res.json();
           if (res.ok && data.user) {
+            data.user.avatar = '';
             setUser(data.user);
             if (data.user?.id) {
               persistAuthSession(data.user.id, data.user.email || user?.email || '');
@@ -2847,7 +2884,18 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok) {
-        setUser(data.user);
+        if (data.user) {
+          const uid = data.user.id || user?.id;
+          if (settingsAvatar && uid) {
+            try { localStorage.setItem(`user_avatar_${uid}`, settingsAvatar); } catch {}
+          } else if (!settingsAvatar && uid) {
+            try { localStorage.removeItem(`user_avatar_${uid}`); } catch {}
+          }
+          if (settingsAvatar && !data.user.avatar) {
+            data.user.avatar = settingsAvatar;
+          }
+          setUser(data.user);
+        }
         if (data.user?.id) {
           persistAuthSession(data.user.id, data.user.email || user?.email || '');
         }
@@ -5059,9 +5107,9 @@ export default function App() {
               aria-label="Account menu"
               className="avatar-ring group relative h-9 w-9 rounded-full p-[1.5px] transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer"
             >
-              {(user?.avatar || (user as any)?.preferences?.avatar) ? (
+              {(user?.avatar || (user as any)?.preferences?.avatar || settingsAvatar || (user?.id ? (localStorage.getItem(`user_avatar_${user.id}`) || '') : '')) ? (
                 <img
-                  src={user?.avatar || (user as any)?.preferences?.avatar}
+                  src={user?.avatar || (user as any)?.preferences?.avatar || settingsAvatar || (user?.id ? (localStorage.getItem(`user_avatar_${user.id}`) || '') : '')}
                   alt={user?.name || 'User avatar'}
                   className="h-full w-full rounded-full object-cover"
                 />
@@ -5086,9 +5134,9 @@ export default function App() {
                 <div className="flex items-center gap-3 p-4 border-b border-slate-100 dark:border-white/[0.07]">
                   <div className="relative group shrink-0">
                     <span className="avatar-ring h-11 w-11 shrink-0 rounded-full p-[1.5px] relative block">
-                      {(user?.avatar || (user as any)?.preferences?.avatar) ? (
+                      {(user?.avatar || (user as any)?.preferences?.avatar || settingsAvatar || (user?.id ? (localStorage.getItem(`user_avatar_${user.id}`) || '') : '')) ? (
                         <img
-                          src={user?.avatar || (user as any)?.preferences?.avatar}
+                          src={user?.avatar || (user as any)?.preferences?.avatar || settingsAvatar || (user?.id ? (localStorage.getItem(`user_avatar_${user.id}`) || '') : '')}
                           alt={user?.name || 'User avatar'}
                           className="h-full w-full rounded-full object-cover"
                         />

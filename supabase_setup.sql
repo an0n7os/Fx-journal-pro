@@ -294,6 +294,9 @@ END $$;
 -- asking. JSONB so new settings need no further migration.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}'::jsonb;
 
+-- avatar: optional profile picture URL or compressed data-URI
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;
+
 
 -- ============================================================================
 -- add_otp_columns.sql

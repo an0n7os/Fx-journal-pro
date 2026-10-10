@@ -2090,7 +2090,12 @@ async function ensureUserDbLoaded(userId?: string, email?: string) {
           supabase.from('mt5_deals').select('*').eq('user_id', uid)
         ]);
         return {
-          users: toCamel(users || []),
+          users: toCamel(users || []).map((u: any) => {
+            if (!u.avatar && u.preferences?.avatar) {
+              u.avatar = u.preferences.avatar;
+            }
+            return u;
+          }),
           accounts: toCamel(accounts || []),
           trades: toCamel(trades || []).map((t: any) => {
             if (typeof t.screenshot === 'string' && t.screenshot.startsWith('[') && t.screenshot.endsWith(']')) {
@@ -2167,10 +2172,15 @@ async function ensureUserDbLoaded(userId?: string, email?: string) {
           }
         }
 
-        // Merge transient fields (OTPs) from cache into loaded users
+        // Merge transient fields (OTPs) and avatar from cache into loaded users
         if (cached.users && cached.users.length > 0 && loadedDb.users.length > 0) {
           const cachedUser = cached.users[0];
           const loadedUser = loadedDb.users[0];
+          if (!loadedUser.avatar && cachedUser.avatar) loadedUser.avatar = cachedUser.avatar;
+          if (!loadedUser.preferences?.avatar && cachedUser.preferences?.avatar) {
+            if (!loadedUser.preferences) loadedUser.preferences = {};
+            loadedUser.preferences.avatar = cachedUser.preferences.avatar;
+          }
           if (cachedUser.resetOtp) loadedUser.resetOtp = cachedUser.resetOtp;
           if (cachedUser.resetOtpExpiresAt) loadedUser.resetOtpExpiresAt = cachedUser.resetOtpExpiresAt;
           if (cachedUser.emailOtp) loadedUser.emailOtp = cachedUser.emailOtp;
@@ -2338,9 +2348,29 @@ async function saveDatabase(
             clean[key] = u[key];
           }
         }
+        // Always mirror avatar into preferences so it persists even if the avatar column is absent in Supabase
+        if (clean.avatar) {
+          clean.preferences = { ...(clean.preferences || {}), avatar: clean.avatar };
+        } else if (clean.preferences?.avatar && !clean.avatar) {
+          clean.avatar = clean.preferences.avatar;
+        }
         return clean;
       });
-      const { error: err1 } = await supabase.from('users').upsert(sanitizedUsers, { onConflict: 'id' });
+      let { error: err1 } = await supabase.from('users').upsert(sanitizedUsers, { onConflict: 'id' });
+      if (err1 && /avatar/i.test(err1.message || '')) {
+        // Fallback if avatar column does not exist on users table in remote Supabase yet:
+        // Ensure avatar is preserved in preferences and retry without avatar column.
+        const retryUsers = sanitizedUsers.map((u: any) => {
+          const c = { ...u };
+          if (c.avatar) {
+            c.preferences = { ...(c.preferences || {}), avatar: c.avatar };
+          }
+          delete c.avatar;
+          return c;
+        });
+        const retryRes = await supabase.from('users').upsert(retryUsers, { onConflict: 'id' });
+        err1 = retryRes.error;
+      }
       if (err1) {
         // Reported, not just logged. Supabase being unreachable used to leave
         // the customer with a success response and nothing saved.
@@ -3403,10 +3433,22 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
       // Verified SSO path. The password column is carried over untouched — a
       // federated sign-in must never be able to set or replace it.
       const uid = existingUserRow?.id || authUserId || `user_${crypto.randomUUID()}`;
-      const userRecord = {
+      const existingAvatar =
+        existingUserRow?.avatar ||
+        (existingUserRow?.preferences as any)?.avatar ||
+        req.body?.avatar ||
+        '';
+      const existingPrefs = (existingUserRow?.preferences && typeof existingUserRow.preferences === 'object')
+        ? { ...existingUserRow.preferences }
+        : {};
+      if (existingAvatar && !existingPrefs.avatar) {
+        existingPrefs.avatar = existingAvatar;
+      }
+
+      const userRecord: any = {
         id: uid,
         email: normalizedEmail,
-        name: name || existingUserRow?.name || normalizedEmail.split('@')[0],
+        name: existingUserRow?.name || name || normalizedEmail.split('@')[0],
         password: existingUserRow?.password || '',
         experience: existingUserRow?.experience || 'Intermediate',
         trading_style: existingUserRow?.trading_style || 'Day Trading',
@@ -3414,26 +3456,42 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
         onboarding_completed: existingUserRow?.onboarding_completed || false,
         is_pro: existingUserRow?.is_pro || false,
         is_email_verified: true,
-        auth_provider: provider || 'google',
+        auth_provider: provider || existingUserRow?.auth_provider || 'google',
         last_login: new Date().toISOString(),
+        role: existingUserRow?.role || 'USER',
+        status: existingUserRow?.status || 'ACTIVE',
+        plan: existingUserRow?.plan || 'free',
+        pro_until: existingUserRow?.pro_until || null,
+        preferences: existingPrefs,
       };
+      if (existingAvatar) {
+        userRecord.avatar = existingAvatar;
+      }
+
       if (useSupabase) {
-        const { error: upsertErr } = await supabase.from('users').upsert(userRecord, { onConflict: 'id' });
+        let { error: upsertErr } = await supabase.from('users').upsert(userRecord, { onConflict: 'id' });
+        if (upsertErr && /avatar/i.test(upsertErr.message || '')) {
+          const retryRecord = { ...userRecord };
+          delete retryRecord.avatar;
+          const retryRes = await supabase.from('users').upsert(retryRecord, { onConflict: 'id' });
+          upsertErr = retryRes.error;
+        }
         if (upsertErr) {
           // Column may not exist (e.g. auth_provider/last_login migration not applied).
           // Retry with only the base columns guaranteed by supabase_schema.sql.
           console.warn('[Register SSO] Full upsert failed, retrying with base columns:', upsertErr.message);
-          const baseRecord = {
+          const baseRecord: any = {
             id: uid,
             email: normalizedEmail,
-            name: name || existingUserRow?.name || normalizedEmail.split('@')[0],
+            name: existingUserRow?.name || name || normalizedEmail.split('@')[0],
             password: existingUserRow?.password || '',
             experience: existingUserRow?.experience || 'Intermediate',
             trading_style: existingUserRow?.trading_style || 'Day Trading',
             main_markets: existingUserRow?.main_markets || ['Forex', 'Gold'],
             onboarding_completed: existingUserRow?.onboarding_completed || false,
             is_pro: existingUserRow?.is_pro || false,
-            is_email_verified: true
+            is_email_verified: true,
+            preferences: existingPrefs,
           };
           const { error: baseErr } = await supabase.from('users').upsert(baseRecord, { onConflict: 'id' });
           if (baseErr) {
@@ -3451,6 +3509,9 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
         } else {
           Object.assign(user, toCamel(userRecord));
         }
+        if (existingAvatar) {
+          user.avatar = existingAvatar;
+        }
         userDatabases.set(normalizedEmail, db);
         userDatabases.set(uid, db);
       }
@@ -3466,6 +3527,9 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
       // blocks the signup if it fails.
       if (referralCode) await linkReferral(req, uid, String(referralCode));
       const camelUser = toCamel(userRecord);
+      if (existingAvatar) {
+        camelUser.avatar = existingAvatar;
+      }
       const sessionToken = issueSession(res, { id: uid, email: normalizedEmail });
       return res.json({ message: 'Registration successful.', user: sanitizeUser(camelUser), requiresOtp: false, sessionToken });
     }
@@ -3473,11 +3537,22 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
     // Standard registration path — generate OTP and save to Supabase
     const uid = existingUserRow?.id || authUserId || `user_${crypto.randomUUID()}`;
     const hashedPassword = password ? await bcrypt.hash(password, 10) : (existingUserRow?.password || '');
+    const existingAvatar =
+      existingUserRow?.avatar ||
+      (existingUserRow?.preferences as any)?.avatar ||
+      req.body?.avatar ||
+      '';
+    const existingPrefs = (existingUserRow?.preferences && typeof existingUserRow.preferences === 'object')
+      ? { ...existingUserRow.preferences }
+      : {};
+    if (existingAvatar && !existingPrefs.avatar) {
+      existingPrefs.avatar = existingAvatar;
+    }
 
-    const userRecord = {
+    const userRecord: any = {
       id: uid,
       email: normalizedEmail,
-      name: name || existingUserRow?.name || normalizedEmail.split('@')[0],
+      name: existingUserRow?.name || name || normalizedEmail.split('@')[0],
       password: hashedPassword,
       experience: existingUserRow?.experience || 'Intermediate',
       trading_style: existingUserRow?.trading_style || 'Day Trading',
@@ -3494,10 +3569,20 @@ app.post('/api/auth/register', authIpBackstopLimiter, authRateLimiter, async (re
       otp_expires_at: otpExpiresAt,
       otp_attempts: 0,
       otp_sent_at: new Date().toISOString(),
+      preferences: existingPrefs,
     };
+    if (existingAvatar) {
+      userRecord.avatar = existingAvatar;
+    }
 
     if (useSupabase) {
-      const { error: upsertErr } = await supabase.from('users').upsert(userRecord, { onConflict: 'id' });
+      let { error: upsertErr } = await supabase.from('users').upsert(userRecord, { onConflict: 'id' });
+      if (upsertErr && /avatar/i.test(upsertErr.message || '')) {
+        const retryRecord = { ...userRecord };
+        delete retryRecord.avatar;
+        const retryRes = await supabase.from('users').upsert(retryRecord, { onConflict: 'id' });
+        upsertErr = retryRes.error;
+      }
       if (upsertErr) {
         // Column may not exist (e.g. auth_provider/last_login migration not applied).
         // Retry with only the base columns guaranteed by the users table.

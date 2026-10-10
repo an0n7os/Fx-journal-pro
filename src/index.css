@@ -347,7 +347,7 @@ html.dark #trading-calendar-card,
   border: none !important;
 }
 
-/* Light mode — force all calendar day buttons to soft off-white */
+/* Calendar Day Buttons Base */
 #trading-calendar-card button {
   background-color: #f5f7fa !important;
   background-image: none !important;
@@ -355,19 +355,35 @@ html.dark #trading-calendar-card,
   color: #0f172a !important;
 }
 
-/* Keep profit days green */
-#trading-calendar-card button.border-emerald-200 {
+/* Profit days - Vibrant Green */
+#trading-calendar-card button.calendar-day-profit,
+#trading-calendar-card button.border-emerald-200,
+#trading-calendar-card button.border-emerald-300,
+.calendar-day-profit {
   background-color: #ecfdf5 !important;
-  border-color: #6ee7b7 !important;
+  border-color: #34d399 !important;
 }
 
-/* Keep loss days red */
-#trading-calendar-card button.border-rose-200 {
+#trading-calendar-card button.calendar-day-profit:hover {
+  background-color: #d1fae5 !important;
+  border-color: #10b981 !important;
+}
+
+/* Loss days - Vibrant Red/Rose */
+#trading-calendar-card button.calendar-day-loss,
+#trading-calendar-card button.border-rose-200,
+#trading-calendar-card button.border-rose-300,
+.calendar-day-loss {
   background-color: #fff1f2 !important;
-  border-color: #fda4af !important;
+  border-color: #fb7185 !important;
 }
 
-/* Dark mode — revert day buttons to dark */
+#trading-calendar-card button.calendar-day-loss:hover {
+  background-color: #ffe4e6 !important;
+  border-color: #f43f5e !important;
+}
+
+/* Dark mode — default neutral day buttons */
 html.dark #trading-calendar-card button,
 .dark #trading-calendar-card button {
   background-color: rgba(30, 41, 59, 0.35) !important;
@@ -376,16 +392,80 @@ html.dark #trading-calendar-card button,
   color: #f1f5f9 !important;
 }
 
+/* Dark mode profit days - Rich glowing green */
+html.dark #trading-calendar-card button.calendar-day-profit,
+.dark #trading-calendar-card button.calendar-day-profit,
 html.dark #trading-calendar-card button.border-emerald-200,
-.dark #trading-calendar-card button.border-emerald-200 {
-  background-color: rgba(6, 78, 59, 0.35) !important;
-  border-color: rgba(16, 185, 129, 0.45) !important;
+.dark #trading-calendar-card button.border-emerald-200,
+html.dark #trading-calendar-card button.border-emerald-300,
+.dark #trading-calendar-card button.border-emerald-300,
+html.dark .calendar-day-profit,
+.dark .calendar-day-profit {
+  background-color: rgba(6, 78, 59, 0.42) !important;
+  border-color: rgba(16, 185, 129, 0.55) !important;
 }
 
+html.dark #trading-calendar-card button.calendar-day-profit:hover,
+.dark #trading-calendar-card button.calendar-day-profit:hover {
+  background-color: rgba(6, 78, 59, 0.6) !important;
+  border-color: rgba(16, 185, 129, 0.8) !important;
+}
+
+/* Dark mode loss days - Rich glowing red */
+html.dark #trading-calendar-card button.calendar-day-loss,
+.dark #trading-calendar-card button.calendar-day-loss,
 html.dark #trading-calendar-card button.border-rose-200,
-.dark #trading-calendar-card button.border-rose-200 {
-  background-color: rgba(136, 19, 55, 0.35) !important;
-  border-color: rgba(244, 63, 94, 0.45) !important;
+.dark #trading-calendar-card button.border-rose-200,
+html.dark #trading-calendar-card button.border-rose-300,
+.dark #trading-calendar-card button.border-rose-300,
+html.dark .calendar-day-loss,
+.dark .calendar-day-loss {
+  background-color: rgba(136, 19, 55, 0.42) !important;
+  border-color: rgba(244, 63, 94, 0.55) !important;
+}
+
+html.dark #trading-calendar-card button.calendar-day-loss:hover,
+.dark #trading-calendar-card button.calendar-day-loss:hover {
+  background-color: rgba(136, 19, 55, 0.6) !important;
+  border-color: rgba(244, 63, 94, 0.8) !important;
+}
+
+/* Calendar P&L Text Values - Vivid Emerald and Rose/Red */
+#trading-calendar-card .calendar-profit-text {
+  color: #059669 !important;
+}
+
+html.dark #trading-calendar-card .calendar-profit-text,
+.dark #trading-calendar-card .calendar-profit-text {
+  color: #34d399 !important;
+}
+
+#trading-calendar-card .calendar-loss-text {
+  color: #e11d48 !important;
+}
+
+html.dark #trading-calendar-card .calendar-loss-text,
+.dark #trading-calendar-card .calendar-loss-text {
+  color: #fb7185 !important;
+}
+
+/* Calendar Day Stats W (Win) and L (Loss) text */
+#trading-calendar-card .calendar-win-text {
+  color: #059669 !important;
+}
+
+html.dark #trading-calendar-card .calendar-win-text,
+.dark #trading-calendar-card .calendar-win-text {
+  color: #34d399 !important;
+}
+
+#trading-calendar-card .calendar-loss-stat-text {
+  color: #e11d48 !important;
+}
+
+html.dark #trading-calendar-card .calendar-loss-stat-text,
+.dark #trading-calendar-card .calendar-loss-stat-text {
+  color: #fb7185 !important;
 }
 
 /* Light mode sidebar / stats panels */
@@ -455,15 +535,15 @@ html.dark #trading-calendar-card .calendar-day-number,
   color: #f8fafc !important;
 }
 
-/* Calendar padding boxes (empty slots) */
-.calendar-day-box {
+/* Calendar padding boxes (empty slots) & neutral day buttons */
+.calendar-day-box:not(.calendar-day-profit):not(.calendar-day-loss) {
   background-color: #e8ecf2 !important;
   background-image: none !important;
   border: 1px solid #d1dce8 !important;
 }
 
-html.dark .calendar-day-box,
-.dark .calendar-day-box {
+html.dark .calendar-day-box:not(.calendar-day-profit):not(.calendar-day-loss),
+.dark .calendar-day-box:not(.calendar-day-profit):not(.calendar-day-loss) {
   background-color: rgba(30, 41, 59, 0.2) !important;
   border: 1px solid rgba(255, 255, 255, 0.04) !important;
 }
@@ -2264,6 +2344,9 @@ html.dark .text-emerald-700 {
 html.dark .text-emerald-400.tabular-nums,
 html.dark .text-emerald-500,
 html.dark .dark\:text-emerald-400.font-bold,
+html.dark .dark\:text-emerald-400.font-black,
+html.dark .text-emerald-600.font-black,
+html.dark .calendar-profit-text,
 html.dark td .text-emerald-400,
 html.dark td .text-emerald-500 {
   color: #34d399 !important;
