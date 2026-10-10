@@ -54,6 +54,7 @@ export interface TradingAccount {
   syncMethod?: 'EA' | 'VPS' | 'CLOUD';
   connectionStatus?: string;
   isDefaultDemo?: boolean;
+  brokerCommission?: number;
 }
 
 export interface Trade {
@@ -78,13 +79,33 @@ export interface Trade {
   strategy?: string;
   emotion?: 'Calm' | 'Excited' | 'Anxious' | 'FOMO' | 'Greedy' | 'Revenge';
   notes?: string;
-  screenshot?: string; // base64 or URL
+  screenshot?: string; // base64 or URL (primary / first image)
+  screenshots?: string[]; // multiple screenshots
   tags: string[];
   isMt5Sync?: boolean;
   /** Broker deal/ticket number, used to detect re-imported rows. */
   ticket?: string | number;
   eaDealId?: number;
   eaPositionId?: number;
+}
+
+/** Utility to safely extract all screenshots from a trade row */
+export function getTradeScreenshots(trade?: Partial<Trade> | null): string[] {
+  if (!trade) return [];
+  if (Array.isArray(trade.screenshots) && trade.screenshots.length > 0) {
+    return trade.screenshots.filter(Boolean);
+  }
+  if (typeof trade.screenshot === 'string' && trade.screenshot.trim()) {
+    const raw = trade.screenshot.trim();
+    if (raw.startsWith('[') && raw.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      } catch {}
+    }
+    return [raw];
+  }
+  return [];
 }
 
 export interface RiskSettings {

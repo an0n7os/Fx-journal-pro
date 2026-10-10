@@ -2092,7 +2092,17 @@ async function ensureUserDbLoaded(userId?: string, email?: string) {
         return {
           users: toCamel(users || []),
           accounts: toCamel(accounts || []),
-          trades: toCamel(trades || []),
+          trades: toCamel(trades || []).map((t: any) => {
+            if (typeof t.screenshot === 'string' && t.screenshot.startsWith('[') && t.screenshot.endsWith(']')) {
+              try {
+                t.screenshots = JSON.parse(t.screenshot);
+                t.screenshot = t.screenshots[0] || '';
+              } catch {}
+            } else if (t.screenshot) {
+              t.screenshots = [t.screenshot];
+            }
+            return t;
+          }),
           riskSettings: toCamel(riskSettings || []),
           supportTickets: toCamel(supportTickets || []),
           mt5Deals: toCamel(mt5Deals || []),
@@ -2351,7 +2361,7 @@ async function saveDatabase(
         'mt5_login', 'mt5_server', 'mt5_build', 'sync_method',
         'connection_status', 'last_heartbeat_at', 'backfill_start', 'backfill_end',
         'investor_password_enc', 'password_enc_nonce', 'password_kms_key_id',
-        'disconnected_at'
+        'disconnected_at', 'broker_commission'
       ]);
       const accs = toSnake(data.accounts).map((a: any) => {
         const clean: any = {};
@@ -2363,7 +2373,17 @@ async function saveDatabase(
         clean.user_id = clean.user_id || uid;
         return clean;
       });
-      const { error: err2 } = await supabase.from('trading_accounts').upsert(accs, { onConflict: 'id' });
+      let { error: err2 } = await supabase.from('trading_accounts').upsert(accs, { onConflict: 'id' });
+      if (err2 && /broker_commission/i.test(err2.message || '')) {
+        // Fallback if broker_commission column not created in remote DB yet
+        const retryAccs = accs.map((a: any) => {
+          const c = { ...a };
+          delete c.broker_commission;
+          return c;
+        });
+        const retryRes = await supabase.from('trading_accounts').upsert(retryAccs, { onConflict: 'id' });
+        err2 = retryRes.error;
+      }
       if (err2) {
         console.error('[saveDatabase] trading_accounts upsert error:', err2);
         return { accountsError: err2 };
@@ -2388,6 +2408,10 @@ async function saveDatabase(
         const clean: any = {};
         for (const key of Object.keys(t)) {
           if (validTradeCols.has(key)) clean[key] = t[key];
+        }
+        // If multiple screenshots exist, store as JSON array in the screenshot column
+        if (Array.isArray(t.screenshots) && t.screenshots.length > 0) {
+          clean.screenshot = JSON.stringify(t.screenshots);
         }
         if (clean.ea_deal_id === undefined && t.ticket !== undefined && Number.isFinite(Number(t.ticket))) {
           clean.ea_deal_id = Number(t.ticket);
@@ -4351,7 +4375,7 @@ app.post('/api/accounts', async (req, res) => {
   if (!db.accounts) db.accounts = [];
   if (!db.riskSettings) db.riskSettings = [];
 
-  const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType, login, server, investorPassword } = req.body;
+  const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType, login, server, investorPassword, brokerCommission } = req.body;
 
   // Account limit check for Free vs Pro
   // If user is adding an MT5 synced account, default demo account will be removed to make room,
@@ -4413,6 +4437,7 @@ app.post('/api/accounts', async (req, res) => {
     equity: startBal,
     status: 'Active',
     isMt5Sync: !!isMt5Sync,
+    brokerCommission: brokerCommission !== undefined ? Math.max(0, parseFloat(brokerCommission) || 0) : 0,
     eaToken: generateEaToken(),
     // A new MT5 account has no EA running yet — the file has not even been
     // downloaded. Marking it Connected at creation told the customer they were
@@ -4494,7 +4519,7 @@ app.put('/api/accounts/:id', async (req, res) => {
   const authEmail = currentUser?.email;
   if (!currentUser || !db) return res.status(401).json({ error: 'Not authenticated' });
   const { id } = req.params;
-  const { name, broker, status, currentBalance, equity, currency, startingBalance } = req.body;
+  const { name, broker, status, currentBalance, equity, currency, startingBalance, brokerCommission } = req.body;
 
   const accIdx = db.accounts.findIndex((acc: any) => acc.id === id);
   if (accIdx !== -1 && db.accounts[accIdx].userId === currentUser.id) {
@@ -4502,6 +4527,9 @@ app.put('/api/accounts/:id', async (req, res) => {
     if (broker) db.accounts[accIdx].broker = broker;
     if (status) db.accounts[accIdx].status = status;
     if (currency) db.accounts[accIdx].currency = currency;
+    if (brokerCommission !== undefined) {
+      db.accounts[accIdx].brokerCommission = Math.max(0, parseFloat(brokerCommission) || 0);
+    }
     // parseFloat straight from the body wrote NaN into the account totals for
     // any non-numeric value — "abc", "", a stray comma — and the balance is
     // the account's own running total, so there is no way back from the UI.

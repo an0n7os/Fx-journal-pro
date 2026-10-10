@@ -2,8 +2,208 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Newspaper, CalendarRange, RefreshCw, ExternalLink, TrendingUp, TrendingDown,
   Minus, Clock, Globe, AlertTriangle, Radio, MapPin, CalendarDays, Search,
-  Bell, X, CheckCircle2, Lock, MessageCircle, Loader2
+  Bell, X, CheckCircle2, Lock, MessageCircle, Loader2, Landmark, ArrowRight,
+  ShieldAlert, Info, Building2, Flame
 } from 'lucide-react';
+
+export interface UsBankHoliday {
+  id: string;
+  name: string;
+  date: string;
+  dayOfWeek: string;
+  status: string;
+  impactLevel: 'Critical' | 'High' | 'Moderate';
+  summary: string;
+  liquidity: string;
+  spreads: string;
+  cme: string;
+  advice: string;
+}
+
+export function generateUsHolidays(year: number): UsBankHoliday[] {
+  const getNthWeekdayOfMonth = (y: number, m: number, weekday: number, n: number) => {
+    let count = 0;
+    for (let day = 1; day <= 31; day++) {
+      const d = new Date(Date.UTC(y, m, day));
+      if (d.getUTCMonth() !== m) break;
+      if (d.getUTCDay() === weekday) {
+        count++;
+        if (count === n) return d;
+      }
+    }
+    return new Date(Date.UTC(y, m, 1));
+  };
+
+  const getLastWeekdayOfMonth = (y: number, m: number, weekday: number) => {
+    for (let day = 31; day >= 1; day--) {
+      const d = new Date(Date.UTC(y, m, day));
+      if (d.getUTCMonth() === m && d.getUTCDay() === weekday) {
+        return d;
+      }
+    }
+    return new Date(Date.UTC(y, m, 1));
+  };
+
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const getDayName = (dStr: string) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const parts = dStr.split('-').map(Number);
+    const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    return days[d.getUTCDay()];
+  };
+
+  const list: Omit<UsBankHoliday, 'dayOfWeek'>[] = [
+    {
+      id: `${year}-new-years`,
+      name: "New Year's Day",
+      date: `${year}-01-01`,
+      status: 'Full Global Market Closure',
+      impactLevel: 'Critical',
+      summary: 'All global financial institutions, Fedwire, and US exchanges are completely shut. Interbank forex trading is suspended or frozen.',
+      liquidity: 'Zero liquidity; international central banking shutdown.',
+      spreads: 'Extreme spread widening if quotes are offered; completely untradable.',
+      cme: 'CME FX & commodity futures fully closed.',
+      advice: 'Mandatory halt on trading; never hold high-leverage positions over New Year rollover.'
+    },
+    {
+      id: `${year}-mlk`,
+      name: "Martin Luther King Jr. Day",
+      date: fmt(getNthWeekdayOfMonth(year, 0, 1, 3)),
+      status: 'US Federal Holiday / Banks Closed',
+      impactLevel: 'High',
+      summary: 'US commercial banks and Federal Reserve bond desks closed. London session trades normally, followed by an afternoon liquidity vacuum.',
+      liquidity: '65-75% drop in NY afternoon USD trading volume.',
+      spreads: 'Bid-ask spreads on EUR/USD, GBP/USD, USD/JPY widen by 1.5x–2.5x after 12:00 PM EST.',
+      cme: 'CME FX and metals futures close early (1:00 PM EST).',
+      advice: 'Trade exclusively during the European/London morning session; close intraday scalp trades prior to US hours.'
+    },
+    {
+      id: `${year}-presidents`,
+      name: "Presidents' Day (Washington's Birthday)",
+      date: fmt(getNthWeekdayOfMonth(year, 1, 1, 3)),
+      status: 'US Banks & Exchanges Closed',
+      impactLevel: 'High',
+      summary: 'No US equity or debt clearing. Major currency pairs trade in compressed consolidation channels with elevated sensitivity to small headlines.',
+      liquidity: 'Volume evaporates abruptly once London trading desks hand over to New York.',
+      spreads: 'Moderate to high spread widening; execution slippage risk on market orders.',
+      cme: 'Early halt for US index and currency futures.',
+      advice: 'Beware of false breakouts during NY afternoon hours on hollow order books.'
+    },
+    {
+      id: `${year}-good-friday`,
+      name: "Good Friday",
+      date: year === 2025 ? '2025-04-18' : year === 2026 ? '2026-04-03' : `${year}-03-26`,
+      status: 'Global Banking Holiday',
+      impactLevel: 'Critical',
+      summary: 'Combined US, UK, European, Australian, and Canadian bank closures. One of the quietest yet highest-risk trading days of the entire calendar year.',
+      liquidity: 'Global FX spot volume declines by ~80%+. Most major institutional desks operate skeleton crews.',
+      spreads: 'Spreads can blow out by 3x–6x on both majors and crosses.',
+      cme: 'CME and ICE markets closed.',
+      advice: 'Strongly advise closing short-term positions; high vulnerability to flash spikes on low volume.'
+    },
+    {
+      id: `${year}-memorial`,
+      name: "Memorial Day",
+      date: fmt(getLastWeekdayOfMonth(year, 4, 1)),
+      status: 'US Federal Holiday / Banks Closed',
+      impactLevel: 'High',
+      summary: 'US markets closed. Marks the start of lower summer trading volume. UK Spring Bank Holiday frequently coincides.',
+      liquidity: 'Active London morning liquidity; afternoon drops to near-zero as US desks are offline.',
+      spreads: 'Spreads widen substantially after European cash close (11:30 AM EST).',
+      cme: 'Early close at 1:00 PM EST.',
+      advice: 'Avoid holding momentum breakout positions into US hours.'
+    },
+    {
+      id: `${year}-juneteenth`,
+      name: "Juneteenth National Independence Day",
+      date: `${year}-06-19`,
+      status: 'Federal Holiday / US Banks Closed',
+      impactLevel: 'Moderate',
+      summary: 'Federal banks and US stock exchanges closed. European and Asian sessions operate with standard volume.',
+      liquidity: 'NY session volume lower by ~55%. USD pairs enter tight ranges.',
+      spreads: 'Slight spread increase on USD pairs.',
+      cme: 'Early closure at 1:00 PM EST for currency and equity futures.',
+      advice: 'Trade with range-bound strategies; lower profit targets for intraday trades.'
+    },
+    {
+      id: `${year}-july4`,
+      name: "US Independence Day (4th of July)",
+      date: `${year}-07-04`,
+      status: 'Federal Holiday / Full Closure',
+      impactLevel: 'High',
+      summary: 'Major American national holiday. Wall Street and all US clearing banks closed.',
+      liquidity: 'NY trading session virtually dead; price action stagnates across USD pairs.',
+      spreads: 'Noticeable spread expansion and reduced market depth.',
+      cme: 'CME FX futures close early or halt.',
+      advice: 'Ideal day to stay out of the market or take time off from active day trading.'
+    },
+    {
+      id: `${year}-labor-day`,
+      name: "Labor Day",
+      date: fmt(getNthWeekdayOfMonth(year, 8, 1, 1)),
+      status: 'Federal Holiday / US Markets Closed',
+      impactLevel: 'High',
+      summary: 'US holiday signalling the official end of summer. European desks trade normally but NY desks are dark.',
+      liquidity: 'London session volume remains solid; dramatic drop after London fixing (11:00 AM EST).',
+      spreads: 'Spreads widen in the afternoon; erratic spikes possible on thin volume.',
+      cme: 'Early closure at 1:00 PM EST.',
+      advice: 'Take profits during the London session and avoid trading USD crosses in the afternoon.'
+    },
+    {
+      id: `${year}-columbus`,
+      name: "Columbus Day / Indigenous Peoples' Day",
+      date: fmt(getNthWeekdayOfMonth(year, 9, 1, 2)),
+      status: 'Bank Holiday (US Equities Open, Bonds Closed)',
+      impactLevel: 'Moderate',
+      summary: 'US bond market and Federal Reserve wire systems closed, while stock exchanges remain open.',
+      liquidity: 'Moderate liquidity impact; FX swap settlements and treasury yields are paused.',
+      spreads: 'Mild spread widening on USD crosses.',
+      cme: 'Normal or slightly abbreviated trading hours.',
+      advice: 'Monitor US equity session volatility; currency pairs may lag normal economic correlations.'
+    },
+    {
+      id: `${year}-veterans`,
+      name: "Veterans Day",
+      date: `${year}-11-11`,
+      status: 'Federal Bank Holiday / Bond Market Closed',
+      impactLevel: 'Moderate',
+      summary: 'US commercial banks and government bond markets closed; NYSE and NASDAQ remain open.',
+      liquidity: 'Reduced institutional liquidity; money-market funds and interbank settlements offline.',
+      spreads: 'Slightly wider spreads on USD pairs during late afternoon.',
+      cme: 'Normal hours for equity & FX futures.',
+      advice: 'Expect tighter intraday trading ranges.'
+    },
+    {
+      id: `${year}-thanksgiving`,
+      name: "Thanksgiving Day & Black Friday",
+      date: fmt(getNthWeekdayOfMonth(year, 10, 4, 4)),
+      status: 'Major US Holiday / Extended Closure',
+      impactLevel: 'Critical',
+      summary: 'US markets completely closed on Thursday; early close at 1:00 PM EST on Friday. Global FX liquidity plunges.',
+      liquidity: 'Severe 75-90% drop in market depth from Thursday morning through the weekend.',
+      spreads: 'Substantial spread widening; risk of flash slippage on algorithmic triggers.',
+      cme: 'Closed Thursday; 1:15 PM EST early close Friday.',
+      advice: 'Close active positions before Thanksgiving Wednesday close; avoid trading on thin holiday Friday.'
+    },
+    {
+      id: `${year}-christmas`,
+      name: "Christmas Day",
+      date: `${year}-12-25`,
+      status: 'Worldwide Full Market Closure',
+      impactLevel: 'Critical',
+      summary: 'All major worldwide financial hubs (New York, London, Tokyo, Frankfurt, Sydney) are completely closed.',
+      liquidity: 'Zero liquidity; brokers disconnect price feeds.',
+      spreads: 'No active trading.',
+      cme: 'Full market closure.',
+      advice: 'Mandatory trading break. Enjoy time with family!'
+    }
+  ];
+
+  return list.map(item => ({
+    ...item,
+    dayOfWeek: getDayName(item.date)
+  }));
+}
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD', 'CNY'];
 const DEFAULT_CATEGORIES = [
@@ -430,12 +630,44 @@ function WhatsAppReminderModal({
   );
 }
 
-export default function FXNews({ initialTab = 'news', isPro = false }: { initialTab?: 'news' | 'calendar'; isPro?: boolean }) {
-  const [tab, setTab] = useState<'news' | 'calendar'>(initialTab);
+export default function FXNews({ initialTab = 'news', isPro = false }: { initialTab?: 'news' | 'calendar' | 'holidays'; isPro?: boolean }) {
+  const [tab, setTab] = useState<'news' | 'calendar' | 'holidays'>(initialTab);
 
   useEffect(() => {
     setTab(initialTab);
   }, [initialTab]);
+
+  const [holidaySearch, setHolidaySearch] = useState('');
+  const [holidayFilter, setHolidayFilter] = useState<'all' | 'critical' | 'upcoming'>('upcoming');
+
+  const allHolidays = useMemo(() => {
+    const currentY = new Date().getFullYear();
+    const h1 = generateUsHolidays(currentY);
+    const h2 = generateUsHolidays(currentY + 1);
+    const combined = [...h1, ...h2];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return combined.map(h => {
+      const parts = h.date.split('-').map(Number);
+      const hDate = new Date(parts[0], parts[1] - 1, parts[2]);
+      const diffTime = hDate.getTime() - today.getTime();
+      const daysUntil = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return {
+        ...h,
+        daysUntil,
+        isPast: daysUntil < 0,
+        isToday: daysUntil === 0,
+        formattedDate: hDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      };
+    });
+  }, []);
+
+  const upcomingHolidays = useMemo(() => {
+    return allHolidays.filter(h => h.daysUntil >= 0).sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [allHolidays]);
+
+  const nearestHoliday = upcomingHolidays[0] || null;
 
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [newsCategories, setNewsCategories] = useState<string[]>(DEFAULT_CATEGORIES);
@@ -649,6 +881,16 @@ export default function FXNews({ initialTab = 'news', isPro = false }: { initial
           >
             <CalendarRange className="h-3.5 w-3.5" /> Economic Calendar
           </button>
+          <button
+            onClick={() => setTab('holidays')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl text-xs font-semibold transition ${
+              tab === 'holidays'
+                ? 'bg-violet-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Landmark className="h-3.5 w-3.5" /> US Bank Holidays & Impact
+          </button>
         </div>
 
         {nextHigh && (
@@ -662,6 +904,41 @@ export default function FXNews({ initialTab = 'news', isPro = false }: { initial
       {/* ================= NEWS TAB ================= */}
       {tab === 'news' && (
         <div className="space-y-5">
+          {/* Featured Upcoming US Bank Holiday Alert */}
+          {nearestHoliday && (
+            <div className="rounded-2xl p-4 sm:p-5 border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent text-slate-800 dark:text-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <Landmark className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                      {nearestHoliday.daysUntil === 0 ? 'Today (US Holiday)' : nearestHoliday.daysUntil === 1 ? 'Tomorrow (US Holiday)' : `In ${nearestHoliday.daysUntil} Days`}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      {nearestHoliday.formattedDate} · {nearestHoliday.dayOfWeek}
+                    </span>
+                  </div>
+                  <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                    {nearestHoliday.name} — Potential Forex Market Impact
+                  </h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
+                    {nearestHoliday.summary}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTab('holidays')}
+                className="self-start md:self-center shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <span>Full Holiday Impact Analysis</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <Search className="h-4 w-4 text-slate-400" />
@@ -1073,6 +1350,222 @@ export default function FXNews({ initialTab = 'news', isPro = false }: { initial
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ================= US BANK HOLIDAYS TAB ================= */}
+      {tab === 'holidays' && (
+        <div className="space-y-6">
+          {/* Header Card */}
+          <div className="dx-panel p-5 sm:p-6 bg-gradient-to-br from-amber-500/10 via-slate-900/40 to-slate-950 border border-amber-500/25">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+                    <Landmark className="h-4 w-4" />
+                  </span>
+                  <span className="text-xs font-bold text-amber-400 tracking-wider uppercase font-mono">
+                    US Federal & Bank Schedule
+                  </span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                  US Bank Holidays & Forex Market Impact
+                </h2>
+                <p className="text-xs text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
+                  Federal Reserve banking closures halt USD interbank settlements and trigger severe liquidity drops. Review dates, expected market depth reductions, and volatility advisories below.
+                </p>
+              </div>
+
+              {nearestHoliday && (
+                <div className="shrink-0 p-3.5 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-1 min-w-[200px]">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Next Upcoming Holiday</span>
+                  <span className="text-sm font-black text-white truncate">{nearestHoliday.name}</span>
+                  <div className="flex items-center justify-between text-xs mt-1">
+                    <span className="text-slate-400">{nearestHoliday.formattedDate}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      {nearestHoliday.daysUntil === 0 ? 'Today' : `In ${nearestHoliday.daysUntil}d`}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Rules of Thumb Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6 pt-5 border-t border-white/10">
+              <div className="p-3 rounded-xl bg-black/20 border border-white/5 space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                  <Building2 className="h-3.5 w-3.5" />
+                  <span>Fedwire Offline</span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-tight">
+                  Federal Reserve interbank settlement pauses. Commercial banks process zero wire orders.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-black/20 border border-white/5 space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+                  <TrendingDown className="h-3.5 w-3.5" />
+                  <span>NY Liquidity Collapse</span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-tight">
+                  NY trading volume cuts by 65–85%. Price action stagnates into narrow consolidation channels.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-black/20 border border-white/5 space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400">
+                  <Globe className="h-3.5 w-3.5" />
+                  <span>London Session Focus</span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-tight">
+                  European hours carry genuine volume. Activity drops abruptly after 11:30 AM EST.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-black/20 border border-white/5 space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  <span>Wider Bid/Ask Spreads</span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-tight">
+                  Brokers expand spreads on EUR/USD, GBP/USD, and XAU/USD. Widen stop buffers.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Search & Filter Toolbar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/10 self-start">
+              <button
+                onClick={() => setHolidayFilter('upcoming')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  holidayFilter === 'upcoming' ? 'bg-violet-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Upcoming Holidays ({upcomingHolidays.length})
+              </button>
+              <button
+                onClick={() => setHolidayFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  holidayFilter === 'all' ? 'bg-violet-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Full Calendar ({allHolidays.length})
+              </button>
+              <button
+                onClick={() => setHolidayFilter('critical')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  holidayFilter === 'critical' ? 'bg-violet-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Critical / Full Closure
+              </button>
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search US holiday or event…"
+                value={holidaySearch}
+                onChange={e => setHolidaySearch(e.target.value)}
+                className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              />
+            </div>
+          </div>
+
+          {/* Holidays Cards List */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+            {allHolidays
+              .filter(h => {
+                if (holidayFilter === 'upcoming' && h.daysUntil < 0) return false;
+                if (holidayFilter === 'critical' && h.impactLevel !== 'Critical') return false;
+                if (holidaySearch.trim()) {
+                  const q = holidaySearch.toLowerCase();
+                  return h.name.toLowerCase().includes(q) || h.summary.toLowerCase().includes(q) || h.date.includes(q);
+                }
+                return true;
+              })
+              .map(h => {
+                const isUpcomingNext = nearestHoliday?.id === h.id;
+                return (
+                  <div
+                    key={h.id}
+                    className={`dx-panel p-5 rounded-2xl flex flex-col justify-between transition-all duration-200 ${
+                      isUpcomingNext
+                        ? 'border-amber-500/50 bg-gradient-to-b from-amber-500/10 to-transparent shadow-md ring-1 ring-amber-500/30'
+                        : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                    }`}
+                  >
+                    <div>
+                      {/* Top Badges */}
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                            h.impactLevel === 'Critical'
+                              ? 'bg-rose-500/15 text-rose-500 dark:text-rose-400 border border-rose-500/30'
+                              : h.impactLevel === 'High'
+                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                                : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30'
+                          }`}>
+                            {h.impactLevel} Impact
+                          </span>
+                          <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-semibold">
+                            {h.formattedDate} · {h.dayOfWeek}
+                          </span>
+                        </div>
+
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg tabular-nums ${
+                          h.daysUntil === 0
+                            ? 'bg-emerald-500 text-black font-extrabold animate-pulse'
+                            : h.daysUntil > 0
+                              ? 'bg-white/10 text-slate-200'
+                              : 'bg-slate-800 text-slate-500 line-through'
+                        }`}>
+                          {h.daysUntil === 0 ? 'TODAY' : h.daysUntil > 0 ? `In ${h.daysUntil} Days` : 'Past'}
+                        </span>
+                      </div>
+
+                      {/* Title & Status */}
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                        {h.name}
+                      </h3>
+                      <p className="text-xs text-amber-600 dark:text-amber-400/90 font-medium mt-0.5">
+                        {h.status}
+                      </p>
+
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-2.5 leading-relaxed">
+                        {h.summary}
+                      </p>
+
+                      {/* Impact Details Grid */}
+                      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11.5px]">
+                        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 space-y-0.5">
+                          <span className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400 block">📉 Volume Impact</span>
+                          <span className="text-slate-700 dark:text-slate-200 leading-tight block">{h.liquidity}</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 space-y-0.5">
+                          <span className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400 block">↔️ Spread Expansion</span>
+                          <span className="text-slate-700 dark:text-slate-200 leading-tight block">{h.spreads}</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 space-y-0.5">
+                          <span className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400 block">🕒 CME Hours</span>
+                          <span className="text-slate-700 dark:text-slate-200 leading-tight block">{h.cme}</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/15 space-y-0.5">
+                          <span className="text-[9.5px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400 block">💡 Trader Advisory</span>
+                          <span className="text-slate-700 dark:text-slate-200 leading-tight block font-medium">{h.advice}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
         </div>
       )}
 

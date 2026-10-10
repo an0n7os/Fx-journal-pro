@@ -536,6 +536,7 @@ ALTER TABLE trading_accounts ADD COLUMN IF NOT EXISTS investor_password_enc TEXT
 ALTER TABLE trading_accounts ADD COLUMN IF NOT EXISTS password_enc_nonce TEXT;
 ALTER TABLE trading_accounts ADD COLUMN IF NOT EXISTS password_kms_key_id TEXT;
 ALTER TABLE trading_accounts ADD COLUMN IF NOT EXISTS disconnected_at TIMESTAMPTZ;
+ALTER TABLE trading_accounts ADD COLUMN IF NOT EXISTS broker_commission NUMERIC DEFAULT 0;
 
 -- ------------------------------------------------------------------
 -- 2. EA instances / tokens (store a HASH, never the raw token)

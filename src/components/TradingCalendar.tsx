@@ -417,17 +417,20 @@ export default function TradingCalendar({ trades, currency }: TradingCalendarPro
                         </span>
                       </div>
 
-                      {/* Trade counts row: L: 1  T: 5  W: 4 */}
-                      <div className="flex items-center justify-between w-full px-0.5 text-[8px] min-[380px]:text-[9px] sm:text-[10px] md:text-[11px] font-bold leading-none select-none">
-                        <span className="text-rose-500 dark:text-rose-400">
-                          L:<span className="ml-0.5">{dayData.lossCount}</span>
-                        </span>
-                        <span className="text-slate-600 dark:text-slate-300">
-                          T:<span className="ml-0.5">{dayData.trades.length}</span>
-                        </span>
-                        <span className="text-emerald-500 dark:text-emerald-400">
-                          W:<span className="ml-0.5">{dayData.winCount}</span>
-                        </span>
+                      {/* Trade statistics inside each date rectangle */}
+                      <div className="w-full pt-1 border-t border-slate-200/50 dark:border-white/[0.06] select-none">
+                        {/* Full label on screens with room: Total: 10, Wins: 6, Losses: 4 */}
+                        <div className="hidden min-[480px]:flex items-center justify-center gap-1.5 text-[9px] sm:text-[9.5px] md:text-[10.5px] font-bold leading-none text-slate-600 dark:text-slate-300">
+                          <span>Total: <strong className="text-slate-900 dark:text-white font-mono">{dayData.trades.length}</strong>,</span>
+                          <span className="text-emerald-600 dark:text-emerald-400">Wins: <strong className="font-mono">{dayData.winCount}</strong>,</span>
+                          <span className="text-rose-600 dark:text-rose-400">Losses: <strong className="font-mono">{dayData.lossCount}</strong></span>
+                        </div>
+                        {/* Compact view on narrow phone displays */}
+                        <div className="flex min-[480px]:hidden items-center justify-between text-[8px] font-bold leading-none">
+                          <span className="text-slate-600 dark:text-slate-300">Total:{dayData.trades.length}</span>
+                          <span className="text-emerald-600 dark:text-emerald-400">W:{dayData.winCount}</span>
+                          <span className="text-rose-600 dark:text-rose-400">L:{dayData.lossCount}</span>
+                        </div>
                       </div>
                     </>
                   ) : (

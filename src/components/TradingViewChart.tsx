@@ -37,7 +37,7 @@ import {
   createSeriesMarkers,
   ISeriesMarkersPluginApi,
 } from 'lightweight-charts';
-import { Search, RefreshCw, Maximize2, AlertCircle, TrendingUp, X, SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, RefreshCw, Maximize2, AlertCircle, TrendingUp, X, SlidersHorizontal, ChevronDown, ChevronUp, Navigation } from 'lucide-react';
 import { Trade } from '../types';
 import { TradeLinePrimitive } from './TradeLinePrimitive';
 import ChartDrawingTools from './ChartDrawingTools';
@@ -198,6 +198,14 @@ const TradingViewChart = memo(function TradingViewChart({
   const [showMobileFilterDrawer, setShowMobileFilterDrawer] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [activeNotePopup, setActiveNotePopup] = useState<{ tradeId: string; note: string; x: number; y: number } | null>(null);
+  const [showTradeArrows, setShowTradeArrows] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('tv_show_trade_arrows');
+      return stored !== null ? stored === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
 
   // ─── Chart initialisation ─────────────────────────────────────────────────
 
@@ -309,6 +317,9 @@ const TradingViewChart = memo(function TradingViewChart({
     }
     primitivesRef.current = [];
 
+    // If trade arrows/markers are disabled, do not attach primitives
+    if (!showTradeArrows) return;
+
     const currentCandles = candlesRef.current || [];
     const candleTimes = currentCandles.map(c => c.time as number);
 
@@ -393,7 +404,7 @@ const TradingViewChart = memo(function TradingViewChart({
         console.warn('Could not attach primitive', e);
       }
     }
-  }, [trades, symbol, filterMode]);
+  }, [trades, symbol, filterMode, showTradeArrows]);
 
   // ─── Fetch OHLC data ──────────────────────────────────────────────────────
 
@@ -797,6 +808,25 @@ const TradingViewChart = memo(function TradingViewChart({
                   {mode}
                 </button>
               ))}
+
+              <div className={`w-px h-4 ${isDark ? 'bg-slate-700' : 'bg-slate-200'} mx-1 flex-shrink-0`} />
+
+              {/* Trade Arrows toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTradeArrows(prev => {
+                    const next = !prev;
+                    try { localStorage.setItem('tv_show_trade_arrows', String(next)); } catch {}
+                    return next;
+                  });
+                }}
+                title={showTradeArrows ? 'Hide trade arrows on chart' : 'Show trade arrows on chart'}
+                className={`text-xs font-bold px-2 py-1 rounded-md transition flex items-center gap-1.5 cursor-pointer ${showTradeArrows ? 'bg-indigo-600 text-white shadow-xs' : btnInactive}`}
+              >
+                <Navigation className={`h-3 w-3 transition-transform ${showTradeArrows ? 'rotate-45' : 'opacity-60'}`} />
+                <span>{showTradeArrows ? 'Trade Arrows' : 'Arrows Off'}</span>
+              </button>
             </div>
 
             {/* Desktop Selected trade info pill */}
@@ -910,6 +940,21 @@ const TradingViewChart = memo(function TradingViewChart({
                     {mode}
                   </button>
                 ))}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTradeArrows(prev => {
+                      const next = !prev;
+                      try { localStorage.setItem('tv_show_trade_arrows', String(next)); } catch {}
+                      return next;
+                    });
+                  }}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition cursor-pointer flex items-center gap-1 shrink-0 ${showTradeArrows ? 'bg-indigo-600 text-white' : btnInactive}`}
+                >
+                  <Navigation className={`h-2.5 w-2.5 transition-transform ${showTradeArrows ? 'rotate-45' : 'opacity-60'}`} />
+                  {showTradeArrows ? 'Arrows On' : 'Arrows Off'}
+                </button>
               </div>
               <button
                 type="button"
