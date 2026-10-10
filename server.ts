@@ -4632,7 +4632,19 @@ app.get('/api/trades', async (req, res) => {
       if (error) {
         console.error('[GET /api/trades] Supabase error:', JSON.stringify(error));
       } else {
-        accountTrades = toCamel(rows || []);
+        accountTrades = toCamel(rows || []).map((t: any) => {
+          if (typeof t.screenshot === 'string' && t.screenshot.startsWith('[') && t.screenshot.endsWith(']')) {
+            try {
+              t.screenshots = JSON.parse(t.screenshot);
+              t.screenshot = t.screenshots[0] || '';
+            } catch {}
+          } else if (t.screenshot) {
+            t.screenshots = [t.screenshot];
+          } else {
+            t.screenshots = [];
+          }
+          return t;
+        });
         console.log(`[GET /api/trades] Fetched ${accountTrades.length} trades for user ${currentUser.id} from Supabase`);
         if (accountTrades.length > 0) console.log('[GET /api/trades] First trade exitTime:', accountTrades[0].exitTime, '| Raw exit_time:', (rows || [])[0]?.exit_time);
       }
@@ -4652,9 +4664,26 @@ app.get('/api/trades', async (req, res) => {
           .filter((a: any) => a.userId === currentUser.id || !a.userId)
           .map((a: any) => a.id)
       );
-      accountTrades = accountId
+      accountTrades = (accountId
         ? (db.trades || []).filter((t: any) => t.accountId === accountId && (t.userId === currentUser.id || !t.userId))
-        : (db.trades || []).filter((t: any) => t.userId === currentUser.id || ownAccountIds.has(t.accountId));
+        : (db.trades || []).filter((t: any) => t.userId === currentUser.id || ownAccountIds.has(t.accountId)))
+        .map((t: any) => {
+          if (!t.screenshots || !Array.isArray(t.screenshots)) {
+            if (typeof t.screenshot === 'string' && t.screenshot.startsWith('[') && t.screenshot.endsWith(']')) {
+              try {
+                t.screenshots = JSON.parse(t.screenshot);
+                t.screenshot = t.screenshots[0] || '';
+              } catch {
+                t.screenshots = t.screenshot ? [t.screenshot] : [];
+              }
+            } else if (t.screenshot) {
+              t.screenshots = [t.screenshot];
+            } else {
+              t.screenshots = [];
+            }
+          }
+          return t;
+        });
       accountTrades.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
   }
@@ -4791,6 +4820,7 @@ app.post('/api/trades', async (req, res) => {
     emotion,
     notes,
     screenshot,
+    screenshots,
     tags
   } = req.body;
 
@@ -4908,6 +4938,11 @@ app.post('/api/trades', async (req, res) => {
     return res.status(400).json({ error: 'Duplicate trade submission detected. Please wait a moment.' });
   }
 
+  const screenshotsList: string[] = Array.isArray(screenshots)
+    ? screenshots.filter((s: any) => typeof s === 'string' && s.trim().length > 0)
+    : (typeof screenshot === 'string' && screenshot.trim().length > 0 ? [screenshot.trim()] : []);
+  const primaryScreenshot = screenshotsList[0] || (typeof screenshot === 'string' ? screenshot : '') || '';
+
   const newTrade: Trade = {
     id: `trade_${crypto.randomUUID()}`,
     accountId: targetAccountId,
@@ -4930,7 +4965,8 @@ app.post('/api/trades', async (req, res) => {
     strategy: strategy || 'Unspecified',
     emotion: emotion || 'Calm',
     notes: notes || '',
-    screenshot: screenshot || '',
+    screenshot: screenshotsList.length > 1 ? JSON.stringify(screenshotsList) : primaryScreenshot,
+    screenshots: screenshotsList,
     tags: tags || []
   };
 
@@ -5127,7 +5163,24 @@ app.put('/api/trades/:id', async (req, res) => {
   if (updateData.strategy !== undefined) db.trades[tradeIdx].strategy = updateData.strategy;
   if (updateData.emotion !== undefined) db.trades[tradeIdx].emotion = updateData.emotion;
   if (updateData.notes !== undefined) db.trades[tradeIdx].notes = updateData.notes;
-  if (updateData.screenshot !== undefined) db.trades[tradeIdx].screenshot = updateData.screenshot;
+  if (updateData.screenshots !== undefined) {
+    const list: string[] = Array.isArray(updateData.screenshots)
+      ? updateData.screenshots.filter((s: any) => typeof s === 'string' && s.trim().length > 0)
+      : [];
+    db.trades[tradeIdx].screenshots = list;
+    db.trades[tradeIdx].screenshot = list.length > 1 ? JSON.stringify(list) : (list[0] || updateData.screenshot || '');
+  } else if (updateData.screenshot !== undefined) {
+    db.trades[tradeIdx].screenshot = updateData.screenshot;
+    if (typeof updateData.screenshot === 'string' && updateData.screenshot.startsWith('[') && updateData.screenshot.endsWith(']')) {
+      try {
+        db.trades[tradeIdx].screenshots = JSON.parse(updateData.screenshot);
+      } catch {
+        db.trades[tradeIdx].screenshots = [updateData.screenshot];
+      }
+    } else {
+      db.trades[tradeIdx].screenshots = updateData.screenshot ? [updateData.screenshot] : [];
+    }
+  }
   if (updateData.tags !== undefined) db.trades[tradeIdx].tags = updateData.tags;
   if (updateData.date !== undefined) db.trades[tradeIdx].date = updateData.date;
 

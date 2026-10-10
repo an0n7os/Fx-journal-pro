@@ -3427,7 +3427,18 @@ async function ensureUserDbLoaded(userId, email) {
         return {
           users: toCamel(users || []),
           accounts: toCamel(accounts || []),
-          trades: toCamel(trades || []),
+          trades: toCamel(trades || []).map((t) => {
+            if (typeof t.screenshot === "string" && t.screenshot.startsWith("[") && t.screenshot.endsWith("]")) {
+              try {
+                t.screenshots = JSON.parse(t.screenshot);
+                t.screenshot = t.screenshots[0] || "";
+              } catch {
+              }
+            } else if (t.screenshot) {
+              t.screenshots = [t.screenshot];
+            }
+            return t;
+          }),
           riskSettings: toCamel(riskSettings || []),
           supportTickets: toCamel(supportTickets || []),
           mt5Deals: toCamel(mt5Deals || []),
@@ -3626,7 +3637,8 @@ async function saveDatabase(data, overrideUserId, overrideEmail, previousAliases
         "investor_password_enc",
         "password_enc_nonce",
         "password_kms_key_id",
-        "disconnected_at"
+        "disconnected_at",
+        "broker_commission"
       ]);
       const accs = toSnake(data.accounts).map((a) => {
         const clean = {};
@@ -3638,7 +3650,16 @@ async function saveDatabase(data, overrideUserId, overrideEmail, previousAliases
         clean.user_id = clean.user_id || uid;
         return clean;
       });
-      const { error: err2 } = await supabase.from("trading_accounts").upsert(accs, { onConflict: "id" });
+      let { error: err2 } = await supabase.from("trading_accounts").upsert(accs, { onConflict: "id" });
+      if (err2 && /broker_commission/i.test(err2.message || "")) {
+        const retryAccs = accs.map((a) => {
+          const c = { ...a };
+          delete c.broker_commission;
+          return c;
+        });
+        const retryRes = await supabase.from("trading_accounts").upsert(retryAccs, { onConflict: "id" });
+        err2 = retryRes.error;
+      }
       if (err2) {
         console.error("[saveDatabase] trading_accounts upsert error:", err2);
         return { accountsError: err2 };
@@ -3676,6 +3697,9 @@ async function saveDatabase(data, overrideUserId, overrideEmail, previousAliases
         const clean = {};
         for (const key of Object.keys(t)) {
           if (validTradeCols.has(key)) clean[key] = t[key];
+        }
+        if (Array.isArray(t.screenshots) && t.screenshots.length > 0) {
+          clean.screenshot = JSON.stringify(t.screenshots);
         }
         if (clean.ea_deal_id === void 0 && t.ticket !== void 0 && Number.isFinite(Number(t.ticket))) {
           clean.ea_deal_id = Number(t.ticket);
@@ -5229,7 +5253,7 @@ app.post("/api/accounts", async (req, res) => {
   if (!currentUser || !db) return res.status(401).json({ error: "Not authenticated. Please refresh the page and log in again." });
   if (!db.accounts) db.accounts = [];
   if (!db.riskSettings) db.riskSettings = [];
-  const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType, login, server, investorPassword } = req.body;
+  const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType, login, server, investorPassword, brokerCommission } = req.body;
   const existingUserAccounts = db.accounts.filter((acc) => {
     const isOwner = acc.userId === currentUser.id || acc.user_id === currentUser.id;
     if (!isOwner) return false;
@@ -5280,6 +5304,7 @@ app.post("/api/accounts", async (req, res) => {
     equity: startBal,
     status: "Active",
     isMt5Sync: !!isMt5Sync,
+    brokerCommission: brokerCommission !== void 0 ? Math.max(0, parseFloat(brokerCommission) || 0) : 0,
     eaToken: generateEaToken2(),
     // A new MT5 account has no EA running yet — the file has not even been
     // downloaded. Marking it Connected at creation told the customer they were
@@ -5350,13 +5375,16 @@ app.put("/api/accounts/:id", async (req, res) => {
   const authEmail = currentUser?.email;
   if (!currentUser || !db) return res.status(401).json({ error: "Not authenticated" });
   const { id } = req.params;
-  const { name, broker, status, currentBalance, equity, currency, startingBalance } = req.body;
+  const { name, broker, status, currentBalance, equity, currency, startingBalance, brokerCommission } = req.body;
   const accIdx = db.accounts.findIndex((acc) => acc.id === id);
   if (accIdx !== -1 && db.accounts[accIdx].userId === currentUser.id) {
     if (name) db.accounts[accIdx].name = name;
     if (broker) db.accounts[accIdx].broker = broker;
     if (status) db.accounts[accIdx].status = status;
     if (currency) db.accounts[accIdx].currency = currency;
+    if (brokerCommission !== void 0) {
+      db.accounts[accIdx].brokerCommission = Math.max(0, parseFloat(brokerCommission) || 0);
+    }
     const money = (raw) => {
       const v = typeof raw === "number" ? raw : parseFloat(String(raw));
       if (!Number.isFinite(v)) return null;
@@ -5427,7 +5455,20 @@ app.get("/api/trades", async (req, res) => {
       if (error) {
         console.error("[GET /api/trades] Supabase error:", JSON.stringify(error));
       } else {
-        accountTrades = toCamel(rows || []);
+        accountTrades = toCamel(rows || []).map((t) => {
+          if (typeof t.screenshot === "string" && t.screenshot.startsWith("[") && t.screenshot.endsWith("]")) {
+            try {
+              t.screenshots = JSON.parse(t.screenshot);
+              t.screenshot = t.screenshots[0] || "";
+            } catch {
+            }
+          } else if (t.screenshot) {
+            t.screenshots = [t.screenshot];
+          } else {
+            t.screenshots = [];
+          }
+          return t;
+        });
         console.log(`[GET /api/trades] Fetched ${accountTrades.length} trades for user ${currentUser.id} from Supabase`);
         if (accountTrades.length > 0) console.log("[GET /api/trades] First trade exitTime:", accountTrades[0].exitTime, "| Raw exit_time:", (rows || [])[0]?.exit_time);
       }
@@ -5441,7 +5482,23 @@ app.get("/api/trades", async (req, res) => {
       const ownAccountIds = new Set(
         (db.accounts || []).filter((a) => a.userId === currentUser.id || !a.userId).map((a) => a.id)
       );
-      accountTrades = accountId ? (db.trades || []).filter((t) => t.accountId === accountId && (t.userId === currentUser.id || !t.userId)) : (db.trades || []).filter((t) => t.userId === currentUser.id || ownAccountIds.has(t.accountId));
+      accountTrades = (accountId ? (db.trades || []).filter((t) => t.accountId === accountId && (t.userId === currentUser.id || !t.userId)) : (db.trades || []).filter((t) => t.userId === currentUser.id || ownAccountIds.has(t.accountId))).map((t) => {
+        if (!t.screenshots || !Array.isArray(t.screenshots)) {
+          if (typeof t.screenshot === "string" && t.screenshot.startsWith("[") && t.screenshot.endsWith("]")) {
+            try {
+              t.screenshots = JSON.parse(t.screenshot);
+              t.screenshot = t.screenshots[0] || "";
+            } catch {
+              t.screenshots = t.screenshot ? [t.screenshot] : [];
+            }
+          } else if (t.screenshot) {
+            t.screenshots = [t.screenshot];
+          } else {
+            t.screenshots = [];
+          }
+        }
+        return t;
+      });
       accountTrades.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
   }
@@ -5545,6 +5602,7 @@ app.post("/api/trades", async (req, res) => {
     emotion,
     notes,
     screenshot,
+    screenshots,
     tags
   } = req.body;
   if (!symbol || !type || !lotSize || !entryPrice || !exitPrice || profit === void 0 || profit === null || profit === "") {
@@ -5630,6 +5688,8 @@ app.post("/api/trades", async (req, res) => {
   if (duplicateExists) {
     return res.status(400).json({ error: "Duplicate trade submission detected. Please wait a moment." });
   }
+  const screenshotsList = Array.isArray(screenshots) ? screenshots.filter((s) => typeof s === "string" && s.trim().length > 0) : typeof screenshot === "string" && screenshot.trim().length > 0 ? [screenshot.trim()] : [];
+  const primaryScreenshot = screenshotsList[0] || (typeof screenshot === "string" ? screenshot : "") || "";
   const newTrade = {
     id: `trade_${crypto4.randomUUID()}`,
     accountId: targetAccountId,
@@ -5652,7 +5712,8 @@ app.post("/api/trades", async (req, res) => {
     strategy: strategy || "Unspecified",
     emotion: emotion || "Calm",
     notes: notes || "",
-    screenshot: screenshot || "",
+    screenshot: screenshotsList.length > 1 ? JSON.stringify(screenshotsList) : primaryScreenshot,
+    screenshots: screenshotsList,
     tags: tags || []
   };
   const netProfit2 = newTrade.profit + newTrade.commission + newTrade.swap;
@@ -5805,7 +5866,22 @@ app.put("/api/trades/:id", async (req, res) => {
   if (updateData.strategy !== void 0) db.trades[tradeIdx].strategy = updateData.strategy;
   if (updateData.emotion !== void 0) db.trades[tradeIdx].emotion = updateData.emotion;
   if (updateData.notes !== void 0) db.trades[tradeIdx].notes = updateData.notes;
-  if (updateData.screenshot !== void 0) db.trades[tradeIdx].screenshot = updateData.screenshot;
+  if (updateData.screenshots !== void 0) {
+    const list = Array.isArray(updateData.screenshots) ? updateData.screenshots.filter((s) => typeof s === "string" && s.trim().length > 0) : [];
+    db.trades[tradeIdx].screenshots = list;
+    db.trades[tradeIdx].screenshot = list.length > 1 ? JSON.stringify(list) : list[0] || updateData.screenshot || "";
+  } else if (updateData.screenshot !== void 0) {
+    db.trades[tradeIdx].screenshot = updateData.screenshot;
+    if (typeof updateData.screenshot === "string" && updateData.screenshot.startsWith("[") && updateData.screenshot.endsWith("]")) {
+      try {
+        db.trades[tradeIdx].screenshots = JSON.parse(updateData.screenshot);
+      } catch {
+        db.trades[tradeIdx].screenshots = [updateData.screenshot];
+      }
+    } else {
+      db.trades[tradeIdx].screenshots = updateData.screenshot ? [updateData.screenshot] : [];
+    }
+  }
   if (updateData.tags !== void 0) db.trades[tradeIdx].tags = updateData.tags;
   if (updateData.date !== void 0) db.trades[tradeIdx].date = updateData.date;
   const updated = db.trades[tradeIdx];

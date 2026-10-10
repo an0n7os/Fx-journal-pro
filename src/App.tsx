@@ -21,7 +21,8 @@ import {
   Trade,
   RiskSettings,
   SupportTicket,
-  Announcement
+  Announcement,
+  getTradeScreenshots
 } from './types';
 
 import { supabase } from './supabaseClient';
@@ -549,13 +550,41 @@ export default function App() {
   const [tradeNotes, setTradeNotes] = useState('');
   const [showNoteField, setShowNoteField] = useState(false);
   const [showEmotionField, setShowEmotionField] = useState(false);
+  const [tradeScreenshots, setTradeScreenshots] = useState<string[]>([]);
   const [tradeScreenshot, setTradeScreenshot] = useState('');
   const [showChartField, setShowChartField] = useState(false);
   const [screenshotError, setScreenshotError] = useState('');
   const [screenshotBusy, setScreenshotBusy] = useState(false);
   const [screenshotDragging, setScreenshotDragging] = useState(false);
-  /** Full-size chart image opened from the journal. */
-  const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
+  /** Full-size chart images opened from the journal. */
+  const [viewingScreenshots, setViewingScreenshots] = useState<{ images: string[]; index: number } | null>(null);
+  const viewingScreenshot = viewingScreenshots ? (viewingScreenshots.images[viewingScreenshots.index] || null) : null;
+  const setViewingScreenshot = (url: string | null) => {
+    if (!url) {
+      setViewingScreenshots(null);
+    } else {
+      if (url.startsWith('[') && url.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(url);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setViewingScreenshots({ images: parsed, index: 0 });
+            return;
+          }
+        } catch {}
+      }
+      setViewingScreenshots({ images: [url], index: 0 });
+    }
+  };
+  const openScreenshotLightbox = (imgs: string[] | string, idx = 0) => {
+    if (typeof imgs === 'string') {
+      setViewingScreenshot(imgs);
+    } else if (Array.isArray(imgs) && imgs.length > 0) {
+      setViewingScreenshots({
+        images: imgs,
+        index: Math.max(0, Math.min(idx, imgs.length - 1))
+      });
+    }
+  };
   const screenshotInputRef = useRef<HTMLInputElement>(null);
   const [tradeTags, setTradeTags] = useState<string[]>([]);
   // Symbol autocomplete
@@ -672,15 +701,26 @@ export default function App() {
   // dismissed with the button in their corner.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      setShowExportModal(false);
-      setShowPasteModal(false);
-      setShowTicketModal(false);
-      setShowEditAccountModal(false);
-      setShowTradeModal(false);
-      setShowAccountModal(false);
-      setViewingScreenshot(null);
-      setSelectedNote(null);
+      if (e.key === 'Escape') {
+        setShowExportModal(false);
+        setShowPasteModal(false);
+        setShowTicketModal(false);
+        setShowEditAccountModal(false);
+        setShowTradeModal(false);
+        setShowAccountModal(false);
+        setViewingScreenshots(null);
+        setSelectedNote(null);
+      } else if (e.key === 'ArrowLeft') {
+        setViewingScreenshots(prev => (prev && prev.images.length > 1) ? {
+          ...prev,
+          index: (prev.index - 1 + prev.images.length) % prev.images.length
+        } : prev);
+      } else if (e.key === 'ArrowRight') {
+        setViewingScreenshots(prev => (prev && prev.images.length > 1) ? {
+          ...prev,
+          index: (prev.index + 1) % prev.images.length
+        } : prev);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -1885,30 +1925,71 @@ export default function App() {
       reader.readAsDataURL(file);
     });
 
-  const handleScreenshotFile = async (file: File | null | undefined) => {
-    if (!file) return;
+  const MAX_SCREENSHOTS_PER_TRADE = 8;
+
+  const handleScreenshotFiles = async (files: FileList | File[] | null | undefined) => {
+    if (!files || files.length === 0) return;
     setScreenshotError('');
-    if (!file.type.startsWith('image/')) {
-      setScreenshotError('Only image files can be attached.');
+    const fileList = Array.from(files);
+
+    const remainingSlots = MAX_SCREENSHOTS_PER_TRADE - tradeScreenshots.length;
+    if (remainingSlots <= 0) {
+      setScreenshotError(`Maximum of ${MAX_SCREENSHOTS_PER_TRADE} screenshots allowed per trade.`);
       return;
     }
-    if (file.size > MAX_SCREENSHOT_BYTES) {
-      setScreenshotError('That image is over 8MB. Please pick a smaller one.');
-      return;
+
+    const toProcess = fileList.slice(0, remainingSlots);
+    if (fileList.length > remainingSlots) {
+      setScreenshotError(`Can only attach ${remainingSlots} more image(s) (limit ${MAX_SCREENSHOTS_PER_TRADE}).`);
     }
-    setScreenshotBusy(true);
-    try {
-      const dataUrl = await compressImageFile(file);
-      if (dataUrl.length * 0.75 > MAX_STORED_SCREENSHOT_BYTES) {
-        setScreenshotError('Image is still too large after compression. Try a screenshot instead of a photo.');
+
+    for (const f of toProcess) {
+      if (!f.type.startsWith('image/')) {
+        setScreenshotError('Only image files can be attached.');
         return;
       }
-      setTradeScreenshot(dataUrl);
+      if (f.size > MAX_SCREENSHOT_BYTES) {
+        setScreenshotError(`"${f.name}" is over 8MB. Please select a smaller image.`);
+        return;
+      }
+    }
+
+    setScreenshotBusy(true);
+    try {
+      const compressedList: string[] = [];
+      for (const f of toProcess) {
+        const dataUrl = await compressImageFile(f);
+        if (dataUrl.length * 0.75 > MAX_STORED_SCREENSHOT_BYTES) {
+          setScreenshotError('One of the images is still too large after compression.');
+          continue;
+        }
+        compressedList.push(dataUrl);
+      }
+      if (compressedList.length > 0) {
+        setTradeScreenshots(prev => {
+          const updated = [...prev, ...compressedList].slice(0, MAX_SCREENSHOTS_PER_TRADE);
+          setTradeScreenshot(updated[0] || '');
+          return updated;
+        });
+      }
     } catch (err: any) {
-      setScreenshotError(err?.message || 'Could not process that image.');
+      setScreenshotError(err?.message || 'Could not process image(s).');
     } finally {
       setScreenshotBusy(false);
     }
+  };
+
+  const handleScreenshotFile = (file: File | null | undefined) => {
+    if (file) handleScreenshotFiles([file]);
+  };
+
+  const handleRemoveScreenshot = (indexToRemove: number) => {
+    setTradeScreenshots(prev => {
+      const next = prev.filter((_, idx) => idx !== indexToRemove);
+      setTradeScreenshot(next[0] || '');
+      return next;
+    });
+    setScreenshotError('');
   };
 
   // Trade Operations
@@ -1957,8 +2038,10 @@ export default function App() {
       setTradeNotes(trade.notes || '');
       setShowNoteField(!!(trade.notes && trade.notes.trim().length > 0));
       setShowEmotionField(!!(trade.emotion && trade.emotion !== 'Calm'));
-      setTradeScreenshot(trade.screenshot || '');
-      setShowChartField(!!trade.screenshot);
+      const initialScreenshots = getTradeScreenshots(trade);
+      setTradeScreenshots(initialScreenshots);
+      setTradeScreenshot(initialScreenshots[0] || '');
+      setShowChartField(initialScreenshots.length > 0);
       setScreenshotError('');
       setTradeTags(trade.tags || []);
     } else {
@@ -1990,6 +2073,7 @@ export default function App() {
       setTradeNotes('');
       setShowNoteField(false);
       setShowEmotionField(false);
+      setTradeScreenshots([]);
       setTradeScreenshot('');
       setShowChartField(false);
       setScreenshotError('');
@@ -2052,7 +2136,8 @@ export default function App() {
       strategy: tradeStrategy,
       emotion: tradeEmotion,
       notes: tradeNotes,
-      screenshot: tradeScreenshot,
+      screenshot: tradeScreenshots[0] || '',
+      screenshots: tradeScreenshots,
       tags: tradeTags
     };
 
@@ -6293,23 +6378,32 @@ export default function App() {
                                         ) : (
                                           <span className="text-slate-400 dark:text-slate-600">-</span>
                                         )}
-                                        {t.screenshot && (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); setViewingScreenshot(t.screenshot || ''); }}
-                                            className="group relative flex items-center justify-center shrink-0 w-7 h-7 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700/80 hover:border-violet-500 shadow-xs transition-all duration-200 hover:scale-110 cursor-pointer bg-slate-100 dark:bg-slate-800"
-                                            title="View chart screenshot"
-                                          >
-                                            <img
-                                              src={t.screenshot}
-                                              alt="Trade chart screenshot"
-                                              className="w-full h-full object-cover"
-                                            />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                              <Eye className="h-3 w-3 text-white" />
-                                            </div>
-                                          </button>
-                                        )}
+                                        {(() => {
+                                          const tScreenshots = getTradeScreenshots(t);
+                                          if (tScreenshots.length === 0) return null;
+                                          return (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => { e.stopPropagation(); openScreenshotLightbox(tScreenshots, 0); }}
+                                              className="group relative flex items-center justify-center shrink-0 w-7 h-7 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700/80 hover:border-violet-500 shadow-xs transition-all duration-200 hover:scale-110 cursor-pointer bg-slate-100 dark:bg-slate-800"
+                                              title={`View ${tScreenshots.length} chart image${tScreenshots.length > 1 ? 's' : ''}`}
+                                            >
+                                              <img
+                                                src={tScreenshots[0]}
+                                                alt="Trade chart screenshot"
+                                                className="w-full h-full object-cover"
+                                              />
+                                              {tScreenshots.length > 1 && (
+                                                <span className="absolute bottom-0 right-0 bg-violet-600/95 text-[8px] font-extrabold text-white px-1 leading-tight rounded-tl">
+                                                  {tScreenshots.length}
+                                                </span>
+                                              )}
+                                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <Eye className="h-3 w-3 text-white" />
+                                              </div>
+                                            </button>
+                                          );
+                                        })()}
                                         {t.notes && (
                                           <button
                                             onClick={(e) => { e.stopPropagation(); setSelectedNote(t.notes || ''); }}
@@ -6385,19 +6479,28 @@ export default function App() {
                                 <span className={`font-bold text-[11px] ${t.type === 'Buy' ? 'text-blue-500 dark:text-blue-400' : 'text-rose-500 dark:text-rose-400'} uppercase tracking-wide`}>{t.type}</span>
                                 <span className="text-[12px] text-slate-500 dark:text-slate-400">{t.lotSize} lots</span>
                                 {t.emotion && <span className="ml-2 text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded-full">{t.emotion}</span>}
-                                {t.screenshot && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); setViewingScreenshot(t.screenshot || ''); }}
-                                    className="group relative flex items-center justify-center shrink-0 w-6 h-6 rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 hover:border-violet-500 shadow-xs transition-all cursor-pointer bg-slate-100 dark:bg-slate-800"
-                                    title="View chart screenshot"
-                                  >
-                                    <img src={t.screenshot} alt="Trade chart" className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                      <Eye className="h-2.5 w-2.5 text-white" />
-                                    </div>
-                                  </button>
-                                )}
+                                {(() => {
+                                  const tScreenshots = getTradeScreenshots(t);
+                                  if (tScreenshots.length === 0) return null;
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); openScreenshotLightbox(tScreenshots, 0); }}
+                                      className="group relative flex items-center justify-center shrink-0 w-6 h-6 rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 hover:border-violet-500 shadow-xs transition-all cursor-pointer bg-slate-100 dark:bg-slate-800"
+                                      title={`View ${tScreenshots.length} chart image${tScreenshots.length > 1 ? 's' : ''}`}
+                                    >
+                                      <img src={tScreenshots[0]} alt="Trade chart" className="w-full h-full object-cover" />
+                                      {tScreenshots.length > 1 && (
+                                        <span className="absolute bottom-0 right-0 bg-violet-600/95 text-[7px] font-extrabold text-white px-0.5 leading-tight rounded-tl">
+                                          {tScreenshots.length}
+                                        </span>
+                                      )}
+                                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <Eye className="h-2.5 w-2.5 text-white" />
+                                      </div>
+                                    </button>
+                                  );
+                                })()}
                                 {t.notes && <button onClick={(e) => { e.stopPropagation(); setSelectedNote(t.notes || ''); }} className="text-slate-400 hover:text-violet-500 transition-colors -m-2 p-2 shrink-0" title="Read Note"><MessageSquare className="h-3.5 w-3.5" /></button>}
                               </div>
                               <div className="flex items-center justify-between">
@@ -10004,40 +10107,98 @@ export default function App() {
       )}
 
       {/* Trade Chart Screenshot Lightbox */}
-      {viewingScreenshot && (
+      {viewingScreenshots && viewingScreenshots.images.length > 0 && (
         <div
-          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-[80]"
-          onClick={() => setViewingScreenshot(null)}
+          className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 z-[80]"
+          onClick={() => setViewingScreenshots(null)}
         >
-          <div className="relative max-w-4xl w-full" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-white/80 text-[13px] font-bold inline-flex items-center gap-2">
-                <ImageIcon className="h-4 w-4" />
-                Trade Chart
+          <div className="relative max-w-5xl w-full flex flex-col items-center" onClick={e => e.stopPropagation()}>
+            {/* Top Bar */}
+            <div className="flex items-center justify-between w-full mb-3 text-white">
+              <span className="text-[13px] font-bold inline-flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-violet-400" />
+                Trade Chart {viewingScreenshots.images.length > 1 && (
+                  <span className="text-white/60 font-medium text-xs">
+                    ({viewingScreenshots.index + 1} of {viewingScreenshots.images.length})
+                  </span>
+                )}
               </span>
               <div className="flex items-center gap-2">
                 <a
-                  href={viewingScreenshot}
-                  download="trade-chart.jpg"
+                  href={viewingScreenshots.images[viewingScreenshots.index]}
+                  download={`trade-chart-${viewingScreenshots.index + 1}.jpg`}
                   className="text-white/70 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10"
                   title="Download image"
                 >
                   <Download className="h-4 w-4" />
                 </a>
                 <button
-                  onClick={() => setViewingScreenshot(null)}
-                  className="text-white/70 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10"
-                  title="Close"
+                  type="button"
+                  onClick={() => setViewingScreenshots(null)}
+                  className="text-white/70 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10 cursor-pointer"
+                  title="Close (Esc)"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
-            <img
-              src={viewingScreenshot}
-              alt="Trade chart screenshot"
-              className="w-full max-h-[80vh] object-contain rounded-xl border border-white/10 shadow-2xl bg-slate-900"
-            />
+
+            {/* Main Image View with Prev/Next buttons */}
+            <div className="relative w-full flex items-center justify-center">
+              {viewingScreenshots.images.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setViewingScreenshots(prev => prev ? {
+                    ...prev,
+                    index: (prev.index - 1 + prev.images.length) % prev.images.length
+                  } : null)}
+                  className="absolute left-2 sm:left-3 z-10 p-2 rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/20 transition-all hover:scale-110 cursor-pointer shadow-lg"
+                  title="Previous image (Left arrow)"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+              )}
+
+              <img
+                src={viewingScreenshots.images[viewingScreenshots.index]}
+                alt={`Trade chart screenshot ${viewingScreenshots.index + 1}`}
+                className="w-full max-h-[75vh] object-contain rounded-xl border border-white/10 shadow-2xl bg-slate-900 select-none"
+              />
+
+              {viewingScreenshots.images.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setViewingScreenshots(prev => prev ? {
+                    ...prev,
+                    index: (prev.index + 1) % prev.images.length
+                  } : null)}
+                  className="absolute right-2 sm:right-3 z-10 p-2 rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/20 transition-all hover:scale-110 cursor-pointer shadow-lg"
+                  title="Next image (Right arrow)"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+
+            {/* Thumbnail navigation strip */}
+            {viewingScreenshots.images.length > 1 && (
+              <div className="flex items-center gap-2 mt-3 px-3 py-2 bg-slate-900/80 border border-white/10 rounded-xl overflow-x-auto max-w-full">
+                {viewingScreenshots.images.map((img, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setViewingScreenshots(prev => prev ? { ...prev, index: i } : null)}
+                    className={`relative w-12 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
+                      i === viewingScreenshots.index
+                        ? 'border-violet-500 ring-2 ring-violet-500/40 scale-105'
+                        : 'border-white/20 opacity-60 hover:opacity-100 hover:border-white/50'
+                    }`}
+                  >
+                    <img src={img} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -10389,7 +10550,7 @@ export default function App() {
                     <Plus className={`h-3 w-3 transition-transform duration-200 ${showChartField ? 'rotate-45' : ''}`} />
                     <ImageIcon className="h-3.5 w-3.5" />
                     Image
-                    {tradeScreenshot && <span className="opacity-70 font-normal">· 1</span>}
+                    {tradeScreenshots.length > 0 && <span className="opacity-70 font-normal">· {tradeScreenshots.length}</span>}
                   </button>
 
                 </div>
@@ -10428,54 +10589,141 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Expanded: Chart screenshot */}
+                {/* Expanded: Chart screenshots */}
                 {showChartField && (
                   <div className="animate-in fade-in slide-in-from-top-2 duration-200">
                     <input
                       ref={screenshotInputRef}
                       type="file"
                       accept="image/*"
+                      multiple
                       className="hidden"
                       onChange={(e) => {
-                        handleScreenshotFile(e.target.files?.[0]);
+                        handleScreenshotFiles(e.target.files);
                         // Cleared so picking the same file twice still fires onChange.
                         e.target.value = '';
                       }}
                     />
 
-                    {tradeScreenshot ? (
-                      <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900">
-                        <img
-                          src={tradeScreenshot}
-                          alt="Trade image screenshot"
-                          className="w-full max-h-52 object-contain bg-slate-100 dark:bg-slate-900 cursor-zoom-in"
-                          onClick={() => setViewingScreenshot(tradeScreenshot)}
-                        />
-                        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10">
-                          <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
+                    {tradeScreenshots.length > 0 ? (
+                      <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900 p-3">
+                        <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-slate-200/80 dark:border-white/10">
+                          <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 inline-flex items-center gap-1.5">
                             <ImageIcon className="h-3.5 w-3.5 text-violet-500" />
-                            Image attached
+                            Attached Images ({tradeScreenshots.length}/{MAX_SCREENSHOTS_PER_TRADE})
                           </span>
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2.5">
+                            {tradeScreenshots.length < MAX_SCREENSHOTS_PER_TRADE && (
+                              <button
+                                type="button"
+                                onClick={() => screenshotInputRef.current?.click()}
+                                disabled={screenshotBusy}
+                                className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:text-violet-500 transition-colors inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                              >
+                                <Plus className="h-3 w-3" />
+                                Add more
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() => screenshotInputRef.current?.click()}
-                              className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:text-violet-500 transition-colors cursor-pointer"
-                            >
-                              Replace
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => { setTradeScreenshot(''); setScreenshotError(''); }}
+                              onClick={() => { setTradeScreenshots([]); setTradeScreenshot(''); setScreenshotError(''); }}
                               className="text-[11px] font-bold text-rose-500 hover:text-rose-600 transition-colors inline-flex items-center gap-1 cursor-pointer"
                             >
                               <X className="h-3 w-3" />
-                              Remove
+                              Remove all
                             </button>
                           </div>
                         </div>
+
+                        {/* If single screenshot, show spacious preview with quick actions */}
+                        {tradeScreenshots.length === 1 ? (
+                          <div className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-950 group">
+                            <img
+                              src={tradeScreenshots[0]}
+                              alt="Trade image screenshot"
+                              className="w-full max-h-56 object-contain bg-slate-100 dark:bg-slate-900 cursor-zoom-in"
+                              onClick={() => openScreenshotLightbox(tradeScreenshots, 0)}
+                            />
+                            <div className="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-semibold px-2 py-0.5 rounded-md">
+                              Chart 1
+                            </div>
+                            <div className="absolute top-2 right-2">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveScreenshot(0)}
+                                className="p-1 rounded-md bg-black/60 hover:bg-rose-600 text-white transition-colors cursor-pointer"
+                                title="Remove image"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white/90 dark:bg-slate-900/90 border-t border-slate-200 dark:border-white/10">
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                Click image to preview full-size
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => screenshotInputRef.current?.click()}
+                                  className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:text-violet-500 cursor-pointer"
+                                >
+                                  + Add another
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Grid view for multiple screenshots */
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                            {tradeScreenshots.map((img, idx) => (
+                              <div
+                                key={idx}
+                                className="group relative rounded-lg overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-950 aspect-[4/3]"
+                              >
+                                <img
+                                  src={img}
+                                  alt={`Trade screenshot ${idx + 1}`}
+                                  className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform duration-200"
+                                  onClick={() => openScreenshotLightbox(tradeScreenshots, idx)}
+                                />
+                                <div className="absolute top-1.5 left-1.5 bg-slate-900/80 backdrop-blur-xs text-white text-[9.5px] font-bold px-1.5 py-0.5 rounded">
+                                  #{idx + 1}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleRemoveScreenshot(idx); }}
+                                  className="absolute top-1.5 right-1.5 p-1 rounded-full bg-slate-900/80 hover:bg-rose-600 text-white transition-colors cursor-pointer shadow"
+                                  title="Remove this image"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                                <div
+                                  className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-zoom-in pointer-events-none"
+                                >
+                                  <span className="text-white text-[11px] font-semibold flex items-center gap-1">
+                                    <Eye className="h-3.5 w-3.5" /> View
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+
+                            {/* Add More card inside grid if under limit */}
+                            {tradeScreenshots.length < MAX_SCREENSHOTS_PER_TRADE && (
+                              <button
+                                type="button"
+                                onClick={() => screenshotInputRef.current?.click()}
+                                disabled={screenshotBusy}
+                                className="border-2 border-dashed border-slate-300 dark:border-white/10 hover:border-violet-500 dark:hover:border-violet-500 rounded-lg aspect-[4/3] flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-400 transition-all cursor-pointer bg-white/40 dark:bg-white/[0.01]"
+                              >
+                                <Plus className="h-5 w-5" />
+                                <span className="text-[11px] font-semibold">Add image</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ) : (
+                      /* Empty state dropzone */
                       <button
                         type="button"
                         onClick={() => screenshotInputRef.current?.click()}
@@ -10484,12 +10732,14 @@ export default function App() {
                         onDrop={(e) => {
                           e.preventDefault();
                           setScreenshotDragging(false);
-                          handleScreenshotFile(e.dataTransfer.files?.[0]);
+                          handleScreenshotFiles(e.dataTransfer.files);
                         }}
                         onPaste={(e) => {
-                          const item = Array.from(e.clipboardData?.items || [])
-                            .find(i => i.type.startsWith('image/'));
-                          if (item) handleScreenshotFile(item.getAsFile());
+                          const items = Array.from(e.clipboardData?.items || [])
+                            .filter(i => i.type.startsWith('image/'))
+                            .map(i => i.getAsFile())
+                            .filter(Boolean) as File[];
+                          if (items.length > 0) handleScreenshotFiles(items);
                         }}
                         disabled={screenshotBusy}
                         className={`w-full rounded-xl border-2 border-dashed px-4 py-7 flex flex-col items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer disabled:opacity-60 ${screenshotDragging
@@ -10499,10 +10749,10 @@ export default function App() {
                       >
                         <Upload className={`h-5 w-5 ${screenshotDragging ? 'text-violet-500' : 'text-slate-400'}`} />
                         <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                          {screenshotBusy ? 'Processing image…' : 'Upload trade image'}
+                          {screenshotBusy ? 'Processing images…' : 'Upload trade images'}
                         </span>
                         <span className="text-[10px] text-slate-400">
-                          Click, drag and drop, or paste · PNG/JPG up to 8MB
+                          Click, drag and drop, or paste (multiple images supported up to 8) · PNG/JPG up to 8MB
                         </span>
                       </button>
                     )}
