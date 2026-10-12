@@ -2215,9 +2215,9 @@ function createEmptyUserDb(userId, email, injectDummyUser = false) {
         platform: "MT5",
         accountType: "Demo",
         currency: "USD",
-        startingBalance: 0,
-        currentBalance: 0,
-        equity: 0,
+        startingBalance: 1e3,
+        currentBalance: 1e3,
+        equity: 1e3,
         status: "Active",
         eaToken: `ea_demo_${cleanUserId.slice(-8)}`,
         eaStatus: "Not Connected",
@@ -3911,9 +3911,9 @@ async function ensureDefaultPortfolioAccount(db, userId, email) {
       platform: "MT5",
       accountType: "Demo",
       currency: "USD",
-      startingBalance: 0,
-      currentBalance: 0,
-      equity: 0,
+      startingBalance: 1e3,
+      currentBalance: 1e3,
+      equity: 1e3,
       status: "Active",
       eaToken: generateEaToken2(),
       eaStatus: "Not Connected",
@@ -4325,9 +4325,9 @@ app.use(async (req, res, next) => {
               platform: "MT5",
               account_type: "DEMO",
               currency: "USD",
-              starting_balance: 1e4,
-              current_balance: 1e4,
-              equity: 1e4,
+              starting_balance: 1e3,
+              current_balance: 1e3,
+              equity: 1e3,
               status: "ACTIVE",
               is_mt5_sync: false,
               is_default_demo: true
@@ -5255,12 +5255,14 @@ app.get("/api/accounts", async (req, res) => {
             } catch (calibErr) {
               console.error("[GET /api/accounts] Calibration error:", calibErr);
             }
-          } else if (isDefaultDemoAccount(acc) && acc.startingBalance === 1e4) {
-            acc.startingBalance = 0;
-            acc.currentBalance = 0;
-            acc.equity = 0;
+          } else if (isDefaultDemoAccount(acc) && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 1e4)) {
+            acc.startingBalance = 1e3;
+            const { data: tradeRows } = await supabase.from("trades").select("*").eq("account_id", acc.id);
+            const closedPnl = (tradeRows || []).filter((t) => t.type !== "Deposit" && t.type !== "Withdrawal").reduce((sum, t) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
+            acc.currentBalance = parseFloat((1e3 + closedPnl).toFixed(2));
+            acc.equity = acc.currentBalance;
             try {
-              await supabase.from("trading_accounts").update({ starting_balance: 0, current_balance: 0, equity: 0 }).eq("id", acc.id);
+              await supabase.from("trading_accounts").update({ starting_balance: 1e3, current_balance: acc.currentBalance, equity: acc.equity }).eq("id", acc.id);
             } catch {
             }
           }
@@ -5295,6 +5297,12 @@ app.get("/api/accounts", async (req, res) => {
     }
   }
   for (const acc of userAccounts) {
+    if (isDefaultDemoAccount(acc) && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 1e4)) {
+      acc.startingBalance = 1e3;
+      const closedPnl = (db.trades || []).filter((t) => (t.accountId || t.account_id) === acc.id && t.type !== "Deposit" && t.type !== "Withdrawal").reduce((sum, t) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
+      acc.currentBalance = parseFloat((1e3 + closedPnl).toFixed(2));
+      acc.equity = acc.currentBalance;
+    }
     const hasEstablishedStartingBalance = typeof acc.startingBalance === "number" && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 1e4 || !!acc.eaLastSyncTime);
     const isUncalibratedMt5 = acc.isMt5Sync && !hasEstablishedStartingBalance && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 1e4);
     if (isUncalibratedMt5) {
@@ -5352,7 +5360,7 @@ app.post("/api/accounts", async (req, res) => {
   if (isMt5Sync) {
     startBal = startingBalance !== void 0 && startingBalance !== null && startingBalance !== "" ? parseFloat(startingBalance) || 0 : 0;
   } else {
-    startBal = parseFloat(startingBalance) || 1e4;
+    startBal = parseFloat(startingBalance) || 1e3;
   }
   let enc = null;
   if (investorPassword) {
@@ -5465,8 +5473,30 @@ app.put("/api/accounts/:id", async (req, res) => {
       }
     }
     if (startingBalance !== void 0) db.accounts[accIdx].startingBalance = money(startingBalance);
-    if (currentBalance !== void 0) db.accounts[accIdx].currentBalance = money(currentBalance);
+    if (currentBalance !== void 0) {
+      db.accounts[accIdx].currentBalance = money(currentBalance);
+      if (equity === void 0) {
+        db.accounts[accIdx].equity = money(currentBalance);
+      }
+    }
     if (equity !== void 0) db.accounts[accIdx].equity = money(equity);
+    if (startingBalance !== void 0 || currentBalance !== void 0) {
+      db.accounts[accIdx].isDefaultDemo = false;
+    }
+    if (supabase) {
+      const updatePayload = {};
+      if (name) updatePayload.name = name;
+      if (currency) updatePayload.currency = currency;
+      if (startingBalance !== void 0) updatePayload.starting_balance = db.accounts[accIdx].startingBalance;
+      if (currentBalance !== void 0) updatePayload.current_balance = db.accounts[accIdx].currentBalance;
+      if (db.accounts[accIdx].equity !== void 0) updatePayload.equity = db.accounts[accIdx].equity;
+      updatePayload.is_default_demo = false;
+      try {
+        await supabase.from("trading_accounts").update(updatePayload).eq("id", id);
+      } catch (sbErr) {
+        console.error("[PUT /api/accounts/:id] Supabase direct update error:", sbErr);
+      }
+    }
     await saveDatabase(db, authEmail);
     res.json({ message: "Account updated successfully", account: sanitizeAccount(db.accounts[accIdx]) });
   } else if (accIdx !== -1) {
@@ -5735,9 +5765,9 @@ app.post("/api/trades", async (req, res) => {
         userId: currentUser.id,
         name: "Main Trading Account",
         broker: "MetaTrader 5",
-        startingBalance: 1e4,
-        currentBalance: 1e4,
-        equity: 1e4,
+        startingBalance: 1e3,
+        currentBalance: 1e3,
+        equity: 1e3,
         currency: "USD",
         status: "Active",
         createdAt: (/* @__PURE__ */ new Date()).toISOString()

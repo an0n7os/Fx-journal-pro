@@ -498,7 +498,7 @@ export default function App() {
   const [newAccType, setNewAccType] = useState<'Live' | 'Demo'>('Live');
   const [newAccInstitutionType, setNewAccInstitutionType] = useState<'Broker' | 'Prop Firm'>('Broker');
   const [newAccCurrency, setNewAccCurrency] = useState('USD');
-  const [newAccBalance, setNewAccBalance] = useState('10000');
+  const [newAccBalance, setNewAccBalance] = useState('1000');
 
   const [accountCreationMethod, setAccountCreationMethod] = useState<'select' | 'manual' | 'mt5'>('select');
   const [newAccBalanceMode, setNewAccBalanceMode] = useState<'auto' | 'manual'>('auto');
@@ -513,6 +513,7 @@ export default function App() {
   const [editingAccount, setEditingAccount] = useState<TradingAccount | null>(null);
   const [editAccName, setEditAccName] = useState('');
   const [editAccStartingBalance, setEditAccStartingBalance] = useState('');
+  const [editAccCurrentBalance, setEditAccCurrentBalance] = useState('');
   const [editAccCurrency, setEditAccCurrency] = useState('USD');
 
   // Trade form fields
@@ -1765,7 +1766,7 @@ export default function App() {
           platform: 'MT5',
           accountType: newAccType,
           currency: newAccCurrency,
-          startingBalance: accountCreationMethod === 'mt5' ? '' : (newAccBalance || '10000'),
+          startingBalance: accountCreationMethod === 'mt5' ? '' : (newAccBalance || '1000'),
           isMt5Sync: accountCreationMethod === 'mt5',
           ...(accountCreationMethod === 'mt5' ? {
             institutionType: newAccInstitutionType,
@@ -1845,6 +1846,8 @@ export default function App() {
         body: JSON.stringify({
           name: editAccName,
           startingBalance: editAccStartingBalance,
+          currentBalance: editAccCurrentBalance !== '' ? editAccCurrentBalance : editAccStartingBalance,
+          equity: editAccCurrentBalance !== '' ? editAccCurrentBalance : editAccStartingBalance,
           currency: editAccCurrency
         })
       });
@@ -3286,10 +3289,13 @@ export default function App() {
   }
 
   // Drawdown math
-  const startingBal = (activeAccount?.startingBalance && activeAccount.startingBalance > 0)
+  const isUncalibratedStarterAccount = !activeAccount?.isMt5Sync && (!activeAccount?.startingBalance || activeAccount.startingBalance === 0 || activeAccount.startingBalance === 10000) && (activeAccount?.broker === 'MT5 Demo Broker' || activeAccount?.broker === 'Demo Broker' || activeAccount?.name === 'Portfolio Account' || activeAccount?.name === 'Main Trading Account' || (activeAccount as any)?.isDefaultDemo);
+  const startingBal = (activeAccount?.startingBalance && activeAccount.startingBalance > 0 && !isUncalibratedStarterAccount)
     ? activeAccount.startingBalance
-    : (activeAccount?.currentBalance ?? 0);
-  const currentBal = activeAccount?.currentBalance ?? 0;
+    : 1000;
+  const currentBal = isUncalibratedStarterAccount
+    ? (1000 + tradingTrades.reduce((sum, t) => sum + (t.profit || 0), 0))
+    : (activeAccount?.currentBalance ?? startingBal);
   const netProfit = parseFloat((currentBal - startingBal).toFixed(2));
 
   // High-end stats computation
@@ -5645,13 +5651,14 @@ export default function App() {
 
                   {/* Balance & Growth — Apple-style inline balance */}
                   {(() => {
-                    const _startingCapital = (activeAccount?.startingBalance && activeAccount.startingBalance > 0)
+                    const isUncalibratedStarter = !activeAccount?.isMt5Sync && (!activeAccount?.startingBalance || activeAccount.startingBalance === 0 || activeAccount.startingBalance === 10000) && (activeAccount?.broker === 'MT5 Demo Broker' || activeAccount?.broker === 'Demo Broker' || activeAccount?.name === 'Portfolio Account' || activeAccount?.name === 'Main Trading Account' || (activeAccount as any)?.isDefaultDemo);
+                    const _startingCapital = (activeAccount?.startingBalance && activeAccount.startingBalance > 0 && !isUncalibratedStarter)
                       ? activeAccount.startingBalance
-                      : (activeAccount?.currentBalance !== undefined && netProfit !== undefined && (activeAccount.currentBalance - netProfit) > 0)
-                        ? (activeAccount.currentBalance - netProfit)
-                        : (activeAccount?.currentBalance ?? 0);
-                    const _startBal = _startingCapital > 0 ? _startingCapital : (activeAccount?.currentBalance ?? 1);
-                    const _curBal = activeAccount?.currentBalance ?? _startBal;
+                      : 1000;
+                    const _startBal = _startingCapital;
+                    const _curBal = isUncalibratedStarter
+                      ? (1000 + (netProfit || 0))
+                      : (activeAccount?.currentBalance ?? _startBal);
                     const growthPct = _startBal > 0 ? parseFloat((((_curBal - _startBal) / _startBal) * 100).toFixed(2)) : 0;
                     const netPnL = parseFloat((_curBal - _startBal).toFixed(2));
                     return (
@@ -5661,7 +5668,7 @@ export default function App() {
                             <p className="text-[10px] font-medium text-white/50 uppercase tracking-wider mb-0.5">Current Balance</p>
                             <div className="flex items-baseline gap-2">
                               <p className="font-display text-2xl xs:text-[26px] leading-none font-black text-white tracking-tight tabular-nums truncate">
-                                {activeAccount ? formatValue(activeAccount.currentBalance ?? activeAccount.startingBalance) : '—'}
+                                {activeAccount ? formatValue(_curBal) : '—'}
                               </p>
                               <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9.5px] font-bold border ${growthPct >= 0
                                   ? 'bg-emerald-400/15 border-emerald-300/30 text-emerald-200'
@@ -6669,14 +6676,18 @@ export default function App() {
                   )}
                   {accounts.map((acc, idx) => {
                     const isActive = acc.id === selectedAccountId;
-                    const isStarterDemoPlaceholder =
-                      (acc.startingBalance === 10000 || !acc.startingBalance || acc.startingBalance === 0) &&
-                      (!acc.isMt5Sync || acc.broker === 'MT5 Demo Broker' || acc.name === 'Portfolio Account' || acc.name === 'Main Trading Account' || (acc as any).isDefaultDemo);
+                    const isUncalibratedStarter =
+                      !acc.isMt5Sync &&
+                      (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000) &&
+                      (acc.broker === 'MT5 Demo Broker' || acc.broker === 'Demo Broker' || acc.name === 'Portfolio Account' || acc.name === 'Main Trading Account' || (acc as any).isDefaultDemo);
 
-                    const effStart = (!isStarterDemoPlaceholder && acc.startingBalance && acc.startingBalance > 0)
+                    const effStart = (acc.startingBalance && acc.startingBalance > 0 && !isUncalibratedStarter)
                       ? acc.startingBalance
-                      : (!isStarterDemoPlaceholder && acc.currentBalance ? acc.currentBalance : 0);
-                    const plReturn = acc.currentBalance - effStart;
+                      : 1000;
+                    const effCurrent = isUncalibratedStarter
+                      ? (1000 + (acc.currentBalance && acc.currentBalance !== 10000 ? acc.currentBalance : 0))
+                      : (acc.currentBalance ?? effStart);
+                    const plReturn = effCurrent - effStart;
 
                     const cur = acc.currency || 'USD';
                     const formatCur = (val: number) => {
@@ -6687,14 +6698,10 @@ export default function App() {
                       }
                     };
 
-                    const startingCapitalStr = isStarterDemoPlaceholder
-                      ? 'Connect MT5'
-                      : (acc.isMt5Sync && (!acc.startingBalance || acc.startingBalance === 0))
-                        ? 'Syncing from MT5...'
-                        : formatCur(acc.startingBalance || 0);
-                    const currentBalanceStr = isStarterDemoPlaceholder
-                      ? 'Connect MT5'
-                      : formatCur(acc.currentBalance || 0);
+                    const startingCapitalStr = (acc.isMt5Sync && (!acc.startingBalance || acc.startingBalance === 0))
+                      ? 'Syncing from MT5...'
+                      : formatCur(effStart);
+                    const currentBalanceStr = formatCur(effCurrent);
 
                     // Format P/L Return with + or - sign
                     const formattedPlReturn = formatCur(Math.abs(plReturn));
@@ -6764,13 +6771,20 @@ export default function App() {
                               e.stopPropagation();
                               setEditingAccount(acc);
                               setEditAccName(acc.name);
-                              setEditAccStartingBalance(String(acc.startingBalance));
+                              const startVal = (acc.startingBalance && acc.startingBalance !== 10000)
+                                ? acc.startingBalance
+                                : (effStart || 1000);
+                              const curVal = (acc.currentBalance !== undefined && acc.currentBalance !== null && acc.currentBalance !== 10000)
+                                ? acc.currentBalance
+                                : (effCurrent || 1000);
+                              setEditAccStartingBalance(String(startVal));
+                              setEditAccCurrentBalance(String(curVal));
                               setEditAccCurrency(acc.currency || 'USD');
                               setShowEditAccountModal(true);
                             }}
                             className={`w-[42px] h-[42px] shrink-0 rounded-xl flex items-center justify-center border transition ${theme === 'dark' ? 'border-white/10 hover:bg-white/5 text-slate-400' : 'border-slate-200 hover:bg-slate-50 text-slate-500'
                               }`}
-                            title="Edit Account Name, Currency and Starting Capital"
+                            title="Edit Account Name, Currency, Starting Capital and Current Capital"
                           >
                             <Edit3 className="h-4 w-4" />
                           </button>
@@ -9641,7 +9655,7 @@ export default function App() {
             <form onSubmit={handleEditAccount} className="space-y-4">
               <div className="pr-8">
                 <h3 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">Edit Trading Portfolio</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Modify alias name and starting capital for <span className="font-semibold text-slate-700 dark:text-slate-200">{editingAccount.broker || 'Trading Account'}</span>.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Modify alias name, starting capital and current capital for <span className="font-semibold text-slate-700 dark:text-slate-200">{editingAccount.broker || 'Trading Account'}</span>.</p>
               </div>
 
               <div>
@@ -9660,10 +9674,24 @@ export default function App() {
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">Starting Capital / Balance</label>
                 <input
                   type="number"
+                  step="any"
                   required
                   value={editAccStartingBalance}
                   onChange={(e) => setEditAccStartingBalance(e.target.value)}
-                  placeholder="10000"
+                  placeholder="1000"
+                  className="h-11 w-full bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/25 focus:border-violet-500 transition"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">Current Capital / Balance</label>
+                <input
+                  type="number"
+                  step="any"
+                  required
+                  value={editAccCurrentBalance}
+                  onChange={(e) => setEditAccCurrentBalance(e.target.value)}
+                  placeholder="1000"
                   className="h-11 w-full bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/25 focus:border-violet-500 transition"
                 />
               </div>

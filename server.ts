@@ -505,9 +505,9 @@ function createEmptyUserDb(userId?: string, email?: string, injectDummyUser = fa
         platform: 'MT5',
         accountType: 'Demo',
         currency: 'USD',
-        startingBalance: 0,
-        currentBalance: 0,
-        equity: 0,
+        startingBalance: 1000,
+        currentBalance: 1000,
+        equity: 1000,
         status: 'Active',
         eaToken: `ea_demo_${cleanUserId.slice(-8)}`,
         eaStatus: 'Not Connected',
@@ -2644,9 +2644,9 @@ async function ensureDefaultPortfolioAccount(
       platform: 'MT5',
       accountType: 'Demo',
       currency: 'USD',
-      startingBalance: 0,
-      currentBalance: 0,
-      equity: 0,
+      startingBalance: 1000,
+      currentBalance: 1000,
+      equity: 1000,
       status: 'Active',
       eaToken: generateEaToken(),
       eaStatus: 'Not Connected',
@@ -3148,9 +3148,9 @@ app.use(async (req, res, next) => {
               platform: 'MT5',
               account_type: 'DEMO',
               currency: 'USD',
-              starting_balance: 10000,
-              current_balance: 10000,
-              equity: 10000,
+              starting_balance: 1000,
+              current_balance: 1000,
+              equity: 1000,
               status: 'ACTIVE',
               is_mt5_sync: false,
               is_default_demo: true,
@@ -4378,12 +4378,19 @@ app.get('/api/accounts', async (req, res) => {
             } catch (calibErr) {
               console.error('[GET /api/accounts] Calibration error:', calibErr);
             }
-          } else if (isDefaultDemoAccount(acc) && acc.startingBalance === 10000) {
-            acc.startingBalance = 0;
-            acc.currentBalance = 0;
-            acc.equity = 0;
+          } else if (isDefaultDemoAccount(acc) && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000)) {
+            acc.startingBalance = 1000;
+            const { data: tradeRows } = await supabase
+              .from('trades')
+              .select('*')
+              .eq('account_id', acc.id);
+            const closedPnl = (tradeRows || [])
+              .filter((t: any) => t.type !== 'Deposit' && t.type !== 'Withdrawal')
+              .reduce((sum: number, t: any) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
+            acc.currentBalance = parseFloat((1000 + closedPnl).toFixed(2));
+            acc.equity = acc.currentBalance;
             try {
-              await supabase.from('trading_accounts').update({ starting_balance: 0, current_balance: 0, equity: 0 }).eq('id', acc.id);
+              await supabase.from('trading_accounts').update({ starting_balance: 1000, current_balance: acc.currentBalance, equity: acc.equity }).eq('id', acc.id);
             } catch { }
           }
         }
@@ -4426,6 +4433,14 @@ app.get('/api/accounts', async (req, res) => {
 
   // Auto-calibrate starting balance for MT5 synced accounts from actual MT5 deposits or trades if still uncalibrated
   for (const acc of userAccounts) {
+    if (isDefaultDemoAccount(acc) && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000)) {
+      acc.startingBalance = 1000;
+      const closedPnl = (db.trades || [])
+        .filter((t: any) => (t.accountId || t.account_id) === acc.id && t.type !== 'Deposit' && t.type !== 'Withdrawal')
+        .reduce((sum: number, t: any) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
+      acc.currentBalance = parseFloat((1000 + closedPnl).toFixed(2));
+      acc.equity = acc.currentBalance;
+    }
     const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 || !!acc.eaLastSyncTime);
     const isUncalibratedMt5 = acc.isMt5Sync && !hasEstablishedStartingBalance && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000);
     if (isUncalibratedMt5) {
@@ -4500,7 +4515,7 @@ app.post('/api/accounts', async (req, res) => {
       ? (parseFloat(startingBalance) || 0)
       : 0;
   } else {
-    startBal = parseFloat(startingBalance) || 10000;
+    startBal = parseFloat(startingBalance) || 1000;
   }
 
   let enc = null;
@@ -4630,8 +4645,31 @@ app.put('/api/accounts/:id', async (req, res) => {
       }
     }
     if (startingBalance !== undefined) db.accounts[accIdx].startingBalance = money(startingBalance);
-    if (currentBalance !== undefined) db.accounts[accIdx].currentBalance = money(currentBalance);
+    if (currentBalance !== undefined) {
+      db.accounts[accIdx].currentBalance = money(currentBalance);
+      if (equity === undefined) {
+        db.accounts[accIdx].equity = money(currentBalance);
+      }
+    }
     if (equity !== undefined) db.accounts[accIdx].equity = money(equity);
+    if (startingBalance !== undefined || currentBalance !== undefined) {
+      db.accounts[accIdx].isDefaultDemo = false;
+    }
+
+    if (supabase) {
+      const updatePayload: any = {};
+      if (name) updatePayload.name = name;
+      if (currency) updatePayload.currency = currency;
+      if (startingBalance !== undefined) updatePayload.starting_balance = db.accounts[accIdx].startingBalance;
+      if (currentBalance !== undefined) updatePayload.current_balance = db.accounts[accIdx].currentBalance;
+      if (db.accounts[accIdx].equity !== undefined) updatePayload.equity = db.accounts[accIdx].equity;
+      updatePayload.is_default_demo = false;
+      try {
+        await supabase.from('trading_accounts').update(updatePayload).eq('id', id);
+      } catch (sbErr) {
+        console.error('[PUT /api/accounts/:id] Supabase direct update error:', sbErr);
+      }
+    }
 
     await saveDatabase(db, authEmail);
     res.json({ message: 'Account updated successfully', account: sanitizeAccount(db.accounts[accIdx]) });
@@ -4993,9 +5031,9 @@ app.post('/api/trades', async (req, res) => {
         userId: currentUser.id,
         name: 'Main Trading Account',
         broker: 'MetaTrader 5',
-        startingBalance: 10000,
-        currentBalance: 10000,
-        equity: 10000,
+        startingBalance: 1000,
+        currentBalance: 1000,
+        equity: 1000,
         currency: 'USD',
         status: 'Active',
         createdAt: new Date().toISOString()

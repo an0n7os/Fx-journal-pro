@@ -66,14 +66,20 @@ export const TraderRankCard: React.FC<TraderRankCardProps> = ({
   totalTradesCount,
   variant = 'full'
 }) => {
-  const isStarterDemoPlaceholder =
-    (account?.startingBalance === 10000 || !account?.startingBalance || account?.startingBalance === 0) &&
-    (!account?.isMt5Sync || account?.broker === 'MT5 Demo Broker' || account?.name === 'Portfolio Account' || account?.name === 'Main Trading Account' || account?.isDefaultDemo);
+  const isUncalibratedStarter =
+    !account?.isMt5Sync &&
+    (!account?.startingBalance || account.startingBalance === 0 || account.startingBalance === 10000) &&
+    (account?.broker === 'MT5 Demo Broker' || account?.broker === 'Demo Broker' || account?.name === 'Portfolio Account' || account?.name === 'Main Trading Account' || (account as any)?.isDefaultDemo);
 
-  const initialBalance = (!isStarterDemoPlaceholder && account?.startingBalance && account.startingBalance > 0)
+  const initialBalance = (account?.startingBalance && account.startingBalance > 0 && !isUncalibratedStarter)
     ? account.startingBalance
-    : (!isStarterDemoPlaceholder && account?.currentBalance ? account.currentBalance : 0);
-  const currentBalance = (!isStarterDemoPlaceholder && account?.currentBalance) ? account.currentBalance : 0;
+    : 1000;
+
+  const currentBalance = isUncalibratedStarter
+    ? (1000 + (netProfit !== undefined ? netProfit : 0))
+    : ((account?.currentBalance !== undefined && account?.currentBalance !== null && account.currentBalance > 0)
+      ? account.currentBalance
+      : (initialBalance + (netProfit !== undefined ? netProfit : 0)));
   const currency = account?.currency || 'USD';
 
   const defaultFormatter = (val: number) => {
@@ -481,11 +487,9 @@ export const TraderRankCard: React.FC<TraderRankCardProps> = ({
             key: 'initial',
             label: 'Starting Capital',
             icon: Target,
-            value: isStarterDemoPlaceholder
-              ? 'Connect MT5'
-              : (account?.isMt5Sync && (!account?.startingBalance || account.startingBalance === 0))
-                ? 'Auto (MT5)'
-                : (initialBalance > 0 ? fmtTile(initialBalance) : 'Connect MT5'),
+            value: (account?.isMt5Sync && (!account?.startingBalance || account.startingBalance === 0))
+              ? 'Auto (MT5)'
+              : fmtTile(initialBalance),
             sub: '',
             tone: 'neutral',
           },
