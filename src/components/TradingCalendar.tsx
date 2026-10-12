@@ -351,13 +351,13 @@ export default function TradingCalendar({ trades, currency }: TradingCalendarPro
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2">
+          <div className="grid grid-cols-7 auto-rows-fr gap-1 sm:gap-1.5 md:gap-2">
             {cells.map((cell, idx) => {
               if (cell.isPadding) {
                 return (
                   <div 
                     key={`pad-${idx}`} 
-                    className="min-h-[64px] min-[390px]:min-h-[72px] sm:min-h-[84px] md:min-h-[96px] calendar-day-box opacity-25 dark:opacity-20 rounded-lg sm:rounded-xl bg-slate-100 dark:bg-slate-800/40 border border-slate-200/40 dark:border-slate-800/40"
+                    className="h-[68px] sm:h-[84px] md:h-[96px] calendar-day-box opacity-25 dark:opacity-20 rounded-lg sm:rounded-xl bg-slate-100 dark:bg-slate-800/40 border border-slate-200/40 dark:border-slate-800/40"
                   ></div>
                 );
               }
@@ -401,7 +401,7 @@ export default function TradingCalendar({ trades, currency }: TradingCalendarPro
                   onClick={() => handleDayClick(cell.day)}
                   data-today={isToday ? 'true' : undefined}
                   aria-current={isToday ? 'date' : undefined}
-                  className={`calendar-day-box min-h-[64px] min-[390px]:min-h-[72px] sm:min-h-[84px] md:min-h-[96px] px-1 py-1 sm:p-2 text-left rounded-lg sm:rounded-xl flex flex-col justify-between group relative transition-all duration-200 overflow-hidden ${statusClass} ${cellBg} ${borderClass} ${
+                  className={`calendar-day-box h-[68px] sm:h-[84px] md:h-[96px] px-1 py-1 sm:p-2 text-left rounded-lg sm:rounded-xl flex flex-col justify-between group relative transition-all duration-200 overflow-hidden ${statusClass} ${cellBg} ${borderClass} ${
                     isSelected 
                       ? 'ring-2 ring-indigo-500 ring-offset-1 sm:ring-offset-2 dark:ring-offset-slate-900 scale-[1.02] z-10 shadow-md' 
                       : 'hover:scale-[1.02] hover:shadow-sm hover:z-10'

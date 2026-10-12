@@ -535,6 +535,27 @@ html.dark #trading-calendar-card .calendar-day-number,
   color: #f8fafc !important;
 }
 
+/* Calendar cell sizing - uniform across all rows for mobile and desktop */
+#trading-calendar-card .calendar-day-box {
+  height: 68px !important;
+  min-height: 68px !important;
+  box-sizing: border-box !important;
+}
+
+@media (min-width: 640px) {
+  #trading-calendar-card .calendar-day-box {
+    height: 84px !important;
+    min-height: 84px !important;
+  }
+}
+
+@media (min-width: 768px) {
+  #trading-calendar-card .calendar-day-box {
+    height: 96px !important;
+    min-height: 96px !important;
+  }
+}
+
 /* Calendar padding boxes (empty slots) & neutral day buttons */
 .calendar-day-box:not(.calendar-day-profit):not(.calendar-day-loss) {
   background-color: #e8ecf2 !important;
