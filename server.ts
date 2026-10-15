@@ -6333,7 +6333,9 @@ app.post('/api/mt5/worker/claim', async (req, res) => {
         .in('sync_method', ['CLOUD', 'VPS'])
         .in('connection_status', ['Validating', 'Queued', 'In Queue'])
         .not('investor_password_enc', 'is', null)
-        .limit(5);
+        .order('connection_status', { ascending: false })
+        .order('last_heartbeat_at', { ascending: true, nullsFirst: true })
+        .limit(10);
 
       for (const rawAcc of pendingRows || []) {
         const account = toCamel(rawAcc);
@@ -6345,11 +6347,13 @@ app.post('/api/mt5/worker/claim', async (req, res) => {
 
         const db = await ensureUserDbLoaded(account.userId, '');
         const jobId = `job_acc_${account.id}`;
+        const existingJob = (db.mt5ConnectJobs || []).find((j: any) => j.accountId === account.id);
+        const attempts = (existingJob?.attempts || 0) + 1;
         const job = {
           id: jobId,
           action: 'CONNECT',
           accountId: account.id,
-          attempts: 1,
+          attempts,
           leaseUntil: new Date(Date.now() + MT5_JOB_LEASE_MS).toISOString(),
           workerId: body.workerId,
           terminal: body.terminal || null,
@@ -6602,6 +6606,7 @@ app.post('/api/mt5/worker/complete', async (req, res) => {
         `Sync finished; ${body.tradesImported ?? account.eaSyncTradeCount ?? 0} trades in the journal`);
     } else {
       account.connectionStatus = job.status === 'FAILED' ? 'Error' : 'Validating';
+      account.lastHeartbeatAt = new Date().toISOString();
       if (!Array.isArray(db.mt5ConnectionErrors)) db.mt5ConnectionErrors = [];
       db.mt5ConnectionErrors.push({
         accountId: account.id,
