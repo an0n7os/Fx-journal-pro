@@ -2000,6 +2000,7 @@ function recomputeMt5TradesForAccount(account: any, deals: any[], skipBalanceTic
 
     result.push({
       id: `mt5ea_${account.id}_${posId}`,
+      userId: account.userId || account.user_id || '',
       accountId: account.id,
       date: new Date(inDeal.time * 1000).toISOString(),
       exitTime: new Date(lastOut.time * 1000).toISOString(),
@@ -2031,6 +2032,7 @@ function recomputeMt5TradesForAccount(account: any, deals: any[], skipBalanceTic
     const type = d.profit >= 0 ? 'Deposit' : 'Withdrawal';
     result.push({
       id: `mt5ea_${account.id}_dep_${d.ticket}`,
+      userId: account.userId || account.user_id || '',
       accountId: account.id,
       date: new Date(d.time * 1000).toISOString(),
       symbol: 'BALANCE',
@@ -2294,18 +2296,26 @@ async function saveDatabase(
   previousAliases?: { userId?: string; email?: string }
 ): Promise<{ accountsError?: any; usersError?: any; tradesError?: any }> {
   if (!data) return {};
+
+  let effectiveUserId = overrideUserId;
+  let effectiveEmail = overrideEmail;
+  if (overrideUserId && overrideUserId.includes('@') && !overrideEmail) {
+    effectiveEmail = overrideUserId;
+    effectiveUserId = undefined;
+  }
+
   const usersToSync = Array.isArray(data.users) ? data.users : [];
   if (usersToSync.length === 0) return {};
 
   const targetUser = usersToSync[0];
-  const uid = targetUser.id;
-  const email = targetUser.email;
+  const uid = targetUser.id || effectiveUserId;
+  const email = targetUser.email || effectiveEmail;
   if (!uid) return {};
 
   if (uid) userDatabases.set(uid, data);
   if (email) userDatabases.set(email.toLowerCase(), data);
-  if (overrideUserId) userDatabases.set(overrideUserId, data);
-  if (overrideEmail) userDatabases.set(overrideEmail.toLowerCase(), data);
+  if (effectiveUserId) userDatabases.set(effectiveUserId, data);
+  if (effectiveEmail) userDatabases.set(effectiveEmail.toLowerCase(), data);
 
   if (previousAliases?.email && previousAliases.email.toLowerCase() !== email?.toLowerCase()) {
     userDatabases.delete(previousAliases.email.toLowerCase());
@@ -2676,11 +2686,32 @@ async function ensureDefaultPortfolioAccount(
   }
 }
 
-// Check whether an account is the default starter demo account ($10k demo account)
+// Check whether an account is the default starter demo account ($1k demo account)
 function isDefaultDemoAccount(acc: any): boolean {
   if (!acc) return false;
-  if (acc.isDefaultDemo === true || acc.is_default_demo === true) return true;
+  // If the account has MT5 configured or synced, it is NEVER a default demo account
+  const isMt5 = !!(
+    acc.isMt5Sync ||
+    acc.is_mt5_sync ||
+    acc.mt5Login ||
+    acc.mt5_login ||
+    acc.eaTerminalLogin ||
+    acc.ea_terminal_login ||
+    acc.eaLastSyncTime ||
+    acc.ea_last_sync_time ||
+    (typeof acc.eaSyncTradeCount === 'number' && acc.eaSyncTradeCount > 0) ||
+    acc.syncMethod === 'VPS' ||
+    acc.sync_method === 'VPS' ||
+    acc.syncMethod === 'EA' ||
+    acc.sync_method === 'EA' ||
+    acc.hasStoredCredentials ||
+    acc.investorPasswordEnc ||
+    acc.investor_password_enc
+  );
+  if (isMt5) return false;
+
   if (acc.id === 'acc_demo_1') return true;
+  if (acc.isDefaultDemo === true || acc.is_default_demo === true) return true;
   const isDemo = (acc.accountType === 'Demo' || acc.account_type === 'DEMO');
   const isStarterBroker = (
     acc.broker === 'MT5 Demo Broker' ||
@@ -4244,6 +4275,19 @@ const requirePro = (req: any, res: any, feature: ProFeature): boolean => {
   return true;
 };
 
+const allowMt5SyncForUser = (currentUser: any, db: any, targetAccountId?: string): boolean => {
+  if (hasPro(currentUser)) return true;
+  // Free tier is allowed 1 active portfolio account (manual or MT5)
+  const existingSynced = (db?.accounts || []).filter((a: any) => {
+    const isOwner = a.userId === currentUser.id || a.user_id === currentUser.id;
+    if (!isOwner) return false;
+    if (targetAccountId && a.id === targetAccountId) return false;
+    if (isDefaultDemoAccount(a)) return false;
+    return a.isMt5Sync || a.is_mt5_sync || a.mt5Login || a.eaTerminalLogin;
+  });
+  return existingSynced.length < FREE_ACCOUNT_LIMIT;
+};
+
 /** The oldest date a plan may pull report data from. Null means no floor. */
 const reportFloorFor = (user: any): Date | null =>
   hasPro(user) ? null : new Date(Date.now() - FREE_REPORT_DAYS * 86400000);
@@ -4347,10 +4391,10 @@ app.get('/api/accounts', async (req, res) => {
           }
         }
 
-        // Auto-calibrate starting balance for MT5 synced accounts, and clear 10000 placeholder on starter demo
+        // Auto-calibrate starting balance for MT5 synced accounts, and clear 1000 placeholder on starter demo
         for (const acc of accounts) {
-          const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 || !!acc.eaLastSyncTime);
-          const isUncalibratedMt5 = acc.isMt5Sync && !hasEstablishedStartingBalance && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000);
+          const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 && acc.startingBalance !== 1000 || !!acc.eaLastSyncTime || !!acc.startingBalanceLocked);
+          const isUncalibratedMt5 = (acc.isMt5Sync || acc.is_mt5_sync || acc.mt5Login || acc.eaTerminalLogin) && !hasEstablishedStartingBalance && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 1000 || acc.startingBalance === 10000);
           if (isUncalibratedMt5) {
             try {
               const { data: dealRows } = await supabase
@@ -4363,8 +4407,9 @@ app.get('/api/accounts', async (req, res) => {
                 .sort((a: any, b: any) => a.time - b.time);
               if (deposits.length > 0) {
                 acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
+                acc.startingBalanceLocked = true;
                 await supabase.from('trading_accounts').update({ starting_balance: acc.startingBalance }).eq('id', acc.id);
-              } else if (acc.currentBalance > 0 && acc.currentBalance !== 10000) {
+              } else if (acc.currentBalance > 0 && acc.currentBalance !== 10000 && acc.currentBalance !== 1000) {
                 const { data: tradeRows } = await supabase
                   .from('trades')
                   .select('*')
@@ -4373,12 +4418,13 @@ app.get('/api/accounts', async (req, res) => {
                   .filter((t: any) => t.type !== 'Deposit' && t.type !== 'Withdrawal')
                   .reduce((sum: number, t: any) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
                 acc.startingBalance = parseFloat(Math.max(0, acc.currentBalance - closedPnl).toFixed(2));
+                acc.startingBalanceLocked = true;
                 await supabase.from('trading_accounts').update({ starting_balance: acc.startingBalance }).eq('id', acc.id);
               }
             } catch (calibErr) {
               console.error('[GET /api/accounts] Calibration error:', calibErr);
             }
-          } else if (isDefaultDemoAccount(acc) && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000)) {
+          } else if (isDefaultDemoAccount(acc) && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000 || acc.startingBalance === 1000)) {
             acc.startingBalance = 1000;
             const { data: tradeRows } = await supabase
               .from('trades')
@@ -4433,7 +4479,7 @@ app.get('/api/accounts', async (req, res) => {
 
   // Auto-calibrate starting balance for MT5 synced accounts from actual MT5 deposits or trades if still uncalibrated
   for (const acc of userAccounts) {
-    if (isDefaultDemoAccount(acc) && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000)) {
+    if (isDefaultDemoAccount(acc) && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000 || acc.startingBalance === 1000)) {
       acc.startingBalance = 1000;
       const closedPnl = (db.trades || [])
         .filter((t: any) => (t.accountId || t.account_id) === acc.id && t.type !== 'Deposit' && t.type !== 'Withdrawal')
@@ -4441,8 +4487,8 @@ app.get('/api/accounts', async (req, res) => {
       acc.currentBalance = parseFloat((1000 + closedPnl).toFixed(2));
       acc.equity = acc.currentBalance;
     }
-    const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 || !!acc.eaLastSyncTime);
-    const isUncalibratedMt5 = acc.isMt5Sync && !hasEstablishedStartingBalance && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 10000);
+    const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 && acc.startingBalance !== 1000 || !!acc.eaLastSyncTime || !!acc.startingBalanceLocked);
+    const isUncalibratedMt5 = (acc.isMt5Sync || acc.is_mt5_sync || acc.mt5Login || acc.eaTerminalLogin) && !hasEstablishedStartingBalance && (!acc.startingBalance || acc.startingBalance === 0 || acc.startingBalance === 1000 || acc.startingBalance === 10000);
     if (isUncalibratedMt5) {
       const accountDeals = (db.mt5Deals || []).filter((d: any) => (d.accountId || d.account_id) === acc.id).map(normalizeDeal);
       const deposits = accountDeals
@@ -4451,7 +4497,7 @@ app.get('/api/accounts', async (req, res) => {
       if (deposits.length > 0) {
         acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
         acc.startingBalanceLocked = true;
-      } else if (acc.currentBalance > 0 && acc.currentBalance !== 10000) {
+      } else if (acc.currentBalance > 0 && acc.currentBalance !== 10000 && acc.currentBalance !== 1000) {
         const closedPnl = (db.trades || [])
           .filter((t: any) => (t.accountId || t.account_id) === acc.id && t.type !== 'Deposit' && t.type !== 'Withdrawal')
           .reduce((sum: number, t: any) => sum + (t.profit || 0) + (t.commission || 0) + (t.swap || 0), 0);
@@ -4494,13 +4540,7 @@ app.post('/api/accounts', async (req, res) => {
     });
   }
 
-  // Free plan is manual entry only. Checked here as well as in the UI, because
-  // the UI check is a nicety and this is the actual limit.
-  if (isMt5Sync && !hasPro(currentUser)) {
-    return res.status(403).json({
-      error: PRO_FEATURE_MESSAGES.mt5Sync, proRequired: true, feature: 'mt5Sync',
-    });
-  }
+
 
   if (!name || !broker) {
     return res.status(400).json({ error: 'Account name and broker are required.' });
@@ -5717,7 +5757,9 @@ app.post('/api/mt5/ea/error', ...eaProtection, async (req, res) => {
 // MetaApi cloud worker. Merges deals, applies money flows, recomputes journal
 // trades, and updates account balance/equity from the authoritative payload.
 function applyEaSyncPayload(db: any, acc: any, deals: any[], moneyFlows: any[], account: any) {
-  const userId = db.users?.[0]?.id;
+  acc.isMt5Sync = true;
+  acc.isDefaultDemo = false;
+  const userId = acc.userId || acc.user_id || db.users?.[0]?.id;
   const accountId = String(acc.id);
 
   // 1. Merge new deals (dedupe by ticket within this account) into both the
@@ -5784,7 +5826,7 @@ function applyEaSyncPayload(db: any, acc: any, deals: any[], moneyFlows: any[], 
     // Required Fix: The starting capital should remain unchanged after the first MT5 sync.
     // Clicking Sync Now should only update the trade history, current balance, and trading statistics.
     // It must NEVER change the original starting capital once established.
-    const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 || !!acc.eaLastSyncTime);
+    const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 && acc.startingBalance !== 1000 || !!acc.eaLastSyncTime || !!acc.startingBalanceLocked);
     if (!hasEstablishedStartingBalance && deposits.length > 0) {
       acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
       acc.startingBalanceLocked = true;
@@ -5827,7 +5869,7 @@ function applyEaSyncPayload(db: any, acc: any, deals: any[], moneyFlows: any[], 
   // 3b. If no initial deposit deal was in the MT5 history (e.g. broker history limits),
   // deduce starting capital from live balance minus closed trades net PnL:
   // ONLY on the very first sync if starting balance has never been established. Once set, it must NEVER change.
-  const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 || !!acc.eaLastSyncTime);
+  const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 && acc.startingBalance !== 1000 || !!acc.eaLastSyncTime || !!acc.startingBalanceLocked);
   if (acc.isMt5Sync && !hasEstablishedStartingBalance) {
     const netTradingProfit = recomputed
       .filter((t: any) => t.type !== 'Deposit' && t.type !== 'Withdrawal')
@@ -6017,10 +6059,13 @@ app.post('/api/mt5/cloud/connect', async (req, res) => {
   let db = (req as any).userDb;
   let currentUser = (req as any).currentUser;
   if (!currentUser || !db) return res.status(401).json({ error: 'Not authenticated' });
-  if (!requirePro(req, res, 'mt5Sync')) return;
 
   const body = validateEaBody(res, CloudConnectSchema, req.body || {});
   if (!body) return;
+
+  if (!allowMt5SyncForUser(currentUser, db, body.accountId)) {
+    return res.status(403).json({ error: PRO_FEATURE_MESSAGES.unlimitedAccounts, proRequired: true, feature: 'unlimitedAccounts' });
+  }
 
   const account = db.accounts.find((a: any) => a.id === body.accountId);
   if (!account) return res.status(404).json({ error: 'Account not found' });
@@ -6089,10 +6134,12 @@ app.post('/api/mt5/cloud/sync', async (req, res) => {
   let db = (req as any).userDb;
   let currentUser = (req as any).currentUser;
   if (!currentUser || !db) return res.status(401).json({ error: 'Not authenticated' });
-  if (!requirePro(req, res, 'mt5Sync')) return;
-
   const body = validateEaBody(res, CloudDisconnectSchema, req.body || {});
   if (!body) return;
+
+  if (!allowMt5SyncForUser(currentUser, db, body.accountId)) {
+    return res.status(403).json({ error: PRO_FEATURE_MESSAGES.unlimitedAccounts, proRequired: true, feature: 'unlimitedAccounts' });
+  }
 
   const account = db.accounts.find((a: any) => a.id === body.accountId);
   if (!account) return res.status(404).json({ error: 'Account not found' });
@@ -6579,17 +6626,12 @@ app.post('/api/mt5/vps/connect', async (req, res) => {
   const db = (req as any).userDb;
   const currentUser = (req as any).currentUser;
   if (!currentUser || !db) return res.status(401).json({ error: 'Not authenticated' });
-  if (!requirePro(req, res, 'mt5Sync')) return;
-
-  if (!vpsSyncAvailable()) {
-    return res.status(503).json({
-      error: 'Automatic sync is not available on this deployment yet. Use the Expert Advisor method.',
-      code: 'VPS_NOT_CONFIGURED',
-    });
-  }
-
   const body = validateEaBody(res, CloudConnectSchema, req.body || {});
   if (!body) return;
+
+  if (!allowMt5SyncForUser(currentUser, db, body.accountId)) {
+    return res.status(403).json({ error: PRO_FEATURE_MESSAGES.unlimitedAccounts, proRequired: true, feature: 'unlimitedAccounts' });
+  }
 
   const account = db.accounts.find((a: any) => a.id === body.accountId);
   if (!account) return res.status(404).json({ error: 'Account not found' });
@@ -6634,7 +6676,12 @@ app.post('/api/mt5/vps/sync', async (req, res) => {
   const db = (req as any).userDb;
   const currentUser = (req as any).currentUser;
   if (!currentUser || !db) return res.status(401).json({ error: 'Not authenticated' });
-  if (!requirePro(req, res, 'mt5Sync')) return;
+  const body = validateEaBody(res, CloudDisconnectSchema, req.body || {});
+  if (!body) return;
+
+  if (!allowMt5SyncForUser(currentUser, db, body.accountId)) {
+    return res.status(403).json({ error: PRO_FEATURE_MESSAGES.unlimitedAccounts, proRequired: true, feature: 'unlimitedAccounts' });
+  }
 
   if (!vpsSyncAvailable()) {
     return res.status(503).json({
@@ -6642,9 +6689,6 @@ app.post('/api/mt5/vps/sync', async (req, res) => {
       code: 'VPS_NOT_CONFIGURED',
     });
   }
-
-  const body = validateEaBody(res, CloudDisconnectSchema, req.body || {});
-  if (!body) return;
 
   const account = db.accounts.find((a: any) => a.id === body.accountId);
   if (!account) return res.status(404).json({ error: 'Account not found' });

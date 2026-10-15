@@ -3289,7 +3289,7 @@ export default function App() {
   }
 
   // Drawdown math
-  const isUncalibratedStarterAccount = !activeAccount?.isMt5Sync && (!activeAccount?.startingBalance || activeAccount.startingBalance === 0 || activeAccount.startingBalance === 10000) && (activeAccount?.broker === 'MT5 Demo Broker' || activeAccount?.broker === 'Demo Broker' || activeAccount?.name === 'Portfolio Account' || activeAccount?.name === 'Main Trading Account' || (activeAccount as any)?.isDefaultDemo);
+  const isUncalibratedStarterAccount = !activeAccount?.isMt5Sync && (!activeAccount?.startingBalance || activeAccount.startingBalance === 0 || activeAccount.startingBalance === 10000 || activeAccount.startingBalance === 1000) && (activeAccount?.broker === 'MT5 Demo Broker' || activeAccount?.broker === 'Demo Broker' || activeAccount?.name === 'Portfolio Account' || activeAccount?.name === 'Main Trading Account' || (activeAccount as any)?.isDefaultDemo);
   const startingBal = (activeAccount?.startingBalance && activeAccount.startingBalance > 0 && !isUncalibratedStarterAccount)
     ? activeAccount.startingBalance
     : 1000;
@@ -5651,7 +5651,7 @@ export default function App() {
 
                   {/* Balance & Growth — Apple-style inline balance */}
                   {(() => {
-                    const isUncalibratedStarter = !activeAccount?.isMt5Sync && (!activeAccount?.startingBalance || activeAccount.startingBalance === 0 || activeAccount.startingBalance === 10000) && (activeAccount?.broker === 'MT5 Demo Broker' || activeAccount?.broker === 'Demo Broker' || activeAccount?.name === 'Portfolio Account' || activeAccount?.name === 'Main Trading Account' || (activeAccount as any)?.isDefaultDemo);
+                    const isUncalibratedStarter = !activeAccount?.isMt5Sync && (!activeAccount?.startingBalance || activeAccount.startingBalance === 0 || activeAccount.startingBalance === 10000 || activeAccount.startingBalance === 1000) && (activeAccount?.broker === 'MT5 Demo Broker' || activeAccount?.broker === 'Demo Broker' || activeAccount?.name === 'Portfolio Account' || activeAccount?.name === 'Main Trading Account' || (activeAccount as any)?.isDefaultDemo);
                     const _startingCapital = (activeAccount?.startingBalance && activeAccount.startingBalance > 0 && !isUncalibratedStarter)
                       ? activeAccount.startingBalance
                       : 1000;
