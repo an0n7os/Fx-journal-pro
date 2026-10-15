@@ -6588,7 +6588,9 @@ app.post('/api/mt5/worker/complete', async (req, res) => {
 
   const account = (db.accounts || []).find((a: any) => a.id === job.accountId);
 
-  job.status = body.ok ? 'DONE' : (job.attempts >= MT5_JOB_MAX_ATTEMPTS ? 'FAILED' : 'PENDING');
+  const isTerminalTimeout = String(body.error || '').includes('-10005') || body.errorCode === 'MT5_INIT_FAILED';
+  const shouldFailPermanently = !body.ok && (isTerminalTimeout || (job.attempts || 0) >= MT5_JOB_MAX_ATTEMPTS);
+  job.status = body.ok ? 'DONE' : (shouldFailPermanently ? 'FAILED' : 'PENDING');
   job.error = body.ok ? null : (body.error || 'Sync failed');
   job.errorCode = body.ok ? null : (body.errorCode || null);
   job.workerId = null;
@@ -6607,6 +6609,9 @@ app.post('/api/mt5/worker/complete', async (req, res) => {
     } else {
       account.connectionStatus = job.status === 'FAILED' ? 'Error' : 'Validating';
       account.lastHeartbeatAt = new Date().toISOString();
+      if (shouldFailPermanently) {
+        clearInvestorPassword(account);
+      }
       if (!Array.isArray(db.mt5ConnectionErrors)) db.mt5ConnectionErrors = [];
       db.mt5ConnectionErrors.push({
         accountId: account.id,
