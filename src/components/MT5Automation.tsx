@@ -20,7 +20,8 @@ import {
   TrendingUp,
   Landmark,
   X,
-  Info
+  Info,
+  HelpCircle
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -167,18 +168,30 @@ const ERROR_COPY: Record<string, string> = {
   MT5_OFFLINE: 'MT5 is not connected to the broker. Reconnect MT5 and keep the EA attached to a chart.',
   E_CONNECTION_LOST: 'MT5 cannot reach the server. Check the WebRequest allow-list and your internet connection.',
   CLOUD_NOT_CONFIGURED: 'Cloud sync (investor password) is not configured on this deployment yet. Use the EA method instead.',
-  CLOUD_WORKER_UNAVAILABLE: 'Cloud sync is not running on this deployment yet. Use the MT5 EA method, which needs no extra setup.',
-  INVALID_PASSWORD: 'The investor password was rejected. Check it and try again.',
+  CLOUD_WORKER_UNAVAILABLE: 'Automatic sync worker is currently offline or not configured. Use the MT5 EA method, which syncs directly inside your MT5 terminal.',
+  INVALID_PASSWORD: 'The investor password was rejected by the broker. Check it and try again.',
   E_AUTH: 'The investor password was rejected by the broker. Use the read-only Investor password (not your main password) and check the broker server name.',
   E_SRV_NOT_FOUND: 'The broker server could not be found. Check the exact server name shown in MetaTrader (Help → About).',
-  E_SERVER_TIMEZONE: 'The broker server timezone could not be detected. Cloud provisioning may need manual setup in the MetaApi dashboard.',
-  E_RESOURCE_SLOTS: 'The MetaApi plan has no free resource slots left. Free up a slot in the MetaApi dashboard, then reconnect.',
-  E_MAIN_SERVERS: 'The cloud terminal could not reach the broker. Wait a minute and try again.',
-  E_ACCOUNT_NOT_FOUND: 'The MetaTrader account was not found on this broker. Double-check the login number and server.',
-  CLOUD_TIMEOUT: 'Cloud sync timed out while connecting. Starting the cloud terminal can take a few minutes — try again.',
-  CLOUD_SYNC_FAILED: 'Cloud sync hit an unexpected error. Please try again in a minute.',
-  CLOUD_SYNC_LOST: 'The cloud connection was lost. Reconnect to re-provision the terminal.',
-  CLOUD_CREDENTIALS: 'The stored investor credentials could not be decrypted. Reconnect to re-enter the password.'
+  E_SERVER_TIMEZONE: 'The broker server timezone could not be detected. Cloud provisioning may need manual setup.',
+  E_RESOURCE_SLOTS: 'The sync service has no free resource slots left. Please retry shortly or use the EA method.',
+  E_MAIN_SERVERS: 'The sync worker could not reach the broker server. Please check broker server status and try again.',
+  E_ACCOUNT_NOT_FOUND: 'The MetaTrader account was not found on this broker. Double-check the login number and broker server.',
+  CLOUD_TIMEOUT: 'Connection timed out while connecting to MT5. Starting the connection can take a moment — please try again.',
+  CLOUD_SYNC_FAILED: 'Automatic sync hit an unexpected error. Please retry or use the EA method.',
+  CLOUD_SYNC_LOST: 'The MT5 connection was lost. Reconnect to re-authenticate.',
+  CLOUD_CREDENTIALS: 'The stored investor credentials could not be decrypted. Reconnect to re-enter the password.',
+  MT5_LOGIN_FAILED: 'Broker rejected login. Double-check your MT5 login number, investor password, and exact broker server name.',
+  BAD_LOGIN: 'The MT5 login number must contain only numeric digits.',
+  MT5_NO_ACCOUNT_INFO: 'MT5 logged in, but the broker returned no account details. Verify that the account is active with your broker.',
+  MT5_WRONG_LOGIN: 'The MT5 terminal is active on a different account number than expected. Check your account settings.',
+  MT5_HISTORY_FAILED: 'Could not fetch trade history from the broker server. Check broker connectivity or server scan.',
+  VPS_SYNC_FAILED: 'Automatic sync failed to connect to your MT5 account. Verify credentials or use the Expert Advisor (EA) method.',
+  WORKER_CRASH: 'The sync worker encountered an unexpected issue while communicating with MT5.',
+  BACKEND_ERROR: 'Server communication error during sync. Please try again shortly.',
+  EA_TIMESTAMP_SKEW: 'Computer system clock is skewed by more than 5 minutes. Please synchronize your system time.',
+  EA_WEBREQUEST_BLOCKED: 'MT5 WebRequest was blocked. Add the website URL in MT5 Tools → Options → Expert Advisors.',
+  BRIDGE_NOT_CONFIGURED: 'Automatic worker sync is not configured on this server. Please use the Expert Advisor method.',
+  VPS_NOT_CONFIGURED: 'Automatic VPS sync is not configured on this server. Please use the Expert Advisor method.'
 };
 
 function timeAgo(iso?: string | null): string {
@@ -609,28 +622,33 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
       (e) => !e.resolvedAt && isAuthError(e.errorCode, e.errorMessage)
     );
 
+    // Any authentication failure takes precedence
+    if (hasAuthFailedJob || hasAuthUnresolved) return 'Incorrect Password';
+
+    // Check for any failed connect job or unresolved errors BEFORE defaulting to Validating!
+    const failedJob = (status?.connectJobs || []).slice().reverse().find((j) => j.status === 'FAILED');
+    const unresolved = (status?.lastErrors || []).filter((e) => !e.resolvedAt);
+
+    if (status?.status === 'Error' || status?.eaStatus === 'Error') return 'Error';
+    if (failedJob) return 'Error';
+    if (unresolved.length > 0 && status) return 'Error';
+
     // VPS method
     if (status?.syncMethod === 'VPS' && status.cloudConnected) {
       if (status.eaStatus === 'Connected' || status.status === 'Connected') return 'Synced';
       if (status.status === 'Queued') return 'Queued';
       if (status.status === 'Disconnected') return 'Disconnected';
-      if (status.status === 'Error') return 'Error';
       const pendingVps = (status.connectJobs || []).some((j) => j.status === 'PENDING' || j.status === 'RUNNING');
       if (pendingVps) return 'Queued';
-      if (hasAuthFailedJob || hasAuthUnresolved) return 'Incorrect Password';
       return 'Validating';
     }
     // Cloud (MetaApi) method
     if (status?.syncMethod === 'CLOUD' && status.cloudConnected) {
       if (status.status === 'Connected') return 'Synced';
       if (status.status === 'Disconnected') return 'Disconnected';
-      if (status.status === 'Error') return 'Error';
-      if (hasAuthFailedJob || hasAuthUnresolved) return 'Incorrect Password';
       return 'Validating';
     }
     if (status?.status === 'Disconnected' || status?.eaStatus === 'Disconnected') return 'Disconnected';
-    const unresolved = (status?.lastErrors || []).filter((e) => !e.resolvedAt);
-    if (unresolved.length > 0 && status) return 'Error';
     const heartbeatAt = status?.lastHeartbeatAt;
     const fresh = heartbeatAt ? Date.now() - new Date(heartbeatAt).getTime() < 120000 : false;
     if (status?.eaStatus === 'Connected' || fresh) {
@@ -699,7 +717,14 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                 ? 'text-slate-500 dark:text-slate-400'
                 : 'text-indigo-600 dark:text-indigo-400';
 
-  const latestError = (status?.lastErrors || []).filter((e) => !e.resolvedAt)[0];
+  const unresolvedError = (status?.lastErrors || []).filter((e) => !e.resolvedAt)[0];
+  const failedConnectJob = (status?.connectJobs || []).slice().reverse().find((j) => j.status === 'FAILED');
+  const latestError = unresolvedError || (failedConnectJob ? {
+    errorCode: failedConnectJob.errorCode || 'VPS_SYNC_FAILED',
+    errorMessage: failedConnectJob.errorMessage || (failedConnectJob as any).error || (failedConnectJob as any).statusMessage || 'MT5 connection failed',
+    occurredAt: (failedConnectJob as any).finishedAt || (failedConnectJob as any).updatedAt || new Date().toISOString(),
+    resolvedAt: null
+  } : undefined);
   const latestCloudJob = (status?.connectJobs || []).filter((j) => j.action === 'CONNECT').slice(-1)[0];
 
   const currency = status?.moneyFlows?.[0]?.currency || account.currency || 'USD';
@@ -810,12 +835,62 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
           )}
         </div>
       )}
+      {phase === 'Validating' && status?.syncMethod === 'VPS' && (
+        <div className="flex items-start gap-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-xl px-4 py-3.5">
+          <Loader2 className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-indigo-600 dark:text-indigo-400" />
+          <div className="flex-1 space-y-1.5">
+            <p className="font-bold text-sm text-indigo-900 dark:text-indigo-100">Validating MT5 Broker Connection…</p>
+            <p className="font-normal opacity-90 leading-relaxed text-indigo-800 dark:text-indigo-200">
+              Contacting broker server <strong>{status?.terminalServer || account?.eaTerminalServer || account?.broker || 'MT5 Server'}</strong> for login <strong>#{status?.terminalLogin || account?.eaTerminalLogin || account?.mt5Login || '—'}</strong>. This verification usually takes 15–30 seconds.
+            </p>
+            {!workerOnline && (
+              <div className="mt-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 text-[11px] font-normal space-y-1">
+                <p className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                  Auto Sync Worker Offline
+                </p>
+                <p>
+                  The background worker process is not active right now. If this validation takes longer than 1 minute, switch to the <strong>Expert Advisor (EA)</strong> method for instant direct syncing from your MT5 terminal.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('ea')}
+                  className="mt-1 inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Switch to Expert Advisor (EA) →
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {phase === 'Validating' && !(status?.syncMethod === 'CLOUD' && status.cloudConnected) && status?.syncMethod !== 'VPS' && (
-        <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-xl px-4 py-3">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-          <div>
-            Waiting for MT5… Compile the EA (F7), attach it to a chart, and allow automated trading. The server is listening
-            for the first connection. This page refreshes automatically.
+        <div className="flex items-start gap-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-xl px-4 py-3.5">
+          <Loader2 className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-indigo-600 dark:text-indigo-400" />
+          <div className="flex-1 space-y-2">
+            <div>
+              <p className="font-bold text-sm text-indigo-900 dark:text-indigo-100">Waiting for MT5 Terminal connection…</p>
+              <p className="font-normal opacity-90 mt-0.5 leading-relaxed text-indigo-800 dark:text-indigo-200">
+                The server is listening for your Expert Advisor. Attach the downloaded EA file to an MT5 chart with <strong>Algo Trading</strong> enabled.
+              </p>
+            </div>
+            <div className="p-2.5 rounded-lg bg-white/70 dark:bg-slate-800/70 border border-indigo-200/60 dark:border-indigo-500/20 text-[11px] font-normal text-slate-600 dark:text-slate-300 space-y-1">
+              <p className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                <HelpCircle className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                If connecting takes longer than 30 seconds, please verify:
+              </p>
+              <ul className="list-disc list-inside space-y-1 ml-1 text-slate-600 dark:text-slate-300">
+                <li>
+                  <strong>MT5 WebRequest URL:</strong> In MT5 go to <em>Tools → Options → Expert Advisors</em>, check <strong>"Allow WebRequest for listed URL"</strong> and add <code className="px-1 py-0.5 bg-slate-100 dark:bg-slate-700 rounded font-mono text-[10px]">{window.location.origin}</code>.
+                </li>
+                <li>
+                  <strong>Algo Trading:</strong> Ensure the <em>Algo Trading</em> button in MT5 top toolbar is green (enabled).
+                </li>
+                <li>
+                  <strong>Check Experts Tab:</strong> Check the <strong>"Experts"</strong> tab at the bottom of MT5 for error codes (e.g. error <code>4060</code> means WebRequest is blocked).
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       )}
@@ -831,17 +906,43 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
         </div>
       )}
       {phase === 'Error' && (
-        <div className="flex items-start gap-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded-xl px-4 py-3">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            {friendlyError(latestError)}
-            {latestError && (
-              <div className="mt-1 font-mono text-[10px] opacity-70">{latestError.errorCode} · {timeAgo(latestError.occurredAt)}</div>
-            )}
+        <div className="flex items-start gap-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-800 dark:text-rose-200 text-xs font-semibold rounded-xl px-4 py-3.5">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-500" />
+          <div className="flex-1 space-y-2">
+            <div>
+              <div className="font-bold text-sm text-rose-900 dark:text-rose-100 flex items-center gap-2">
+                MT5 Connection Issue Detected
+                {latestError?.errorCode && (
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-200/60 dark:bg-rose-500/20 text-rose-800 dark:text-rose-200">
+                    {latestError.errorCode}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-rose-700 dark:text-rose-300 font-medium leading-relaxed">
+                {friendlyError(latestError)}
+              </p>
+              {latestError?.occurredAt && (
+                <div className="mt-1 font-mono text-[10px] opacity-70">Occurred {timeAgo(latestError.occurredAt)}</div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => onRefresh()}
+                className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg transition"
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Retry Connection
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('ea')}
+                className="inline-flex items-center gap-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold px-3.5 py-2 rounded-lg transition"
+              >
+                <Terminal className="h-3.5 w-3.5 text-indigo-500" /> Use Expert Advisor (EA)
+              </button>
+            </div>
           </div>
-          <button onClick={() => onRefresh()} className="shrink-0 inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition">
-            <RefreshCw className="h-3 w-3" /> Retry
-          </button>
         </div>
       )}
       {phase === 'Disconnected' && (
@@ -963,15 +1064,27 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
               {status.connectJobs && status.connectJobs.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {status.connectJobs.slice(-3).map((j) => (
-                    <div key={j.id} className="inline-flex items-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 px-3 py-1.5 text-xs">
-                      <span className="font-black text-slate-700 dark:text-slate-200">{j.action}</span>
-                      <span className={`font-bold ${
-                        j.status === 'FAILED' ? 'text-rose-500'
-                        : j.status === 'DONE' ? 'text-emerald-600'
-                        : j.status === 'RUNNING' ? 'text-amber-500'
-                        : 'text-indigo-500'
-                      }`}>{j.status}</span>
-                      {j.errorCode && <span className="text-rose-500 font-bold text-[10px]">{j.errorCode}</span>}
+                    <div key={j.id} className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 px-3 py-2 text-xs">
+                      <div className="inline-flex items-center gap-2">
+                        <span className="font-black text-slate-700 dark:text-slate-200">{j.action}</span>
+                        <span className={`font-bold ${
+                          j.status === 'FAILED' ? 'text-rose-500'
+                          : j.status === 'DONE' ? 'text-emerald-600'
+                          : j.status === 'RUNNING' ? 'text-amber-500'
+                          : 'text-indigo-500'
+                        }`}>{j.status}</span>
+                        {j.errorCode && <span className="text-rose-500 font-bold font-mono text-[10px]">{j.errorCode}</span>}
+                      </div>
+                      {j.status === 'FAILED' && (
+                        <div className="text-rose-600 dark:text-rose-400 text-[11px] font-medium mt-1 leading-normal">
+                          {friendlyError({
+                            errorCode: j.errorCode || '',
+                            errorMessage: j.errorMessage || (j as any).lastError || (j as any).error || j.statusMessage || '',
+                            occurredAt: '',
+                            resolvedAt: null
+                          })}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

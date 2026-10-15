@@ -5951,6 +5951,24 @@ app.get('/api/mt5/:accountId/status', async (req, res) => {
     resolvedErrors = [cloudUnavailable, ...lastErrors];
   }
 
+  // Also reconcile any failed connect jobs or unhandled worker errors so accounts don't get stuck in Validating
+  const latestFailedJob = connectJobs.slice().reverse().find((j: any) => j.status === 'FAILED' || j.errorCode || j.error);
+  if (latestFailedJob) {
+    if (connStatus === 'Validating' || connStatus === 'Queued') {
+      connStatus = 'Error';
+    }
+    const hasJobError = resolvedErrors.some((e: any) => e.errorCode === latestFailedJob.errorCode || e.errorMessage === (latestFailedJob.error || latestFailedJob.errorMessage));
+    if (!hasJobError) {
+      resolvedErrors = [{
+        accountId: account.id,
+        errorCode: latestFailedJob.errorCode || 'VPS_SYNC_FAILED',
+        errorMessage: latestFailedJob.errorMessage || latestFailedJob.error || latestFailedJob.statusMessage || 'MT5 connection failed',
+        occurredAt: latestFailedJob.finishedAt || latestFailedJob.updatedAt || new Date().toISOString(),
+        resolvedAt: null
+      }, ...resolvedErrors];
+    }
+  }
+
   res.json({
     accountId: account.id,
     status: connStatus,
