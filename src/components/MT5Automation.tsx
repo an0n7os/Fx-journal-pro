@@ -262,6 +262,8 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showPasswordTip, setShowPasswordTip] = useState(false);
   const [activeTab, setActiveTab] = useState<'ea' | 'investor' | 'vps'>('vps');
+  const [connectElapsed, setConnectElapsed] = useState(0);
+  const [retrying, setRetrying] = useState(false);
 
   // The server decides: it knows whether a worker can run here at all.
   // Defaults to false so a status that has not arrived yet never advertises a
@@ -290,6 +292,27 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   useEffect(() => {
     setActiveTab('vps');
   }, []);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    const isConnecting =
+      status?.status === 'Queued' ||
+      status?.status === 'Validating' ||
+      status?.status === 'Syncing' ||
+      vpsBusy ||
+      (status?.syncMethod === 'VPS' && (status?.connectJobs || []).some((j) => j.status === 'PENDING' || j.status === 'RUNNING'));
+
+    if (isConnecting) {
+      timer = setInterval(() => {
+        setConnectElapsed((s) => s + 1);
+      }, 1000);
+    } else {
+      setConnectElapsed(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [status?.status, status?.syncMethod, status?.connectJobs, vpsBusy]);
 
   const host = typeof window !== 'undefined' ? window.location.host : 'www.fxjournalpro.com';
   const apiUrl = `${window.location.protocol}//${host}/api/mt5`;
@@ -584,6 +607,38 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
     }
   }
 
+  async function handleRetryConnection() {
+    if (!account) return;
+    setRetrying(true);
+    setError('');
+    setVpsError('');
+    try {
+      const res = await authFetch(`/api/mt5/${account.id}/retry`, {
+        method: 'POST'
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!data.retried) {
+        setStatus((prev) => prev ? {
+          ...prev,
+          status: 'Not Started',
+          connectJobs: (prev.connectJobs || []).filter(j => j.status !== 'FAILED'),
+          lastErrors: []
+        } : null);
+        setActiveTab('vps');
+        setTimeout(() => {
+          const el = document.getElementById('vpsLogin') || document.getElementById('vpsServer');
+          if (el) el.focus();
+        }, 100);
+      }
+      await pollStatus();
+      onRefresh();
+    } catch {
+      onRefresh();
+    } finally {
+      setRetrying(false);
+    }
+  }
+
   async function handleVpsDisconnect() {
     if (!account) return;
     setVpsBusy(true);
@@ -625,13 +680,18 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
     // Any authentication failure takes precedence
     if (hasAuthFailedJob || hasAuthUnresolved) return 'Incorrect Password';
 
+    // Any active/pending VPS job takes precedence over past failed jobs!
+    const pendingVps = (status?.connectJobs || []).some((j) => j.status === 'PENDING' || j.status === 'RUNNING');
+    if (pendingVps) return 'Queued';
+
     // Check for any failed connect job or unresolved errors BEFORE defaulting to Validating!
-    const failedJob = (status?.connectJobs || []).slice().reverse().find((j) => j.status === 'FAILED');
+    const lastJob = (status?.connectJobs || [])[(status?.connectJobs || []).length - 1];
+    const failedJob = lastJob && lastJob.status === 'FAILED' ? lastJob : (status?.connectJobs || []).slice().reverse().find((j) => j.status === 'FAILED');
     const unresolved = (status?.lastErrors || []).filter((e) => !e.resolvedAt);
 
     if (status?.status === 'Error' || status?.eaStatus === 'Error') return 'Error';
-    if (failedJob) return 'Error';
-    if (unresolved.length > 0 && status) return 'Error';
+    if (!pendingVps && failedJob) return 'Error';
+    if (!pendingVps && unresolved.length > 0 && status) return 'Error';
 
     // VPS method
     if (status?.syncMethod === 'VPS' && status.cloudConnected) {
@@ -790,11 +850,76 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
           dead end, and a spinner over "will connect automatically" is a lie
           that costs the customer a support ticket to discover. */}
       {phase === 'Queued' && status?.syncMethod === 'VPS' && !queueStalled && (
-        <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-xl px-4 py-3">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-          <div className="flex-1">
-            Connecting to MT5 — we will connect to your account, fetch your trades, and update the journal automatically.
-            {status.queueDepth && status.queueDepth > 1 ? ` (${status.queueDepth} jobs ahead)` : ''} This page refreshes automatically.
+        <div className="relative overflow-hidden rounded-2xl border border-violet-500/30 bg-gradient-to-br from-violet-950/40 via-slate-900/90 to-indigo-950/40 p-4 sm:p-5 shadow-[0_8px_30px_rgba(139,92,246,0.14)]">
+          {/* Ambient glow */}
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-violet-600/10 rounded-full blur-2xl pointer-events-none" />
+
+          <div className="relative z-10 space-y-3.5">
+            {/* Header row */}
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="relative flex items-center justify-center h-10 w-10 rounded-xl bg-violet-500/15 border border-violet-500/30 text-violet-400 shrink-0">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-violet-500"></span>
+                  </span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-white tracking-tight">
+                      Connecting to MT5 Broker
+                    </h4>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/35">
+                      <Clock className="w-3 h-3" /> ~1 min wait
+                    </span>
+                    {status.queueDepth && status.queueDepth > 1 ? (
+                      <span className="text-[10px] font-mono text-slate-400">
+                        ({status.queueDepth} in queue)
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Please wait about 1 minute while we securely connect to your broker and sync your trading history.
+                  </p>
+                </div>
+              </div>
+
+              {/* Real-time elapsed badge */}
+              <div className="flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-xl bg-slate-900/90 border border-white/10 text-slate-300 shrink-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Elapsed: <strong className="text-white font-bold">{connectElapsed}s</strong></span>
+              </div>
+            </div>
+
+            {/* Live Progress Bar */}
+            <div className="space-y-1.5 pt-1">
+              <div className="w-full h-2 bg-slate-800/90 rounded-full overflow-hidden border border-white/5">
+                <div
+                  className="h-full bg-gradient-to-r from-violet-500 via-indigo-500 to-emerald-400 rounded-full transition-all duration-1000 ease-out shadow-[0_0_12px_rgba(139,92,246,0.6)]"
+                  style={{
+                    width: `${Math.min(94, Math.max(12, Math.round((connectElapsed / 55) * 100)))}%`
+                  }}
+                />
+              </div>
+
+              {/* Live Status text */}
+              <div className="flex items-center justify-between text-[11px] text-slate-400 flex-wrap gap-2 pt-0.5">
+                <span className="flex items-center gap-2 text-violet-300 font-medium">
+                  <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-ping"></span>
+                  {connectElapsed < 12
+                    ? `Step 1/3: Dispatching secure worker to ${status?.terminalServer || account?.eaTerminalServer || account?.broker || 'broker server'}...`
+                    : connectElapsed < 28
+                    ? 'Step 2/3: Authorizing read-only Investor credentials with broker...'
+                    : connectElapsed < 48
+                    ? 'Step 3/3: Downloading trade history, deals & calculating balances...'
+                    : 'Finalizing synchronization & journal analytics...'}
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium">
+                  Please keep this page open &bull; Auto-refreshes
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -929,15 +1054,21 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
             <div className="flex items-center gap-3 pt-1">
               <button
                 type="button"
-                onClick={() => onRefresh()}
-                className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg transition"
+                onClick={handleRetryConnection}
+                disabled={retrying}
+                className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition cursor-pointer disabled:opacity-60 shadow-xs"
               >
-                <RefreshCw className="h-3.5 w-3.5" /> Retry Connection
+                {retrying ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {retrying ? 'Retrying…' : 'Retry Connection'}
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('ea')}
-                className="inline-flex items-center gap-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold px-3.5 py-2 rounded-lg transition"
+                className="inline-flex items-center gap-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold px-4 py-2.5 rounded-xl transition cursor-pointer"
               >
                 <Terminal className="h-3.5 w-3.5 text-indigo-500" /> Use Expert Advisor (EA)
               </button>

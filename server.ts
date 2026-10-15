@@ -4745,9 +4745,11 @@ app.delete('/api/accounts/:id', async (req, res) => {
     db.riskSettings = db.riskSettings.filter((r: any) => r.accountId !== id);
 
     if (useSupabase) {
-      await supabase.from('trading_accounts').delete().eq('id', id);
-      await supabase.from('trades').delete().eq('account_id', id);
-      await supabase.from('risk_settings').delete().eq('account_id', id);
+      await Promise.all([
+        supabase.from('trading_accounts').delete().eq('id', id),
+        supabase.from('trades').delete().eq('account_id', id),
+        supabase.from('risk_settings').delete().eq('account_id', id)
+      ]);
     }
 
     await saveDatabase(db, authEmail);
@@ -5994,7 +5996,11 @@ app.get('/api/mt5/:accountId/status', async (req, res) => {
   }
 
   // Also reconcile any failed connect jobs or unhandled worker errors so accounts don't get stuck in Validating
-  const latestFailedJob = connectJobs.slice().reverse().find((j: any) => j.status === 'FAILED' || j.errorCode || j.error);
+  const lastJob = connectJobs[connectJobs.length - 1];
+  const hasActiveJob = lastJob && (lastJob.status === 'PENDING' || lastJob.status === 'RUNNING');
+  const latestFailedJob = !hasActiveJob
+    ? connectJobs.slice().reverse().find((j: any) => j.status === 'FAILED' || j.errorCode || j.error)
+    : null;
   if (latestFailedJob) {
     if (connStatus === 'Validating' || connStatus === 'Queued') {
       connStatus = 'Error';
@@ -6187,6 +6193,51 @@ app.post('/api/mt5/:accountId/disconnect', async (req, res) => {
   logEaEvent(db, account, 'EA_DISCONNECT', 'warn', 'User disconnected the MT5 sync');
   await saveDatabase(db, db.users?.[0]?.email);
   res.json({ ok: true, status: 'Disconnected' });
+});
+
+// Clear / resolve MT5 connection errors and failed jobs so the user can retry cleanly
+app.post('/api/mt5/:accountId/retry', async (req, res) => {
+  let db = (req as any).userDb;
+  let currentUser = (req as any).currentUser;
+  if (!currentUser || !db) return res.status(401).json({ error: 'Not authenticated' });
+
+  const account = db.accounts.find((a: any) => a.id === req.params.accountId);
+  if (!account) return res.status(404).json({ error: 'Account not found' });
+  if (account.userId !== currentUser.id) return res.status(403).json({ error: 'Access denied' });
+
+  // Resolve past connection errors
+  if (Array.isArray(db.mt5ConnectionErrors)) {
+    for (const err of db.mt5ConnectionErrors) {
+      if (err.accountId === account.id && !err.resolvedAt) {
+        err.resolvedAt = new Date().toISOString();
+      }
+    }
+  }
+
+  // Remove stale failed connect jobs so they don't block
+  if (Array.isArray(db.mt5ConnectJobs)) {
+    db.mt5ConnectJobs = db.mt5ConnectJobs.filter(
+      (j: any) => !(j.accountId === account.id && j.status === 'FAILED')
+    );
+  }
+
+  // If VPS credentials exist, re-enqueue a SYNC_NOW job
+  if (account.syncMethod === 'VPS' && account.investorPasswordEnc) {
+    const existing = (db.mt5ConnectJobs || []).find(
+      (j: any) => j.accountId === account.id && (j.status === 'PENDING' || j.status === 'RUNNING')
+    );
+    let jobId = existing?.id;
+    if (!existing) {
+      jobId = enqueueConnectJob(db, account, 'SYNC_NOW');
+    }
+    account.connectionStatus = 'Queued';
+    await saveDatabase(db, db.users?.[0]?.email);
+    return res.json({ ok: true, retried: true, status: 'Queued', jobId });
+  }
+
+  account.connectionStatus = 'Not Connected';
+  await saveDatabase(db, db.users?.[0]?.email);
+  return res.json({ ok: true, retried: false, status: 'Not Connected' });
 });
 
 // ==========================================
@@ -13638,7 +13689,10 @@ app.get('/api/shared/:token', async (req, res) => {
 if (IS_DEV) {
   import('vite').then(({ createServer }) => {
     createServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: { port: Number(process.env.HMR_PORT) || 24679 }
+      },
       appType: 'spa'
     }).then((vite) => {
       app.use(vite.middlewares);

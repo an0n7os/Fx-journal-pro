@@ -1877,31 +1877,40 @@ export default function App() {
         confirmText: 'Yes, Delete Portfolio',
         cancelText: 'Cancel',
         onConfirm: async () => {
-          setActionLoading(true);
+          // Immediately close the edit modal & optimistically update UI for zero latency
+          setShowEditAccountModal(false);
+          setEditingAccount(null);
+
+          const previousAccounts = accounts;
+          const previousTrades = trades;
+          const remaining = accounts.filter(a => a.id !== targetAccount.id);
+          setAccounts(remaining);
+          setTrades(prev => prev.filter(t => t.accountId !== targetAccount.id));
+
+          if (selectedAccountId === targetAccount.id) {
+            const nextId = remaining.length > 0 ? remaining[0].id : '';
+            setSelectedAccountId(nextId);
+            persistSelectedAccount(nextId);
+          }
+
           try {
             const res = await authFetch(`/api/accounts/${targetAccount.id}`, {
               method: 'DELETE'
             });
-            const data = await res.json();
-            if (res.ok) {
-              setShowEditAccountModal(false);
-              setEditingAccount(null);
-              const remaining = accounts.filter(a => a.id !== targetAccount.id);
-              if (selectedAccountId === targetAccount.id) {
-                const nextId = remaining.length > 0 ? remaining[0].id : '';
-                setSelectedAccountId(nextId);
-                persistSelectedAccount(nextId);
-                await fetchAccountData(nextId);
-              } else {
-                await fetchAccountData();
-              }
-            } else if (data.error) {
-              showAlert(data.error, { title: 'Delete Failed', type: 'error' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              // Rollback optimistic state if backend failed
+              setAccounts(previousAccounts);
+              setTrades(previousTrades);
+              showAlert(data.error || 'Failed to delete account', { title: 'Delete Failed', type: 'error' });
+            } else {
+              // Silently refresh in background
+              fetchAccountData();
             }
           } catch (err: any) {
+            setAccounts(previousAccounts);
+            setTrades(previousTrades);
             showAlert('Error deleting account: ' + (err?.message || err), { title: 'Delete Failed', type: 'error' });
-          } finally {
-            setActionLoading(false);
           }
         }
       }
