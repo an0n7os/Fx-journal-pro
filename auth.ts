@@ -44,30 +44,15 @@ function createMemoryStore(): Record<string, any[]> {
 }
 
 function getDatabaseAdapter(): any {
-  // On Serverless (Vercel / Netlify), ALWAYS use memory adapter.
-  // Attempting a PostgreSQL connection from a cold-start serverless function
-  // causes the entire function to hang until the TCP timeout fires, which
-  // makes every auth endpoint (including Google OAuth) appear to freeze.
-  // Sessions are ephemeral per-instance anyway on serverless, so memory
-  // is the correct choice. Set DATABASE_URL only on self-hosted deployments.
-  if (IS_SERVERLESS) {
-    if (process.env.DATABASE_URL) {
-      console.log('[Better Auth] Serverless detected — using memory adapter (DATABASE_URL is ignored on serverless to prevent connection hangs).');
-    }
-    return memoryAdapter(createMemoryStore());
-  }
-
-  // Non-serverless: use PostgreSQL if DATABASE_URL is set
+  // Use PostgreSQL if DATABASE_URL is set (including on Serverless / Neon pooler)
   if (process.env.DATABASE_URL) {
-    // Load pg via createRequire so its CJS dynamic-require calls work even
-    // when this file is bundled as ESM.
     const pgModule = getNodeRequire()('pg');
     const Pool = pgModule.Pool ?? pgModule.default?.Pool;
     return new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
-      connectionTimeoutMillis: 15000,
-      max: 20,
+      connectionTimeoutMillis: 5000,
+      max: IS_SERVERLESS ? 3 : 20,
     });
   }
 
@@ -107,8 +92,10 @@ function resolveAuthSecret(): string {
 }
 
 export function resolveBaseURL(): string {
-  if (process.env.BETTER_AUTH_URL?.trim()) {
-    return process.env.BETTER_AUTH_URL.trim();
+  const configured = process.env.BETTER_AUTH_URL?.trim() || process.env.PUBLIC_APP_URL?.trim();
+  // On serverless / production, ignore localhost if accidentally copied from dev .env
+  if (configured && !((IS_SERVERLESS || process.env.NODE_ENV === 'production') && configured.includes('localhost'))) {
+    return configured;
   }
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()) {
     return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`;
@@ -116,8 +103,8 @@ export function resolveBaseURL(): string {
   if (process.env.VERCEL_URL?.trim()) {
     return `https://${process.env.VERCEL_URL.trim()}`;
   }
-  if (IS_SERVERLESS) {
-    return 'https://fx-journal-pro-pi.vercel.app';
+  if (IS_SERVERLESS || process.env.NODE_ENV === 'production') {
+    return 'https://www.fxjournalpro.com';
   }
   return 'http://localhost:3000';
 }
@@ -126,6 +113,12 @@ export const auth = betterAuth({
   database: getDatabaseAdapter(),
   baseURL: resolveBaseURL(),
   secret: resolveAuthSecret(),
+  session: {
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60,
+    },
+  },
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
