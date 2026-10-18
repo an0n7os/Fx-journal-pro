@@ -1572,6 +1572,357 @@ function createMt5Router(deps) {
 
 // server.ts
 import { createClient } from "@supabase/supabase-js";
+
+// src/neonClient.ts
+import pg from "pg";
+var { Pool } = pg;
+var NeonQueryBuilder = class {
+  constructor(pool, tableName) {
+    this.action = "select";
+    this.selectCols = "*";
+    this.isHead = false;
+    this.filters = [];
+    this.orderBys = [];
+    this.isSingleMode = false;
+    this.isMaybeSingleMode = false;
+    this.pool = pool;
+    this.tableName = tableName;
+  }
+  select(columns = "*", options) {
+    this.action = "select";
+    this.selectCols = columns;
+    if (options?.count === "exact") this.countOption = "exact";
+    if (options?.head) this.isHead = true;
+    return this;
+  }
+  eq(column, value) {
+    this.filters.push({ column, op: "=", value });
+    return this;
+  }
+  neq(column, value) {
+    this.filters.push({ column, op: "!=", value });
+    return this;
+  }
+  in(column, values) {
+    this.filters.push({ column, op: "IN", value: values });
+    return this;
+  }
+  not(column, operator, value) {
+    if (operator === "is" && value === null) {
+      this.filters.push({ column, op: "IS NOT", value: null });
+    } else if (operator === "in") {
+      this.filters.push({ column, op: "NOT IN", value });
+    } else {
+      this.filters.push({ column, op: "!=", value });
+    }
+    return this;
+  }
+  order(column, options) {
+    this.orderBys.push({ column, ascending: options?.ascending !== false });
+    return this;
+  }
+  limit(count) {
+    this.limitCount = count;
+    return this;
+  }
+  maybeSingle() {
+    this.isMaybeSingleMode = true;
+    this.limitCount = 1;
+    return this;
+  }
+  single() {
+    this.isSingleMode = true;
+    this.limitCount = 1;
+    return this;
+  }
+  insert(rows, _options) {
+    this.action = "insert";
+    this.payload = rows;
+    return this;
+  }
+  upsert(rows, options) {
+    this.action = "upsert";
+    this.payload = rows;
+    this.onConflictCols = options?.onConflict || "id";
+    return this;
+  }
+  update(updates) {
+    this.action = "update";
+    this.payload = updates;
+    return this;
+  }
+  delete() {
+    this.action = "delete";
+    return this;
+  }
+  // Makes the query builder thenable (awaitable)
+  async then(resolve, reject) {
+    try {
+      const result = await this.execute();
+      return resolve ? resolve(result) : result;
+    } catch (err) {
+      if (reject) return reject(err);
+      return { data: null, error: err };
+    }
+  }
+  async execute() {
+    try {
+      if (this.action === "select") {
+        return await this.executeSelect();
+      } else if (this.action === "insert" || this.action === "upsert") {
+        return await this.executeInsertOrUpsert();
+      } else if (this.action === "update") {
+        return await this.executeUpdate();
+      } else if (this.action === "delete") {
+        return await this.executeDelete();
+      }
+      return { data: null, error: null };
+    } catch (err) {
+      console.error(`[Neon DB Error in ${this.tableName}]`, err?.message || err);
+      return { data: null, error: { message: err?.message || String(err) } };
+    }
+  }
+  buildWhereClause(startIndex = 1) {
+    if (this.filters.length === 0) return { sql: "", values: [] };
+    const parts = [];
+    const values = [];
+    let idx = startIndex;
+    for (const f of this.filters) {
+      const col = `"${f.column}"`;
+      if (f.op === "IS NOT" && f.value === null) {
+        parts.push(`${col} IS NOT NULL`);
+      } else if (f.op === "IS" && f.value === null) {
+        parts.push(`${col} IS NULL`);
+      } else if (f.op === "IN" || f.op === "NOT IN") {
+        const arr = Array.isArray(f.value) ? f.value : [f.value];
+        if (arr.length === 0) {
+          parts.push(f.op === "IN" ? "1=0" : "1=1");
+        } else {
+          const placeholders = arr.map(() => `$${idx++}`).join(", ");
+          values.push(...arr);
+          parts.push(`${col} ${f.op} (${placeholders})`);
+        }
+      } else {
+        parts.push(`${col} ${f.op} $${idx++}`);
+        values.push(f.value);
+      }
+    }
+    return { sql: " WHERE " + parts.join(" AND "), values };
+  }
+  async executeSelect() {
+    let exactCount = null;
+    const where = this.buildWhereClause(1);
+    if (this.countOption === "exact") {
+      const countSql = `SELECT count(*)::int as total FROM "${this.tableName}"${where.sql}`;
+      const countRes = await this.pool.query(countSql, where.values);
+      exactCount = countRes.rows[0]?.total ?? 0;
+    }
+    if (this.isHead) {
+      return { data: [], error: null, count: exactCount };
+    }
+    let selectList = "*";
+    if (this.selectCols && this.selectCols !== "*") {
+      selectList = this.selectCols.split(",").map((c) => {
+        const trimmed = c.trim();
+        return trimmed.includes("(") ? trimmed : `"${trimmed}"`;
+      }).join(", ");
+    }
+    let sql = `SELECT ${selectList} FROM "${this.tableName}"${where.sql}`;
+    if (this.orderBys.length > 0) {
+      const orderParts = this.orderBys.map((o) => `"${o.column}" ${o.ascending ? "ASC" : "DESC"}`);
+      sql += ` ORDER BY ${orderParts.join(", ")}`;
+    }
+    if (this.limitCount !== void 0 && this.limitCount !== null) {
+      sql += ` LIMIT ${this.limitCount}`;
+    }
+    const res = await this.pool.query(sql, where.values);
+    let data = res.rows;
+    if (this.isSingleMode) {
+      if (res.rows.length === 0) {
+        return { data: null, error: { message: "Row not found", code: "PGRST116" }, count: exactCount };
+      }
+      data = res.rows[0];
+    } else if (this.isMaybeSingleMode) {
+      data = res.rows[0] || null;
+    }
+    return { data, error: null, count: exactCount };
+  }
+  isJsonCol(col) {
+    const jsonCols = /* @__PURE__ */ new Set([
+      "preferences",
+      "main_markets",
+      "mainmarkets",
+      "tags",
+      "screenshots",
+      "metadata",
+      "links",
+      "payout_details",
+      "payoutdetails",
+      "mentor_access",
+      "mentoraccess",
+      "ea_processed_requests"
+    ]);
+    return jsonCols.has(col.toLowerCase());
+  }
+  formatVal(val, col) {
+    if (val === void 0 || val === null) return null;
+    if (val instanceof Date) return val.toISOString();
+    if (typeof val === "object") {
+      if (this.isJsonCol(col)) {
+        return JSON.stringify(val);
+      }
+      if (Object.keys(val).length === 0) {
+        const lower = col.toLowerCase();
+        if (lower === "created_at" || lower === "createdat") return (/* @__PURE__ */ new Date()).toISOString();
+        return null;
+      }
+      return JSON.stringify(val);
+    }
+    return val;
+  }
+  async executeInsertOrUpsert() {
+    const rawRows = Array.isArray(this.payload) ? this.payload : [this.payload];
+    if (rawRows.length === 0) return { data: [], error: null };
+    const colSet = /* @__PURE__ */ new Set();
+    for (const r of rawRows) {
+      if (r && typeof r === "object") {
+        Object.keys(r).forEach((k) => colSet.add(k));
+      }
+    }
+    const cols = Array.from(colSet);
+    if (cols.length === 0) return { data: [], error: null };
+    const quotedCols = cols.map((c) => `"${c}"`).join(", ");
+    const valuePlaceholders = [];
+    const values = [];
+    let idx = 1;
+    for (const row of rawRows) {
+      const rowPlaceholders = [];
+      for (const col of cols) {
+        rowPlaceholders.push(`$${idx++}`);
+        values.push(this.formatVal(row[col], col));
+      }
+      valuePlaceholders.push(`(${rowPlaceholders.join(", ")})`);
+    }
+    let sql = `INSERT INTO "${this.tableName}" (${quotedCols}) VALUES ${valuePlaceholders.join(", ")}`;
+    if (this.action === "upsert" && this.onConflictCols) {
+      const conflictCols = this.onConflictCols.split(",").map((c) => `"${c.trim()}"`).join(", ");
+      const updateCols = cols.filter((c) => !this.onConflictCols.split(",").map((x) => x.trim()).includes(c)).map((c) => `"${c}" = EXCLUDED."${c}"`);
+      if (updateCols.length > 0) {
+        sql += ` ON CONFLICT (${conflictCols}) DO UPDATE SET ${updateCols.join(", ")}`;
+      } else {
+        sql += ` ON CONFLICT (${conflictCols}) DO NOTHING`;
+      }
+    }
+    sql += " RETURNING *";
+    const res = await this.pool.query(sql, values);
+    const data = Array.isArray(this.payload) ? res.rows : res.rows[0] || null;
+    return { data, error: null };
+  }
+  async executeUpdate() {
+    if (!this.payload || typeof this.payload !== "object") {
+      return { data: [], error: null };
+    }
+    const cols = Object.keys(this.payload);
+    if (cols.length === 0) return { data: [], error: null };
+    const setParts = [];
+    const values = [];
+    let idx = 1;
+    for (const col of cols) {
+      setParts.push(`"${col}" = $${idx++}`);
+      values.push(this.formatVal(this.payload[col], col));
+    }
+    const where = this.buildWhereClause(idx);
+    values.push(...where.values);
+    const sql = `UPDATE "${this.tableName}" SET ${setParts.join(", ")}${where.sql} RETURNING *`;
+    const res = await this.pool.query(sql, values);
+    return { data: res.rows, error: null };
+  }
+  async executeDelete() {
+    const where = this.buildWhereClause(1);
+    const sql = `DELETE FROM "${this.tableName}"${where.sql} RETURNING *`;
+    const res = await this.pool.query(sql, where.values);
+    return { data: res.rows, error: null };
+  }
+};
+function createNeonClient(connectionString) {
+  const pool = new Pool({
+    connectionString,
+    ssl: connectionString.includes("localhost") ? false : { rejectUnauthorized: false },
+    max: 20,
+    idleTimeoutMillis: 3e4,
+    connectionTimeoutMillis: 15e3
+  });
+  return {
+    pool,
+    from(table) {
+      return new NeonQueryBuilder(pool, table);
+    },
+    auth: {
+      async getUser(token) {
+        try {
+          if (!token) return { data: { user: null }, error: null };
+          const sessionRes = await pool.query(
+            'SELECT s.*, u.* FROM "session" s JOIN "user" u ON s."userId" = u.id WHERE s.token = $1 LIMIT 1',
+            [token]
+          );
+          if (sessionRes.rows.length > 0) {
+            const row = sessionRes.rows[0];
+            return {
+              data: {
+                user: {
+                  id: row.id,
+                  email: row.email,
+                  user_metadata: { name: row.name, avatar: row.image }
+                }
+              },
+              error: null
+            };
+          }
+          return { data: { user: null }, error: null };
+        } catch (err) {
+          return { data: { user: null }, error: { message: err?.message || String(err) } };
+        }
+      },
+      admin: {
+        async listUsers({ perPage = 100 } = {}) {
+          try {
+            const res = await pool.query('SELECT * FROM "user" LIMIT $1', [perPage]);
+            return { data: { users: res.rows }, error: null };
+          } catch (err) {
+            return { data: { users: [] }, error: { message: err?.message || String(err) } };
+          }
+        },
+        async updateUserById(id, updates) {
+          try {
+            const cols = Object.keys(updates);
+            if (cols.length === 0) return { data: null, error: null };
+            const sets = cols.map((c, i) => `"${c}" = $${i + 2}`).join(", ");
+            const vals = cols.map((c) => updates[c]);
+            const res = await pool.query(`UPDATE "user" SET ${sets} WHERE id = $1 RETURNING *`, [id, ...vals]);
+            return { data: { user: res.rows[0] || null }, error: null };
+          } catch (err) {
+            return { data: null, error: { message: err?.message || String(err) } };
+          }
+        },
+        async createUser(userAttrs) {
+          try {
+            const id = userAttrs.id || `user_${Date.now()}`;
+            const email = userAttrs.email;
+            const res = await pool.query(
+              'INSERT INTO "user" (id, email, name, "createdAt", "updatedAt") VALUES ($1, $2, $3, NOW(), NOW()) ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email RETURNING *',
+              [id, email, userAttrs.user_metadata?.name || ""]
+            );
+            return { data: { user: res.rows[0] }, error: null };
+          } catch (err) {
+            return { data: null, error: { message: err?.message || String(err) } };
+          }
+        }
+      }
+    }
+  };
+}
+
+// server.ts
 import { z } from "zod";
 import Razorpay from "razorpay";
 import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
@@ -1618,11 +1969,12 @@ function getDatabaseAdapter() {
   }
   if (process.env.DATABASE_URL) {
     const pgModule = getNodeRequire()("pg");
-    const Pool = pgModule.Pool ?? pgModule.default?.Pool;
-    return new Pool({
+    const Pool2 = pgModule.Pool ?? pgModule.default?.Pool;
+    return new Pool2({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5e3
+      connectionTimeoutMillis: 15e3,
+      max: 20
     });
   }
   try {
@@ -1855,7 +2207,8 @@ var auth = betterAuth({
     storeStateStrategy: "cookie",
     accountLinking: {
       enabled: true,
-      trustedProviders: ["google"]
+      trustedProviders: ["google", "github"],
+      requireLocalEmailVerified: false
     }
   },
   databaseHooks: {
@@ -1883,6 +2236,7 @@ var auth = betterAuth({
     }
   },
   onAPIError: {
+    errorURL: "/login",
     onError: (error, ctx) => {
       console.error("[Better Auth API Error]", error?.message || error, ctx?.path);
     }
@@ -1976,7 +2330,11 @@ try {
       supabaseUrl = `https://${supabaseUrl}.supabase.co`;
     }
   }
-  if (supabaseUrl && supabaseKey) {
+  if (process.env.DATABASE_URL) {
+    supabase = createNeonClient(process.env.DATABASE_URL);
+    useSupabase = true;
+    console.log("[AxyFx Journal Server] Neon PostgreSQL Database integration ENABLED via DATABASE_URL!");
+  } else if (supabaseUrl && supabaseKey) {
     supabase = createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
@@ -1990,14 +2348,14 @@ try {
   } else {
     if (IS_PRODUCTION_LIKE) {
       console.error(
-        "[AxyFx Journal Server] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set. Refusing to start in production on the local db.json fallback \u2014 all data would be lost on the next deploy. Set both variables, or set ALLOW_LOCAL_DB=true if you really intend to run on a disk that persists."
+        "[AxyFx Journal Server] DATABASE_URL / SUPABASE_URL are not set. Refusing to start in production on the local db.json fallback \u2014 all data would be lost on the next deploy. Set DATABASE_URL or Supabase variables, or set ALLOW_LOCAL_DB=true if you really intend to run on a disk that persists."
       );
       if (process.env.ALLOW_LOCAL_DB !== "true") {
-        throw new Error("Supabase credentials are required in production");
+        throw new Error("Database credentials (DATABASE_URL or Supabase) are required in production");
       }
       console.warn("[AxyFx Journal Server] ALLOW_LOCAL_DB=true \u2014 continuing on db.json.");
     }
-    console.log("[AxyFx Journal Server] Supabase integration DISABLED. Falling back to local db.json");
+    console.log("[AxyFx Journal Server] Database integration DISABLED. Falling back to local db.json");
   }
 } catch (err) {
   if (err instanceof Error && (err.message === "Supabase credentials are required in production" || err.message === "A public Supabase key cannot be used as the server key")) throw err;
@@ -6784,6 +7142,15 @@ app.post("/api/mt5/worker/claim", async (req, res) => {
         if (!Array.isArray(db.mt5ConnectJobs)) db.mt5ConnectJobs = [];
         db.mt5ConnectJobs = db.mt5ConnectJobs.filter((j) => j.accountId !== account.id);
         db.mt5ConnectJobs.push(job);
+        const targetAcc = (db.accounts || []).find((a) => a.id === account.id);
+        if (targetAcc) {
+          targetAcc.connectionStatus = "Connecting";
+          targetAcc.lastHeartbeatAt = (/* @__PURE__ */ new Date()).toISOString();
+        }
+        await supabase.from("trading_accounts").update({
+          connection_status: "Connecting",
+          last_heartbeat_at: (/* @__PURE__ */ new Date()).toISOString()
+        }).eq("id", account.id);
         logEaEvent(db, account, "VPS_JOB_CLAIMED", "info", `Worker ${body.workerId} claimed CONNECT for MT5 ${account.mt5Login}`);
         await saveDatabase(db, db.users?.[0]?.email);
         return res.json({
@@ -6809,13 +7176,6 @@ app.post("/api/mt5/worker/claim", async (req, res) => {
     }
   }
   const dbs = useSupabase ? [] : allJobDbs();
-  if (useSupabase) {
-    const { data: rows } = await supabase.from("users").select("id").limit(100);
-    for (const r of rows || []) {
-      const d = await ensureUserDbLoaded(r.id, "");
-      if (d) dbs.push(d);
-    }
-  }
   for (const db of dbs) {
     reapExpiredJobs(db);
     const jobs = Array.isArray(db.mt5ConnectJobs) ? db.mt5ConnectJobs : [];

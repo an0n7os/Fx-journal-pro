@@ -66,7 +66,8 @@ function getDatabaseAdapter(): any {
     return new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 15000,
+      max: 20,
     });
   }
 
@@ -327,7 +328,8 @@ export const auth = betterAuth({
     storeStateStrategy: 'cookie',
     accountLinking: {
       enabled: true,
-      trustedProviders: ['google'],
+      trustedProviders: ['google', 'github'],
+      requireLocalEmailVerified: false,
     },
   },
   databaseHooks: {
@@ -355,6 +357,7 @@ export const auth = betterAuth({
     },
   },
   onAPIError: {
+    errorURL: '/login',
     onError: (error: any, ctx: any) => {
       console.error('[Better Auth API Error]', error?.message || error, ctx?.path);
     },

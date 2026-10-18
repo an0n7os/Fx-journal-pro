@@ -19,6 +19,7 @@ import {
 import { EA_TEMPLATE } from './src/eaTemplate.js';
 import { createMt5Router } from './src/mt5-integration-kit/backend/mt5Router.js';
 import { createClient } from '@supabase/supabase-js';
+import { createNeonClient } from './src/neonClient.js';
 import { z } from 'zod';
 import Razorpay from 'razorpay';
 // metaapi.cloud-sdk is NOT a dependency any more — see getCloudApi() for why
@@ -190,7 +191,11 @@ try {
     }
   }
 
-  if (supabaseUrl && supabaseKey) {
+  if (process.env.DATABASE_URL) {
+    supabase = createNeonClient(process.env.DATABASE_URL);
+    useSupabase = true;
+    console.log('[AxyFx Journal Server] Neon PostgreSQL Database integration ENABLED via DATABASE_URL!');
+  } else if (supabaseUrl && supabaseKey) {
     supabase = createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
@@ -211,17 +216,17 @@ try {
     // SESSION_SECRET check below does.
     if (IS_PRODUCTION_LIKE) {
       console.error(
-        '[AxyFx Journal Server] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set. ' +
+        '[AxyFx Journal Server] DATABASE_URL / SUPABASE_URL are not set. ' +
         'Refusing to start in production on the local db.json fallback — all data would be ' +
-        'lost on the next deploy. Set both variables, or set ALLOW_LOCAL_DB=true if you ' +
+        'lost on the next deploy. Set DATABASE_URL or Supabase variables, or set ALLOW_LOCAL_DB=true if you ' +
         'really intend to run on a disk that persists.'
       );
       if (process.env.ALLOW_LOCAL_DB !== 'true') {
-        throw new Error('Supabase credentials are required in production');
+        throw new Error('Database credentials (DATABASE_URL or Supabase) are required in production');
       }
       console.warn('[AxyFx Journal Server] ALLOW_LOCAL_DB=true — continuing on db.json.');
     }
-    console.log('[AxyFx Journal Server] Supabase integration DISABLED. Falling back to local db.json');
+    console.log('[AxyFx Journal Server] Database integration DISABLED. Falling back to local db.json');
   }
 } catch (err) {
   // A deliberate startup abort must not be swallowed by this catch, or the
@@ -6417,6 +6422,16 @@ app.post('/api/mt5/worker/claim', async (req, res) => {
         db.mt5ConnectJobs = db.mt5ConnectJobs.filter((j: any) => j.accountId !== account.id);
         db.mt5ConnectJobs.push(job);
 
+        const targetAcc = (db.accounts || []).find((a: any) => a.id === account.id);
+        if (targetAcc) {
+          targetAcc.connectionStatus = 'Connecting';
+          targetAcc.lastHeartbeatAt = new Date().toISOString();
+        }
+        await supabase.from('trading_accounts').update({
+          connection_status: 'Connecting',
+          last_heartbeat_at: new Date().toISOString()
+        }).eq('id', account.id);
+
         // Mirror connection attempt
         logEaEvent(db, account, 'VPS_JOB_CLAIMED', 'info', `Worker ${body.workerId} claimed CONNECT for MT5 ${account.mt5Login}`);
         await saveDatabase(db, db.users?.[0]?.email);
@@ -6444,15 +6459,8 @@ app.post('/api/mt5/worker/claim', async (req, res) => {
     }
   }
 
-  // 2. In-memory / local database queue fallback
+  // 2. In-memory / local database queue fallback (for non-database local mode only)
   const dbs = useSupabase ? [] : allJobDbs();
-  if (useSupabase) {
-    const { data: rows } = await supabase.from('users').select('id').limit(100);
-    for (const r of rows || []) {
-      const d = await ensureUserDbLoaded((r as any).id, '');
-      if (d) dbs.push(d);
-    }
-  }
 
   for (const db of dbs) {
     reapExpiredJobs(db);
