@@ -885,10 +885,15 @@ function issueSession(res: any, user: { id: string; email: string }): string {
 
 function clearSession(res: any) {
   res.clearCookie(SESSION_COOKIE, sessionCookieOptions());
+  res.clearCookie(SESSION_COOKIE, { ...sessionCookieOptions(), domain: '.fxjournalpro.com' });
   res.clearCookie('better-auth.session_token', { path: '/' });
   res.clearCookie('__Secure-better-auth.session_token', { path: '/' });
+  res.clearCookie('better-auth.session_token', { path: '/', domain: '.fxjournalpro.com' });
+  res.clearCookie('__Secure-better-auth.session_token', { path: '/', domain: '.fxjournalpro.com' });
   res.clearCookie('better-auth.state', { path: '/' });
   res.clearCookie('__Secure-better-auth.state', { path: '/' });
+  res.clearCookie('better-auth.state', { path: '/', domain: '.fxjournalpro.com' });
+  res.clearCookie('__Secure-better-auth.state', { path: '/', domain: '.fxjournalpro.com' });
 }
 
 // Strip every secret before a user object crosses the network. Applied to EVERY
@@ -3068,14 +3073,77 @@ app.use(async (req, res, next) => {
     let authUserId: string | undefined;
     let authEmail: string | undefined;
 
-    // 1. Identity from signed session cookie (fx_auth_session)
+    // 1. Identity from Better Auth session (Google OAuth etc.) - checked FIRST so an active Google login always overrides any stale session cookie
+    let betterUser: any = null;
+    try {
+      const betterSession = await betterAuthInstance.api.getSession({ headers: fromNodeHeaders(req.headers) });
+      if (betterSession?.user) {
+        betterUser = betterSession.user;
+        authUserId = betterSession.user.id;
+        authEmail = betterSession.user.email;
+      }
+    } catch (_) {}
+
+    // 1b. Direct Database Session Lookup Fallback for Better Auth (Neon PostgreSQL / Serverless)
+    if (!authUserId && !authEmail && (useSupabase || process.env.DATABASE_URL)) {
+      try {
+        let rawToken = req.cookies?.['better-auth.session_token'] ||
+          req.cookies?.['__Secure-better-auth.session_token'] ||
+          (req.headers['authorization']?.startsWith('Bearer ') ? req.headers['authorization'].slice(7) : '') ||
+          (req.headers['x-session-token'] as string) || '';
+        
+        if (!rawToken && req.headers.cookie) {
+          const cookieStr = req.headers.cookie;
+          const match = cookieStr.match(/(?:__Secure-)?better-auth\.session_token=([^;]+)/);
+          if (match) {
+            rawToken = decodeURIComponent(match[1].trim());
+          }
+        }
+        
+        if (rawToken) {
+          const cleanToken = rawToken.split('.')[0].trim();
+          if (cleanToken && supabase) {
+            const sessionRes = await supabase.from('session')
+              .select('*')
+              .eq('token', cleanToken)
+              .maybeSingle();
+
+            if (sessionRes?.data?.userId) {
+              const isStillValid = !sessionRes.data.expiresAt || new Date(sessionRes.data.expiresAt).getTime() > Date.now();
+              if (isStillValid) {
+                const uRes = await supabase.from('user')
+                  .select('*')
+                  .eq('id', sessionRes.data.userId)
+                  .maybeSingle();
+
+                if (uRes?.data?.email) {
+                  betterUser = uRes.data;
+                  authUserId = uRes.data.id;
+                  authEmail = uRes.data.email;
+                }
+              }
+            }
+          }
+        }
+      } catch (dbFallbackErr) {
+        console.warn('[AxyFx Auth] Direct session DB fallback failed:', dbFallbackErr);
+      }
+    }
+
+    // 2. Identity from signed session cookie (fx_auth_session)
     const session = verifySessionValue(req.cookies?.[SESSION_COOKIE]);
-    if (session?.userId || session?.email) {
+    if (authUserId || authEmail) {
+      // Better Auth is active! If the existing fx_auth_session cookie belongs to a different user, overwrite it with the active user
+      if (session && ((session.userId && session.userId !== authUserId) || (session.email && session.email.toLowerCase() !== (authEmail || '').toLowerCase()))) {
+        issueSession(res, { id: authUserId, email: authEmail || '' });
+      }
+    } else if (session?.userId || session?.email) {
+      // No Better Auth session active, use fx_auth_session
       authUserId = session.userId?.trim();
       authEmail = session.email?.trim();
     }
 
-    // 2. Identity from Authorization Bearer token or X-Session-Token
+    // 3. Identity from Authorization Bearer token or X-Session-Token
     if (!authUserId && !authEmail) {
       const authHeader = (req.headers['authorization'] || '').toString().trim();
       const token = authHeader.startsWith('Bearer ')
@@ -3095,65 +3163,6 @@ app.use(async (req, res, next) => {
               authEmail = sbUser.user.email;
             }
           } catch (_) {}
-        }
-      }
-    }
-
-    // 3. Identity from Better Auth session (Google OAuth etc.)
-    let betterUser: any = null;
-    if (!authUserId && !authEmail) {
-      try {
-        const betterSession = await betterAuthInstance.api.getSession({ headers: fromNodeHeaders(req.headers) });
-        if (betterSession?.user) {
-          betterUser = betterSession.user;
-          authUserId = betterSession.user.id;
-          authEmail = betterSession.user.email;
-        }
-      } catch (_) {}
-
-      // 3b. Direct Database Session Lookup Fallback for Better Auth (Neon PostgreSQL / Serverless)
-      if (!authUserId && !authEmail && (useSupabase || process.env.DATABASE_URL)) {
-        try {
-          let rawToken = req.cookies?.['better-auth.session_token'] ||
-            req.cookies?.['__Secure-better-auth.session_token'] ||
-            (req.headers['authorization']?.startsWith('Bearer ') ? req.headers['authorization'].slice(7) : '') ||
-            (req.headers['x-session-token'] as string) || '';
-          
-          if (!rawToken && req.headers.cookie) {
-            const cookieStr = req.headers.cookie;
-            const match = cookieStr.match(/(?:__Secure-)?better-auth\.session_token=([^;]+)/);
-            if (match) {
-              rawToken = decodeURIComponent(match[1].trim());
-            }
-          }
-          
-          if (rawToken) {
-            const cleanToken = rawToken.split('.')[0].trim();
-            if (cleanToken && supabase) {
-              const sessionRes = await supabase.from('session')
-                .select('*')
-                .eq('token', cleanToken)
-                .maybeSingle();
-
-              if (sessionRes?.data?.userId) {
-                const isStillValid = !sessionRes.data.expiresAt || new Date(sessionRes.data.expiresAt).getTime() > Date.now();
-                if (isStillValid) {
-                  const uRes = await supabase.from('user')
-                    .select('*')
-                    .eq('id', sessionRes.data.userId)
-                    .maybeSingle();
-
-                  if (uRes?.data?.email) {
-                    betterUser = uRes.data;
-                    authUserId = uRes.data.id;
-                    authEmail = uRes.data.email;
-                  }
-                }
-              }
-            }
-          }
-        } catch (dbFallbackErr) {
-          console.warn('[AxyFx Auth] Direct session DB fallback failed:', dbFallbackErr);
         }
       }
     }

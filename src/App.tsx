@@ -342,6 +342,9 @@ export default function App() {
     window.localStorage.removeItem('auth_email');
     window.localStorage.removeItem('auth_session_token');
     window.localStorage.removeItem('selected_account_id');
+    try {
+      (authClient as any).signOut().catch(() => {});
+    } catch (_) {}
     return fetch('/api/auth/logout', {
       method: 'POST',
       credentials: 'include',
@@ -1342,8 +1345,8 @@ export default function App() {
 
   // authFetch — wraps native fetch and injects auth credentials, bearer tokens, and headers
   const authFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
-    const storedUserId = sessionStorage.getItem('auth_user_id') || localStorage.getItem('auth_user_id') || user?.id || '';
-    const storedEmail = sessionStorage.getItem('auth_email') || localStorage.getItem('auth_email') || user?.email || '';
+    const storedUserId = user?.id || sessionStorage.getItem('auth_user_id') || localStorage.getItem('auth_user_id') || '';
+    const storedEmail = user?.email || sessionStorage.getItem('auth_email') || localStorage.getItem('auth_email') || '';
     const sessionToken = sessionStorage.getItem('auth_session_token') || localStorage.getItem('auth_session_token') || '';
     const method = (options.method || 'GET').toUpperCase();
     const needsContentType = ['POST', 'PUT', 'PATCH'].includes(method) && options.body;
@@ -1466,6 +1469,15 @@ export default function App() {
             }
             if (data.user.avatar && uid) {
               try { localStorage.setItem(`user_avatar_${uid}`, data.user.avatar); } catch {}
+            }
+            // If previous user in localStorage was different, clear previous user's cached accounts & trades immediately
+            const prevStoredId = sessionStorage.getItem('auth_user_id') || localStorage.getItem('auth_user_id');
+            if (prevStoredId && prevStoredId !== data.user.id) {
+              setAccounts([]);
+              setTrades([]);
+              setSelectedAccountId('');
+              sessionStorage.removeItem('selected_account_id');
+              localStorage.removeItem('selected_account_id');
             }
             // Persist the canonical IDs resolved by the server (cookie-based restore)
             // before we call fetchAccountData so authFetch has them available.

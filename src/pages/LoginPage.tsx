@@ -2578,8 +2578,17 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             <button type="button" disabled={actionLoading}
               onClick={async () => {
                 setActionLoading(true); setAuthError(null);
-                // Persist referral code in sessionStorage now so it survives the OAuth round-trip.
-                // Also embed it in callbackURL as a query param as a belt-and-suspenders fallback.
+                // Clear previous session storage before initiating OAuth so a new Google account starts fresh
+                try {
+                  sessionStorage.removeItem('auth_user_id');
+                  sessionStorage.removeItem('auth_email');
+                  sessionStorage.removeItem('auth_session_token');
+                  sessionStorage.removeItem('selected_account_id');
+                  localStorage.removeItem('auth_user_id');
+                  localStorage.removeItem('auth_email');
+                  localStorage.removeItem('auth_session_token');
+                  localStorage.removeItem('selected_account_id');
+                } catch {}
                 const pendingRef = referralCode.trim() || sessionStorage.getItem('fx_referral_code') || '';
                 if (pendingRef) {
                   try { sessionStorage.setItem('fx_referral_code', pendingRef); } catch { /* private mode */ }
@@ -2650,8 +2659,17 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
             <button type="button" disabled={actionLoading}
               onClick={async () => {
                 setActionLoading(true); setAuthError(null);
-                // Persist referral code in sessionStorage now so it survives the OAuth round-trip.
-                // Also embed it in callbackURL as a query param as a belt-and-suspenders fallback.
+                // Clear previous session storage before initiating OAuth so a new Google account starts fresh
+                try {
+                  sessionStorage.removeItem('auth_user_id');
+                  sessionStorage.removeItem('auth_email');
+                  sessionStorage.removeItem('auth_session_token');
+                  sessionStorage.removeItem('selected_account_id');
+                  localStorage.removeItem('auth_user_id');
+                  localStorage.removeItem('auth_email');
+                  localStorage.removeItem('auth_session_token');
+                  localStorage.removeItem('selected_account_id');
+                } catch {}
                 const pendingRef = referralCode.trim() || sessionStorage.getItem('fx_referral_code') || '';
                 if (pendingRef) {
                   try { sessionStorage.setItem('fx_referral_code', pendingRef); } catch { /* private mode */ }
