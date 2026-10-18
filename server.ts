@@ -7105,7 +7105,7 @@ app.post('/api/ai/mentor', async (req, res) => {
   // Prepare a concise trading digest for AI (latest 50 trades)
   const recentTrades = accountTrades.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 50);
   const digest = recentTrades.map((t: any) => ({
-    date: t.date.split('T')[0],
+    date: (t.date instanceof Date ? t.date.toISOString() : String(t.date || '')).split('T')[0],
     symbol: t.symbol,
     type: t.type,
     lots: t.lotSize,
