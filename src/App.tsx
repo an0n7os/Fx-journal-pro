@@ -1568,7 +1568,6 @@ export default function App() {
     // overwriting real data that the first fetch is about to return.
     if (isFetchingAccountsRef.current) return;
     isFetchingAccountsRef.current = true;
-    setLoading(true);
     try {
       // Accounts
       const accsRes = await authFetch('/api/accounts');
@@ -1625,7 +1624,6 @@ export default function App() {
     } catch (e) {
       console.error('Error fetching dashboard tables:', e);
     } finally {
-      setLoading(false);
       isFetchingAccountsRef.current = false;
     }
   };
@@ -4753,13 +4751,17 @@ export default function App() {
 
   // While checking existing session on page load, show splash loading
   if (loading) {
+    const hasExistingSession = typeof window !== 'undefined' && !!(
+      sessionStorage.getItem('auth_user_id') ||
+      localStorage.getItem('auth_user_id')
+    );
     return (
       <div className="min-h-screen bg-[#07090e] flex items-center justify-center p-4">
         <div className="text-center space-y-4 max-w-sm">
           <Logo size={42} className="justify-center mx-auto" />
           <div className="flex items-center justify-center gap-2 text-violet-400 text-xs font-semibold">
             <span className="h-2 w-2 rounded-full bg-violet-400 animate-ping" />
-            Signing you in...
+            {hasExistingSession ? 'Loading workspace...' : 'Signing you in...'}
           </div>
         </div>
       </div>
