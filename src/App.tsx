@@ -964,12 +964,8 @@ export default function App() {
   // Selected currency
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
 
-  const isSupabaseConfigured = Boolean(
-    import.meta.env.VITE_SUPABASE_URL &&
-    import.meta.env.VITE_SUPABASE_KEY &&
-    !import.meta.env.VITE_SUPABASE_URL.includes('your-project.supabase.co') &&
-    !import.meta.env.VITE_SUPABASE_KEY.includes('your-anon-key')
-  );
+  // Supabase is decommissioned in favor of Neon PostgreSQL & Better Auth
+  const isSupabaseConfigured = false;
   const siteUrl = import.meta.env.VITE_SITE_URL?.trim();
   const authRedirectUrl =
     siteUrl ||
