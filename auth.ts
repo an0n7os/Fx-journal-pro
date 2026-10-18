@@ -350,10 +350,6 @@ export const auth = betterAuth({
   },
   advanced: {
     useSecureCookies: resolveBaseURL().startsWith('https://'),
-    crossSubDomainCookies: {
-      enabled: !resolveBaseURL().includes('localhost'),
-      domain: resolveBaseURL().includes('fxjournalpro.com') ? '.fxjournalpro.com' : undefined,
-    },
     defaultCookieAttributes: {
       sameSite: 'lax',
       secure: resolveBaseURL().startsWith('https://'),
