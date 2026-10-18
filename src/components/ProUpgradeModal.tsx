@@ -485,9 +485,17 @@ export default function ProUpgradeModal({
                     </span>
                   </>
                 ) : (
-                  <span className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white font-display tracking-tight tabular-nums">
-                    ₹{amountRupees}
-                  </span>
+                  <>
+                    <span className="text-base sm:text-lg lg:text-xl font-bold line-through text-slate-400/80 tabular-nums">
+                      ₹999
+                    </span>
+                    <span className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white font-display tracking-tight tabular-nums">
+                      ₹{amountRupees}
+                    </span>
+                    <span className="text-[10px] sm:text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      ⚡ Limited Days Offer (50% OFF)
+                    </span>
+                  </>
                 )}
                 <span className="text-xs sm:text-sm text-slate-400">
                   / 30 days <span className="text-[10.5px] sm:text-[11px] text-slate-500">· about ₹16/day</span>

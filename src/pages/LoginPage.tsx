@@ -218,8 +218,8 @@ const benefits = [
   { icon: Clock, title: 'Minutes, not evenings', desc: 'Review a full trading week in the time it used to take to type up one day.' },
 ];
 
-// Plan comparison. Every row here is a promise to a paying customer, so each
-// one has to be enforced in the product before this page goes live.
+const PRO_ORIGINAL_INR = '₹999';
+const PRO_ORIGINAL_USD = '$11.90';
 const PRO_PRICE_USD = '$5.90';
 const PRO_PRICE_INR = '₹499';
 
@@ -1670,28 +1670,37 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               </button>
             </div>
 
-            <div className="lp-card lp-card-accent p-6 sm:p-7 flex flex-col relative">
-              <span className="absolute top-6 right-6 rounded-full border border-violet-300/40 bg-violet-400/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-100">
-                Recommended
-              </span>
-              <p className="lp-eyebrow">Pro</p>
-              <div className="flex items-baseline gap-2 mt-3">
-                <p className="font-display text-[40px] font-bold text-white leading-none tracking-[-0.03em] lp-num">{PRO_PRICE_INR}</p>
-                <span className="text-sm text-slate-300">/ 30 days</span>
+            <div className="lp-card lp-card-accent p-6 sm:p-7 flex flex-col relative overflow-hidden">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="rounded-full border border-violet-300/40 bg-violet-400/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-100">
+                  Recommended
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-500/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]">
+                  ⚡ Limited Days Offer
+                </span>
               </div>
-              {/*
-                "/month ... Cancel anytime" described a subscription that does
-                not exist. Checkout calls /api/payments/order — a one-time
-                Razorpay order that grants exactly 30 days — and never
-                /api/payments/subscribe, so there is nothing recurring and
-                nothing to cancel. A customer reading "cancel anytime" would
-                expect auto-renewal and a cancel button; access simply lapses
-                instead. No auto-renewal is the honest wording, and the better
-                selling point.
-              */}
-              <p className="text-[13px] text-slate-300/90 mt-2">
-                {PRO_PRICE_USD} billed internationally.
-              </p>
+              <p className="lp-eyebrow mt-3">Pro</p>
+              
+              <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 mt-2.5">
+                <span className="font-display text-2xl sm:text-3xl font-bold line-through text-slate-400/80 leading-none">
+                  {PRO_ORIGINAL_INR}
+                </span>
+                <p className="font-display text-[42px] font-bold text-white leading-none tracking-[-0.03em] lp-num">
+                  {PRO_PRICE_INR}
+                </p>
+                <span className="text-sm text-slate-300">/ 30 days</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  50% OFF
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 mt-2 flex-wrap text-[13px] text-slate-300/90">
+                <span className="line-through text-slate-400 text-xs">{PRO_ORIGINAL_USD}</span>
+                <span>{PRO_PRICE_USD} billed internationally.</span>
+                <span className="text-[11px] font-semibold text-amber-300/90 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  🔥 Limited time deal
+                </span>
+              </div>
               <ul className="mt-6 space-y-2.5 flex-1">
                 <li className="flex items-start gap-2.5 text-[13px] text-white">
                   <Check className="h-4 w-4 text-violet-200 shrink-0 mt-0.5" />
@@ -1742,7 +1751,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 onClick={() => openAuthModal('register')}
                 className="lp-btn-primary mt-6 w-full font-semibold rounded-full px-6 py-3 text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-violet-900/30"
               >
-                <span>Go Pro — {PRO_PRICE_INR}</span>
+                <span>Claim Offer — <span className="line-through opacity-60 font-normal mr-1">{PRO_ORIGINAL_INR}</span>{PRO_PRICE_INR}</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
