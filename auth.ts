@@ -98,14 +98,14 @@ export function resolveBaseURL(): string {
   if (configured && !((IS_SERVERLESS || process.env.NODE_ENV === 'production') && configured.includes('localhost'))) {
     return configured;
   }
+  if (IS_SERVERLESS || process.env.NODE_ENV === 'production') {
+    return 'https://www.fxjournalpro.com';
+  }
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()) {
     return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`;
   }
   if (process.env.VERCEL_URL?.trim()) {
     return `https://${process.env.VERCEL_URL.trim()}`;
-  }
-  if (IS_SERVERLESS || process.env.NODE_ENV === 'production') {
-    return 'https://www.fxjournalpro.com';
   }
   return 'http://localhost:3000';
 }

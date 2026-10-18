@@ -3114,9 +3114,18 @@ app.use(async (req, res, next) => {
       // 3b. Direct Database Session Lookup Fallback for Better Auth (Neon PostgreSQL / Serverless)
       if (!authUserId && !authEmail && (useSupabase || process.env.DATABASE_URL)) {
         try {
-          const rawToken = req.cookies?.['better-auth.session_token'] ||
+          let rawToken = req.cookies?.['better-auth.session_token'] ||
             req.cookies?.['__Secure-better-auth.session_token'] ||
-            (req.headers['authorization']?.startsWith('Bearer ') ? req.headers['authorization'].slice(7) : '') || '';
+            (req.headers['authorization']?.startsWith('Bearer ') ? req.headers['authorization'].slice(7) : '') ||
+            (req.headers['x-session-token'] as string) || '';
+          
+          if (!rawToken && req.headers.cookie) {
+            const cookieStr = req.headers.cookie;
+            const match = cookieStr.match(/(?:__Secure-)?better-auth\.session_token=([^;]+)/);
+            if (match) {
+              rawToken = decodeURIComponent(match[1].trim());
+            }
+          }
           
           if (rawToken) {
             const cleanToken = rawToken.split('.')[0].trim();
@@ -3209,6 +3218,7 @@ app.use(async (req, res, next) => {
             is_pro: isSuperAdminUser ? true : false,
             is_email_verified: true,
             auth_provider: 'google',
+            allow_partner_trade_view: false,
             last_login: new Date().toISOString(),
           };
           try {

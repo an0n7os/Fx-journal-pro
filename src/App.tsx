@@ -33,6 +33,7 @@ import { TraderRankCard } from './components/TraderRankCard';
 import LegalFooter from './components/LegalFooter';
 import NextEventCard from './components/NextEventCard';
 import LoginPage from './pages/LoginPage';
+import { authClient } from './lib/auth-client';
 import ProUpgradeModal from './components/ProUpgradeModal';
 import ProFeaturePanel from './components/ProFeaturePanel';
 import CustomAlertModal from './components/CustomAlertModal';
@@ -1412,13 +1413,46 @@ export default function App() {
       // FIX #3: Write sessionStorage BEFORE calling fetchAccountData so that
       // authFetch has the correct user ID available when it builds headers.
       try {
-        const storedId = sessionStorage.getItem('auth_user_id');
-        const storedEmail = sessionStorage.getItem('auth_email');
+        let storedId = sessionStorage.getItem('auth_user_id') || localStorage.getItem('auth_user_id');
+        let storedEmail = sessionStorage.getItem('auth_email') || localStorage.getItem('auth_email');
+
+        // Check Better Auth client session directly if we don't have stored credentials (e.g. fresh Google OAuth redirect)
+        if (!storedId && !storedEmail) {
+          try {
+            const bSession = await (authClient as any).getSession();
+            if (bSession?.data?.user) {
+              storedId = bSession.data.user.id;
+              storedEmail = bSession.data.user.email;
+              sessionStorage.setItem('auth_user_id', storedId);
+              sessionStorage.setItem('auth_email', storedEmail);
+            }
+          } catch (bErr) {
+            console.warn('[Bootstrap] authClient.getSession check:', bErr);
+          }
+        }
+
         const headers: Record<string, string> = {};
         if (storedId) headers['x-auth-user-id'] = storedId;
         if (storedEmail) headers['x-auth-email'] = storedEmail;
 
-        const res = await fetch('/api/auth/me', { headers, credentials: 'include' });
+        let res = await fetch('/api/auth/me', { headers, credentials: 'include' });
+
+        // If initial /api/auth/me returns non-ok, retry with fresh authClient.getSession()
+        if (!res.ok) {
+          try {
+            const bSession = await (authClient as any).getSession();
+            if (bSession?.data?.user) {
+              storedId = bSession.data.user.id;
+              storedEmail = bSession.data.user.email;
+              const retryHeaders: Record<string, string> = {
+                'x-auth-user-id': storedId,
+                'x-auth-email': storedEmail,
+              };
+              res = await fetch('/api/auth/me', { headers: retryHeaders, credentials: 'include' });
+            }
+          } catch (_) {}
+        }
+
         if (res.ok) {
           const data = await res.json();
           if (data.user) {
@@ -1439,7 +1473,11 @@ export default function App() {
             setUser(data.user);
             const isCompleted = !!(data.user.onboardingCompleted || (data.user as any).onboarding_completed);
             setShowOnboardingWizard(!isCompleted);
-            await fetchAccountData();
+            try {
+              await fetchAccountData();
+            } catch (accErr) {
+              console.warn('[Bootstrap] fetchAccountData non-fatal error:', accErr);
+            }
             // Link any pending referral code from a Google OAuth signup
             await linkPendingReferral(data.user.id, data.user.email);
             // Check admin status after session restore

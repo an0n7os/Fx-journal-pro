@@ -2584,7 +2584,9 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 if (pendingRef) {
                   try { sessionStorage.setItem('fx_referral_code', pendingRef); } catch { /* private mode */ }
                 }
-                const callbackBase = window.location.origin + '/dashboard';
+                const callbackBase = (typeof window !== 'undefined' && window.location.origin.includes('fxjournalpro.com'))
+                  ? 'https://www.fxjournalpro.com/dashboard'
+                  : (typeof window !== 'undefined' ? window.location.origin + '/dashboard' : '/dashboard');
                 const callbackURL = pendingRef
                   ? `${callbackBase}?ref=${encodeURIComponent(pendingRef)}`
                   : callbackBase;
@@ -2654,7 +2656,9 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                 if (pendingRef) {
                   try { sessionStorage.setItem('fx_referral_code', pendingRef); } catch { /* private mode */ }
                 }
-                const callbackBase = window.location.origin + '/dashboard';
+                const callbackBase = (typeof window !== 'undefined' && window.location.origin.includes('fxjournalpro.com'))
+                  ? 'https://www.fxjournalpro.com/dashboard'
+                  : (typeof window !== 'undefined' ? window.location.origin + '/dashboard' : '/dashboard');
                 const callbackURL = pendingRef
                   ? `${callbackBase}?ref=${encodeURIComponent(pendingRef)}`
                   : callbackBase;
