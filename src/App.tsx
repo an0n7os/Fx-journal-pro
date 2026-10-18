@@ -4701,6 +4701,21 @@ export default function App() {
     );
   }
 
+  // While checking existing session on page load, show splash loading
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#07090e] flex items-center justify-center p-4">
+        <div className="text-center space-y-4 max-w-sm">
+          <Logo size={42} className="justify-center mx-auto" />
+          <div className="flex items-center justify-center gap-2 text-violet-400 text-xs font-semibold">
+            <span className="h-2 w-2 rounded-full bg-violet-400 animate-ping" />
+            Signing you in...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // No user - show login page
   if (!user) {
     return (

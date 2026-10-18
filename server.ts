@@ -3110,6 +3110,43 @@ app.use(async (req, res, next) => {
           authEmail = betterSession.user.email;
         }
       } catch (_) {}
+
+      // 3b. Direct Database Session Lookup Fallback for Better Auth (Neon PostgreSQL / Serverless)
+      if (!authUserId && !authEmail && (useSupabase || process.env.DATABASE_URL)) {
+        try {
+          const rawToken = req.cookies?.['better-auth.session_token'] ||
+            req.cookies?.['__Secure-better-auth.session_token'] ||
+            (req.headers['authorization']?.startsWith('Bearer ') ? req.headers['authorization'].slice(7) : '') || '';
+          
+          if (rawToken) {
+            const cleanToken = rawToken.split('.')[0].trim();
+            if (cleanToken && supabase) {
+              const sessionRes = await supabase.from('session')
+                .select('*')
+                .eq('token', cleanToken)
+                .maybeSingle();
+
+              if (sessionRes?.data?.userId) {
+                const isStillValid = !sessionRes.data.expiresAt || new Date(sessionRes.data.expiresAt).getTime() > Date.now();
+                if (isStillValid) {
+                  const uRes = await supabase.from('user')
+                    .select('*')
+                    .eq('id', sessionRes.data.userId)
+                    .maybeSingle();
+
+                  if (uRes?.data?.email) {
+                    betterUser = uRes.data;
+                    authUserId = uRes.data.id;
+                    authEmail = uRes.data.email;
+                  }
+                }
+              }
+            }
+          }
+        } catch (dbFallbackErr) {
+          console.warn('[AxyFx Auth] Direct session DB fallback failed:', dbFallbackErr);
+        }
+      }
     }
 
     // 4. In development, allow x-auth-user-id and x-auth-email fallback for API requests
