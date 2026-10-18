@@ -431,7 +431,13 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(() => {
+    try {
+      const err = new URLSearchParams(window.location.search).get('error');
+      if (err) return decodeURIComponent(err);
+    } catch {}
+    return null;
+  });
   const [actionLoading, setActionLoading] = useState(false);
   const [otpCode, setOtpCode] = useState('');
 
@@ -441,7 +447,13 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
 
   const [turnstileToken, setTurnstileToken] = useState('');
 
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => {
+    try {
+      return !!new URLSearchParams(window.location.search).get('error');
+    } catch {
+      return false;
+    }
+  });
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
 

@@ -48,7 +48,7 @@ function getDatabaseAdapter(): any {
         return new Pool({
           connectionString: process.env.DATABASE_URL,
           ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
-          connectionTimeoutMillis: 5000,
+          connectionTimeoutMillis: 15000,
           max: IS_SERVERLESS ? 3 : 20,
         });
       }
@@ -339,12 +339,17 @@ export const auth = betterAuth({
               },
             };
           }
+          return { data: user };
         },
       },
     },
   },
   advanced: {
     useSecureCookies: resolveBaseURL().startsWith('https://'),
+    crossSubDomainCookies: {
+      enabled: !resolveBaseURL().includes('localhost'),
+      domain: resolveBaseURL().includes('fxjournalpro.com') ? '.fxjournalpro.com' : undefined,
+    },
     defaultCookieAttributes: {
       sameSite: 'lax',
       secure: resolveBaseURL().startsWith('https://'),
