@@ -107,7 +107,7 @@ export function resolveBaseURL(): string {
   if (process.env.VERCEL_URL?.trim()) {
     return `https://${process.env.VERCEL_URL.trim()}`;
   }
-  return 'http://localhost:3000';
+  return `http://localhost:${process.env.PORT || 3001}`;
 }
 
 export const auth = betterAuth({
@@ -310,6 +310,10 @@ export const auth = betterAuth({
   trustedOrigins: [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3001',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
     'https://fx-journal-pro-pi.vercel.app',
     'https://fxjournalpro.com',
     'https://www.fxjournalpro.com',
