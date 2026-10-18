@@ -6,11 +6,7 @@ import { memoryAdapter } from '@better-auth/memory-adapter';
 import { createRequire } from 'node:module';
 import path from 'path';
 import crypto from 'node:crypto';
-
-// Use createRequire to load 'pg' as CommonJS at runtime.
-// A static ESM import causes esbuild to inline pg's CJS internals into the
-// ESM bundle, which then breaks with "Dynamic require of 'pg' is not
-// supported" when Node tries to execute it.
+import pg from 'pg';
 const getNodeRequire = () => {
   if (typeof require !== 'undefined') return require;
   if (typeof import.meta !== 'undefined' && import.meta?.url) {
@@ -46,14 +42,19 @@ function createMemoryStore(): Record<string, any[]> {
 function getDatabaseAdapter(): any {
   // Use PostgreSQL if DATABASE_URL is set (including on Serverless / Neon pooler)
   if (process.env.DATABASE_URL) {
-    const pgModule = getNodeRequire()('pg');
-    const Pool = pgModule.Pool ?? pgModule.default?.Pool;
-    return new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000,
-      max: IS_SERVERLESS ? 3 : 20,
-    });
+    try {
+      const Pool = pg.Pool ?? (pg as any).default?.Pool;
+      if (Pool) {
+        return new Pool({
+          connectionString: process.env.DATABASE_URL,
+          ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
+          connectionTimeoutMillis: 5000,
+          max: IS_SERVERLESS ? 3 : 20,
+        });
+      }
+    } catch (dbErr) {
+      console.warn('[Better Auth] PostgreSQL pool initialization failed, falling back:', dbErr);
+    }
   }
 
   // Local development: load SQLite dynamically so serverless bundlers never fail
