@@ -2677,10 +2677,10 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Chat on WhatsApp"
-          className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+16px)] right-4 sm:right-6 sm:bottom-6 z-40 flex items-center justify-center gap-2.5 p-3 sm:px-4 sm:py-3 rounded-full bg-[#25D366] hover:bg-[#20ba5a] text-white font-semibold text-xs shadow-[0_4px_22px_rgba(37,211,102,0.45)] hover:shadow-[0_6px_30px_rgba(37,211,102,0.65)] hover:scale-105 active:scale-95 transition-all duration-200 group border border-white/20"
+          title="Chat on WhatsApp"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+20px)] right-5 sm:right-7 sm:bottom-7 z-40 flex items-center justify-center w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-[#25D366] hover:bg-[#20ba5a] text-white shadow-[0_4px_22px_rgba(37,211,102,0.5)] hover:shadow-[0_8px_30px_rgba(37,211,102,0.7)] hover:scale-110 active:scale-95 transition-all duration-200 border-2 border-white/30 cursor-pointer"
         >
-          <WhatsAppIcon className="h-5 w-5 shrink-0 fill-current" />
-          <span className="hidden sm:inline font-bold tracking-wide">Chat on WhatsApp</span>
+          <WhatsAppIcon className="h-7 w-7 sm:h-8 sm:w-8 shrink-0 fill-current" />
         </a>
       )}
     </div>
