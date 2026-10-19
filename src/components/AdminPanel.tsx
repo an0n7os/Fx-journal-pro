@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet, Sparkles, Trash2, AlertTriangle,
 } from 'lucide-react';
@@ -2758,25 +2759,32 @@ Their referral link stops working and ` +
         </div>
       )}
 
-      {/* Permanent Delete User Modal */}
-      {deleteModalUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-red-500/30 rounded-2xl w-full max-w-md p-6 shadow-2xl shadow-red-950/40 space-y-5 text-left relative overflow-hidden">
+      {/* Permanent Delete User Modal (Mounted via Portal directly to body) */}
+      {deleteModalUser && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+          onClick={() => !deleteLoading && setDeleteModalUser(null)}
+        >
+          <div
+            className="bg-[#0e1320] border border-red-500/40 rounded-2xl w-full max-w-md p-6 shadow-[0_25px_60px_-15px_rgba(239,68,68,0.3)] space-y-5 text-left relative overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Top red glow accent */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-600 via-rose-500 to-red-600" />
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-600 via-rose-500 to-red-600 shadow-[0_0_12px_rgba(239,68,68,0.8)]" />
 
             {/* Header */}
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center justify-center text-red-400">
-                  <AlertTriangle className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-white">Permanently Delete User</h3>
-                  <p className="text-xs text-rose-400/80 font-medium">Irreversible & Permanent Action</p>
+                  <p className="text-xs text-rose-400/90 font-medium">Irreversible & Permanent Action</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => !deleteLoading && setDeleteModalUser(null)}
                 disabled={deleteLoading}
                 className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
@@ -2786,57 +2794,57 @@ Their referral link stops working and ` +
             </div>
 
             {/* User Info Card */}
-            <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/60 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-white font-bold text-xs uppercase shrink-0">
+            <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/70 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500/25 to-purple-500/25 border border-red-500/20 flex items-center justify-center text-white font-bold text-xs uppercase shrink-0">
                 {(deleteModalUser.name || deleteModalUser.email || 'U').slice(0, 2)}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-xs font-semibold text-white truncate">
                   {deleteModalUser.name || 'Unnamed User'}
                 </div>
-                <div className="text-[11px] text-slate-400 truncate">
+                <div className="text-[11px] text-slate-300 truncate font-mono">
                   {deleteModalUser.email}
                 </div>
               </div>
-              <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-md bg-white/5 text-slate-300 border border-white/10 shrink-0">
+              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 border border-red-500/20 shrink-0">
                 {deleteModalUser.role || 'USER'}
               </span>
             </div>
 
             {/* Warning List */}
             <div className="space-y-2 text-xs text-slate-300">
-              <p className="font-medium text-slate-200">
+              <p className="font-semibold text-slate-200">
                 Are you sure? This will immediately and permanently erase:
               </p>
               <ul className="space-y-1.5 pl-1 text-[11px] text-slate-400">
                 <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                   <span>Their user account, session tokens, and login credentials</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                   <span>All linked MT5 trading accounts and trade history</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                   <span>Risk management settings, journal notes, and analytics</span>
                 </li>
               </ul>
             </div>
 
             {deleteError && (
-              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+              <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs">
                 {deleteError}
               </div>
             )}
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
               <button
                 type="button"
                 onClick={() => setDeleteModalUser(null)}
                 disabled={deleteLoading}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 transition cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition cursor-pointer disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -2844,7 +2852,7 @@ Their referral link stops working and ` +
                 type="button"
                 onClick={handleConfirmDeleteUser}
                 disabled={deleteLoading}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-lg shadow-red-950/50 border border-red-500/30 transition flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-lg shadow-red-950/60 border border-red-500/40 transition flex items-center gap-2 cursor-pointer disabled:opacity-60"
               >
                 {deleteLoading ? (
                   <>
@@ -2860,15 +2868,17 @@ Their referral link stops working and ` +
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Floating Success Toast */}
-      {deleteSuccessToast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 border border-emerald-500/30 text-emerald-400 shadow-2xl shadow-emerald-950/50 text-xs font-semibold animate-in slide-in-from-bottom-2 duration-200">
+      {/* Floating Success Toast (Mounted via Portal) */}
+      {deleteSuccessToast && typeof document !== 'undefined' && createPortal(
+        <div className="fixed bottom-6 right-6 z-[99999] flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 border border-emerald-500/30 text-emerald-400 shadow-2xl shadow-emerald-950/50 text-xs font-semibold animate-in slide-in-from-bottom-2 duration-200">
           <Check className="w-4 h-4 text-emerald-400" />
           <span>{deleteSuccessToast}</span>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>
