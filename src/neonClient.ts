@@ -343,6 +343,11 @@ export function createNeonClient(connectionString: string) {
     connectionTimeoutMillis: 15000,
   });
 
+  // Handle idle connection resets from AWS / Neon poolers without crashing the node process
+  pool.on('error', (err: any) => {
+    console.warn('[Neon Pool Idle Event]:', err?.message || err);
+  });
+
   return {
     pool,
     from(table: string) {
