@@ -1852,6 +1852,9 @@ function createNeonClient(connectionString) {
     idleTimeoutMillis: 3e4,
     connectionTimeoutMillis: 15e3
   });
+  pool.on("error", (err) => {
+    console.warn("[Neon Pool Idle Event]:", err?.message || err);
+  });
   return {
     pool,
     from(table) {
