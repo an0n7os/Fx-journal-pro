@@ -7385,7 +7385,8 @@ app.post("/api/mt5/worker/complete", async (req, res) => {
   }
   const account = (db.accounts || []).find((a) => a.id === job.accountId);
   const isTerminalTimeout = String(body.error || "").includes("-10005") || body.errorCode === "MT5_INIT_FAILED";
-  const shouldFailPermanently = !body.ok && (isTerminalTimeout || (job.attempts || 0) >= MT5_JOB_MAX_ATTEMPTS);
+  const isAuthFailed = String(body.error || "").includes("-6") || String(body.error || "").toLowerCase().includes("authorization failed");
+  const shouldFailPermanently = !body.ok && (isAuthFailed || isTerminalTimeout || (job.attempts || 0) >= MT5_JOB_MAX_ATTEMPTS);
   job.status = body.ok ? "DONE" : shouldFailPermanently ? "FAILED" : "PENDING";
   job.error = body.ok ? null : body.error || "Sync failed";
   job.errorCode = body.ok ? null : body.errorCode || null;
@@ -7422,6 +7423,18 @@ app.post("/api/mt5/worker/complete", async (req, res) => {
         resolvedAt: null
       });
       logEaEvent(db, account, "VPS_SYNC_FAILED", "error", String(body.error || "Sync failed").slice(0, 200));
+    }
+    if (useSupabase) {
+      try {
+        await supabase.from("trading_accounts").update({
+          connection_status: account.connectionStatus,
+          ea_status: account.eaStatus || (body.ok ? "Connected" : "Not Connected"),
+          last_heartbeat_at: account.lastHeartbeatAt,
+          ...shouldFailPermanently ? { investor_password_enc: null } : {}
+        }).eq("id", account.id);
+      } catch (err) {
+        console.error("[worker/complete] Supabase account update error:", err);
+      }
     }
   }
   await saveDatabase(db, db.users?.[0]?.email);

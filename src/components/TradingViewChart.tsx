@@ -710,7 +710,7 @@ const TradingViewChart = memo(function TradingViewChart({
 
       {/* ─── Top Toolbar (integrated header, never covers the chart canvas) ── */}
       {!hideControls && showControls && (
-        <div className="relative z-20 w-full flex-shrink-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col gap-2 pointer-events-auto">
+        <div className="relative z-40 w-full flex-shrink-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col gap-2 pointer-events-auto">
           {/* Main Controls Row */}
           <div className="flex items-center justify-between gap-1.5 sm:gap-2 w-full">
             {/* Left: Symbol Search & Badge */}
@@ -744,13 +744,13 @@ const TradingViewChart = memo(function TradingViewChart({
                   className={`pl-6 pr-2 py-1 text-xs font-bold uppercase rounded-lg border w-20 sm:w-28 md:w-32 focus:outline-none focus:ring-2 transition ${inputCls}`}
                 />
 
-                {/* Autocomplete */}
+                {/* Autocomplete Dropdown - elevated above chart tools */}
                 {showSuggestions && suggestions.length > 0 && (
-                  <div className={`absolute top-full left-0 mt-1.5 w-44 rounded-xl shadow-2xl border z-[100] overflow-hidden ${isDark ? 'bg-[#18181b] border-slate-700' : 'bg-white border-slate-200'}`}>
-                    <div className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800/40">
+                  <div className={`absolute top-full left-0 mt-1.5 w-52 sm:w-56 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border z-[200] overflow-hidden ${isDark ? 'bg-[#18181b] border-slate-700/80' : 'bg-white border-slate-200'}`}>
+                    <div className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800/40 bg-slate-500/5">
                       Popular Symbols
                     </div>
-                    <div className="max-h-56 overflow-y-auto">
+                    <div className="max-h-60 overflow-y-auto">
                       {suggestions.map(s => (
                         <button
                           key={s}
@@ -759,9 +759,9 @@ const TradingViewChart = memo(function TradingViewChart({
                             e.preventDefault();
                             commitSymbol(s);
                           }}
-                          className={`w-full text-left px-3 py-2 text-xs font-bold hover:bg-violet-600 hover:text-white transition flex items-center justify-between border-b last:border-0 ${isDark ? 'border-slate-800/60 text-slate-200' : 'border-slate-100 text-slate-700'}`}
+                          className={`w-full text-left px-3.5 py-2 text-xs font-bold hover:bg-violet-600 hover:text-white transition flex items-center justify-between border-b last:border-0 ${isDark ? 'border-slate-800/60 text-slate-200' : 'border-slate-100 text-slate-700'}`}
                         >
-                          <span className="font-mono">{s}</span>
+                          <span className="font-mono tracking-wide">{s}</span>
                           <span className="text-[9px] font-semibold opacity-60">
                             {s === 'XAUUSD' || s === 'XAGUSD' ? 'METAL' : s.includes('BTC') || s.includes('ETH') ? 'CRYPTO' : s.includes('US30') || s.includes('US500') || s.includes('NAS100') ? 'INDEX' : 'FOREX'}
                           </span>
