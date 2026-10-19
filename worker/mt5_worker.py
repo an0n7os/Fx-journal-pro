@@ -193,17 +193,43 @@ def terminal_login(job: Job) -> None:
         init_kwargs["path"] = TERMINAL_PATH
 
     def _attempt_login() -> tuple[bool, int, str]:
-        # Initialize terminal IPC first
-        if not mt5.initialize(**init_kwargs):
-            c, m = mt5.last_error()
-            return False, c, f"Terminal IPC init failed: {m}"
+        # 1. First attempt: initialize directly with target account credentials
+        direct_kwargs: dict[str, Any] = {
+            "login": int(job.login),
+            "password": str(job.password),
+            "server": str(job.server),
+            "timeout": 30000,
+        }
+        if TERMINAL_PATH:
+            direct_kwargs["path"] = TERMINAL_PATH
 
-        # Authorize account with broker
-        if mt5.login(job.login, password=job.password, server=job.server):
-            return True, 0, "OK"
+        try:
+            if mt5.initialize(**direct_kwargs):
+                info = mt5.account_info()
+                if info and int(info.login) == int(job.login):
+                    return True, 0, "OK"
+                if mt5.login(job.login, password=job.password, server=job.server, timeout=30000):
+                    return True, 0, "OK"
+                c, m = mt5.last_error()
+                return False, c, m
+        except Exception as exc:  # noqa: BLE001
+            log.warning("direct initialize error: %s", exc)
+
+        # 2. Fallback: initialize terminal IPC, then authorize via mt5.login
+        fallback_kwargs: dict[str, Any] = {"timeout": 30000}
+        if TERMINAL_PATH:
+            fallback_kwargs["path"] = TERMINAL_PATH
+        try:
+            if mt5.initialize(**fallback_kwargs):
+                if mt5.login(job.login, password=job.password, server=job.server, timeout=30000):
+                    return True, 0, "OK"
+                c, m = mt5.last_error()
+                return False, c, m
+        except Exception as exc:  # noqa: BLE001
+            log.warning("fallback initialize error: %s", exc)
 
         c, m = mt5.last_error()
-        return False, c, m
+        return False, c, f"Terminal IPC init failed: {m}"
 
     # Attempt 1
     ok, code, message = _attempt_login()
