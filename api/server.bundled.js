@@ -2612,6 +2612,7 @@ var OPAQUE_JSON_KEYS = /* @__PURE__ */ new Set([
   "detail"
 ]);
 function toCamel(obj) {
+  if (obj instanceof Date) return obj.toISOString();
   if (Array.isArray(obj)) return obj.map(toCamel);
   if (obj !== null && typeof obj === "object") {
     const n = {};
@@ -2624,6 +2625,7 @@ function toCamel(obj) {
   return obj;
 }
 function toSnake(obj) {
+  if (obj instanceof Date) return obj.toISOString();
   if (Array.isArray(obj)) return obj.map(toSnake);
   if (obj !== null && typeof obj === "object") {
     const n = {};
@@ -10965,8 +10967,22 @@ app.get("/api/admin/users", async (req, res) => {
     }
     if (scope !== null) allUsers = (allUsers || []).filter((u) => scope.includes(u.id));
     const { data: allAccounts2 } = await supabase.from("trading_accounts").select("*");
-    const { data: allTrades2 } = await supabase.from("trades").select("id, user_id, account_id");
+    const { data: allTrades2 } = await supabase.from("trades").select("id, user_id, account_id, date, created_at");
     const { data: allPays } = await supabase.from("payments").select("user_id, amount, status");
+    const { data: allSessions } = await supabase.from("session").select("userId, updatedAt, createdAt");
+    const sessionLastActiveMap = {};
+    if (Array.isArray(allSessions)) {
+      for (const s of allSessions) {
+        const uid = s.userId || s.user_id;
+        const ts = s.updatedAt || s.updated_at || s.createdAt || s.created_at;
+        if (uid && ts) {
+          const iso = ts instanceof Date ? ts.toISOString() : String(ts);
+          if (!sessionLastActiveMap[uid] || iso > sessionLastActiveMap[uid]) {
+            sessionLastActiveMap[uid] = iso;
+          }
+        }
+      }
+    }
     const earnedByReferrer2 = referralEarningsByReferrer(
       (allUsers || []).map((u) => ({ id: u.id, referredBy: u.referred_by })),
       allPays || []
@@ -10979,8 +10995,23 @@ app.get("/api/admin/users", async (req, res) => {
       const directReferrals = (allUsers || []).filter(
         (other) => other.referred_by && (other.referred_by === u.id || other.referred_by === refCode)
       ).length;
+      const camelU = toCamel(u);
+      let effectiveLastLogin = camelU.lastLogin || sessionLastActiveMap[u.id] || null;
+      if (!effectiveLastLogin && uTrades.length > 0) {
+        for (const t of uTrades) {
+          const d = t.date || t.created_at || t.createdAt;
+          if (d) {
+            const iso = d instanceof Date ? d.toISOString() : String(d);
+            if (!effectiveLastLogin || iso > effectiveLastLogin) {
+              effectiveLastLogin = iso;
+            }
+          }
+        }
+      }
       return {
-        ...sanitizeUser(toCamel(u)),
+        ...sanitizeUser(camelU),
+        lastLogin: effectiveLastLogin,
+        createdAt: camelU.createdAt || (u.created_at instanceof Date ? u.created_at.toISOString() : u.created_at) || null,
         accountsCount: uAccounts.length,
         tradesCount: uTrades.length,
         referralCode: refCode,

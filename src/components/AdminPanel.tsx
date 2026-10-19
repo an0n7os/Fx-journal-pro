@@ -1011,7 +1011,7 @@ Their referral link stops working and ` +
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="text-slate-200 font-medium text-xs">{formatDateTime(u.lastLogin)}</div>
                         <div className="text-[11px] text-slate-400 mt-0.5">
-                          Joined: {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
+                          Joined: {u.createdAt && !isNaN(new Date(u.createdAt).getTime()) ? new Date(u.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
                         </div>
                       </td>
 

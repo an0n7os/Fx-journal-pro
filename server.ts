@@ -557,6 +557,7 @@ const OPAQUE_JSON_KEYS = new Set([
 
 // Helper to convert snake_case object to camelCase
 function toCamel(obj: any): any {
+  if (obj instanceof Date) return obj.toISOString();
   if (Array.isArray(obj)) return obj.map(toCamel);
   if (obj !== null && typeof obj === 'object') {
     const n: any = {};
@@ -571,6 +572,7 @@ function toCamel(obj: any): any {
 
 // Helper to convert camelCase object to snake_case
 function toSnake(obj: any): any {
+  if (obj instanceof Date) return obj.toISOString();
   if (Array.isArray(obj)) return obj.map(toSnake);
   if (obj !== null && typeof obj === 'object') {
     const n: any = {};
@@ -11461,8 +11463,25 @@ app.get('/api/admin/users', async (req, res) => {
     // through a derived field such as the referral count.
     if (scope !== null) allUsers = (allUsers || []).filter((u: any) => scope.includes(u.id));
     const { data: allAccounts } = await supabase.from('trading_accounts').select('*');
-    const { data: allTrades } = await supabase.from('trades').select('id, user_id, account_id');
+    const { data: allTrades } = await supabase.from('trades').select('id, user_id, account_id, date, created_at');
     const { data: allPays } = await supabase.from('payments').select('user_id, amount, status');
+    
+    // Fetch sessions to get the most recent activity timestamp for each user
+    const { data: allSessions } = await supabase.from('session').select('userId, updatedAt, createdAt');
+    const sessionLastActiveMap: Record<string, string> = {};
+    if (Array.isArray(allSessions)) {
+      for (const s of allSessions) {
+        const uid = s.userId || s.user_id;
+        const ts = s.updatedAt || s.updated_at || s.createdAt || s.created_at;
+        if (uid && ts) {
+          const iso = ts instanceof Date ? ts.toISOString() : String(ts);
+          if (!sessionLastActiveMap[uid] || iso > sessionLastActiveMap[uid]) {
+            sessionLastActiveMap[uid] = iso;
+          }
+        }
+      }
+    }
+
     // referred_by holds either the referrer's id or their referral code, so the
     // earnings are keyed by whatever it holds and both are looked up below.
     const earnedByReferrer = referralEarningsByReferrer(
@@ -11479,8 +11498,29 @@ app.get('/api/admin/users', async (req, res) => {
         other.referred_by && (other.referred_by === u.id || other.referred_by === refCode)
       ).length;
 
+      const camelU = toCamel(u);
+
+      // Determine most accurate last activity:
+      // 1. Explicit last_login
+      // 2. Active session updatedAt
+      // 3. Most recent trade date
+      let effectiveLastLogin = camelU.lastLogin || sessionLastActiveMap[u.id] || null;
+      if (!effectiveLastLogin && uTrades.length > 0) {
+        for (const t of uTrades) {
+          const d = t.date || t.created_at || t.createdAt;
+          if (d) {
+            const iso = d instanceof Date ? d.toISOString() : String(d);
+            if (!effectiveLastLogin || iso > effectiveLastLogin) {
+              effectiveLastLogin = iso;
+            }
+          }
+        }
+      }
+
       return {
-        ...sanitizeUser(toCamel(u)),
+        ...sanitizeUser(camelU),
+        lastLogin: effectiveLastLogin,
+        createdAt: camelU.createdAt || (u.created_at instanceof Date ? u.created_at.toISOString() : u.created_at) || null,
         accountsCount: uAccounts.length,
         tradesCount: uTrades.length,
         referralCode: refCode,
