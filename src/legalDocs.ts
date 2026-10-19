@@ -122,7 +122,6 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
       {
         heading: '12. Contact',
         paragraphs: [
-          'FXJournalPro Support',
           'Email: contact@fxjournalpro.com',
           'Phone / WhatsApp: +91 81368 02573',
         ],
@@ -143,7 +142,7 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
       '9. Intellectual Property: All software, branding, designs, text, graphics, and materials remain the property of FXJournalPro or its licensors.',
       '10. Modifications: Continued use of FXJournalPro after an update constitutes acceptance of the revised Terms.',
       '11. Governing Law: Governed by applicable laws. Disputes subject to jurisdiction of competent courts.',
-      '12. Contact: FXJournalPro Support. Email: contact@fxjournalpro.com | Phone/WhatsApp: +91 81368 02573',
+      '12. Contact: Email: contact@fxjournalpro.com | Phone/WhatsApp: +91 81368 02573',
     ],
   },
 
@@ -270,7 +269,6 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
       {
         heading: '11. Contact',
         paragraphs: [
-          'FXJournalPro Support',
           'Email: contact@fxjournalpro.com',
           'Phone / WhatsApp: +91 81368 02573',
         ],
@@ -288,7 +286,7 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
       '8. No Sale of Personal Data: We never sell or rent your personal information, journal records, or trading statistics.',
       '9. Data Retention and Deletion: Request account deletion anytime at contact@fxjournalpro.com.',
       '10. User Rights: Access, correct, export, or delete your personal data upon request.',
-      '11. Contact: FXJournalPro Support | contact@fxjournalpro.com | +91 81368 02573',
+      '11. Contact: contact@fxjournalpro.com | +91 81368 02573',
     ],
   },
 
@@ -443,13 +441,6 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
         ],
       },
       {
-        heading: 'Digital Platform',
-        paragraphs: [
-          'FXJournalPro',
-          'Cloud-based software service available worldwide.',
-        ],
-      },
-      {
         heading: 'Support Hours',
         paragraphs: [
           'Monday–Saturday: 9:00 AM–6:00 PM IST',
@@ -469,7 +460,6 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
       'Customer Support Email: contact@fxjournalpro.com',
       'Phone / WhatsApp: +91 81368 02573',
       'Instagram: @fx_journalpro | Telegram: @Contact_fxjournalpro',
-      'Digital Service: Cloud-based trading journal available worldwide',
       'Support Hours: Monday–Saturday, 9:00 AM–6:00 PM IST (Closed on National Holidays)',
       'Grievance & Compliance Officer: Akshayraj (contact@fxjournalpro.com)',
       'Response Time: We aim to respond to customer inquiries within 24–48 business hours.',
@@ -602,7 +592,6 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
       {
         heading: 'Contact Us',
         paragraphs: [
-          'FXJournalPro Support',
           'Email: contact@fxjournalpro.com',
           'Phone / WhatsApp: +91 81368 02573',
           'Support Hours: Monday–Saturday, 9:00 AM–6:00 PM IST',
@@ -618,7 +607,7 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
       'What FXJournalPro Is Not: We are NOT a broker, do NOT execute trades, do NOT manage customer funds, do NOT accept deposits, do NOT provide copy-trading, and do NOT offer financial advice.',
       'Our AI Assistant — Heyza: Provides software-generated educational and analytical insights based on your journal data. Does not provide trade signals or financial advice.',
       'Our Mission: Help traders turn their trading history into meaningful insights with discipline and organization.',
-      'Contact: FXJournalPro Support | contact@fxjournalpro.com | +91 81368 02573',
+      'Contact: contact@fxjournalpro.com | +91 81368 02573',
     ],
   },
 };
