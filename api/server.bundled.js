@@ -6783,8 +6783,9 @@ function applyEaSyncPayload(db, acc, deals, moneyFlows, account) {
     if (deposits.length > 0) {
       skipBalanceTicket = deposits[0].ticket;
     }
-    const hasEstablishedStartingBalance2 = typeof acc.startingBalance === "number" && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 1e4 && acc.startingBalance !== 1e3 || !!acc.eaLastSyncTime || !!acc.startingBalanceLocked);
-    if (!hasEstablishedStartingBalance2 && deposits.length > 0) {
+    const isDefaultedToCurrent = typeof acc.startingBalance === "number" && typeof acc.currentBalance === "number" && acc.startingBalance === acc.currentBalance;
+    const hasEstablishedStartingBalance2 = typeof acc.startingBalance === "number" && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && !isDefaultedToCurrent && (acc.startingBalance !== 1e4 && acc.startingBalance !== 1e3 || !!acc.eaLastSyncTime || !!acc.startingBalanceLocked);
+    if ((!hasEstablishedStartingBalance2 || isDefaultedToCurrent) && deposits.length > 0) {
       acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
       acc.startingBalanceLocked = true;
     }

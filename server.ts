@@ -5891,10 +5891,11 @@ function applyEaSyncPayload(db: any, acc: any, deals: any[], moneyFlows: any[], 
     }
 
     // Required Fix: The starting capital should remain unchanged after the first MT5 sync.
-    // Clicking Sync Now should only update the trade history, current balance, and trading statistics.
-    // It must NEVER change the original starting capital once established.
-    const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && (acc.startingBalance !== 10000 && acc.startingBalance !== 1000 || !!acc.eaLastSyncTime || !!acc.startingBalanceLocked);
-    if (!hasEstablishedStartingBalance && deposits.length > 0) {
+    // If startingBalance was defaulted to currentBalance or unset, and an authoritative MT5 deposit exists,
+    // establish the true authentic initial capital.
+    const isDefaultedToCurrent = typeof acc.startingBalance === 'number' && typeof acc.currentBalance === 'number' && acc.startingBalance === acc.currentBalance;
+    const hasEstablishedStartingBalance = typeof acc.startingBalance === 'number' && acc.startingBalance > 0 && !isDefaultDemoAccount(acc) && !isDefaultedToCurrent && (acc.startingBalance !== 10000 && acc.startingBalance !== 1000 || !!acc.eaLastSyncTime || !!acc.startingBalanceLocked);
+    if ((!hasEstablishedStartingBalance || isDefaultedToCurrent) && deposits.length > 0) {
       acc.startingBalance = parseFloat(deposits[0].profit.toFixed(2));
       acc.startingBalanceLocked = true;
     }
