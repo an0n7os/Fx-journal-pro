@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet, Sparkles, Trash2,
+  Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet, Sparkles, Trash2, AlertTriangle,
 } from 'lucide-react';
 import { SupportTicket, Announcement } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -80,7 +80,10 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
     }
   }, [role]);
   const [partnerBusy, setPartnerBusy] = useState<string | null>(null);
-  const [deleteBusy, setDeleteBusy] = useState<string | null>(null);
+  const [deleteModalUser, setDeleteModalUser] = useState<any | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccessToast, setDeleteSuccessToast] = useState<string | null>(null);
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({});
 
   // Assignment editor: which sub-admin is open, and who they can see.
@@ -385,31 +388,41 @@ Their referral link stops working and ` +
     }
   };
 
-  const handleDeleteUser = async (u: any) => {
-    const confirmName = u.name || u.email;
-    if (!confirm(
-      `⚠️ PERMANENT DELETE WARNING\n\nAre you sure you want to delete user "${confirmName}" (${u.email})?\n\nThis will permanently delete:\n• Their account and login\n• All connected trading accounts and trades\n• All risk settings and journal data\n\nThis action CANNOT be undone.`
-    )) {
-      return;
-    }
+  const openDeleteModal = (u: any) => {
+    setDeleteError(null);
+    setDeleteModalUser(u);
+  };
 
-    setDeleteBusy(u.id);
+  const handleConfirmDeleteUser = async () => {
+    if (!deleteModalUser) return;
+    const target = deleteModalUser;
+    setDeleteLoading(true);
+    setDeleteError(null);
+
+    // Optimistically remove user from table immediately for instant snappy UI
+    setUsers(prev => prev.filter(x => x.id !== target.id));
+
     try {
-      const res = await fetch(`/api/admin/users/${u.id}`, {
+      const res = await fetch(`/api/admin/users/${target.id}`, {
         method: 'DELETE',
-        headers: { ...getAuthHeaders() }
+        headers: { ...getAuthHeaders() },
+        credentials: 'include',
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        alert(data.message || `User ${u.email} deleted successfully.`);
-        setUsers(prev => prev.filter(x => x.id !== u.id));
+        setDeleteModalUser(null);
+        setDeleteSuccessToast(`User ${target.email} has been permanently deleted.`);
+        setTimeout(() => setDeleteSuccessToast(null), 4000);
       } else {
-        alert(data.error || 'Failed to delete user.');
+        // Rollback optimistic removal if server responded with an error
+        setUsers(prev => [...prev, target]);
+        setDeleteError(data.error || 'Failed to delete user.');
       }
     } catch (e: any) {
-      alert(e?.message || 'Network error deleting user.');
+      setUsers(prev => [...prev, target]);
+      setDeleteError(e?.message || 'Network error deleting user.');
     } finally {
-      setDeleteBusy(null);
+      setDeleteLoading(false);
     }
   };
 
@@ -1112,13 +1125,12 @@ Their referral link stops working and ` +
                               )}
 
                               <button
-                                onClick={() => handleDeleteUser(u)}
-                                disabled={deleteBusy === u.id}
+                                onClick={() => openDeleteModal(u)}
                                 title="Permanently delete user and all associated data"
-                                className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition disabled:opacity-40 cursor-pointer"
+                                className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition cursor-pointer"
                               >
                                 <Trash2 className="w-3 h-3" />
-                                {deleteBusy === u.id ? 'Deleting…' : 'Delete'}
+                                Delete
                               </button>
                             </>
                           )}
@@ -2743,6 +2755,119 @@ Their referral link stops working and ` +
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Permanent Delete User Modal */}
+      {deleteModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-red-500/30 rounded-2xl w-full max-w-md p-6 shadow-2xl shadow-red-950/40 space-y-5 text-left relative overflow-hidden">
+            {/* Top red glow accent */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-600 via-rose-500 to-red-600" />
+
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center justify-center text-red-400">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">Permanently Delete User</h3>
+                  <p className="text-xs text-rose-400/80 font-medium">Irreversible & Permanent Action</p>
+                </div>
+              </div>
+              <button
+                onClick={() => !deleteLoading && setDeleteModalUser(null)}
+                disabled={deleteLoading}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* User Info Card */}
+            <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/60 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-white font-bold text-xs uppercase shrink-0">
+                {(deleteModalUser.name || deleteModalUser.email || 'U').slice(0, 2)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold text-white truncate">
+                  {deleteModalUser.name || 'Unnamed User'}
+                </div>
+                <div className="text-[11px] text-slate-400 truncate">
+                  {deleteModalUser.email}
+                </div>
+              </div>
+              <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-md bg-white/5 text-slate-300 border border-white/10 shrink-0">
+                {deleteModalUser.role || 'USER'}
+              </span>
+            </div>
+
+            {/* Warning List */}
+            <div className="space-y-2 text-xs text-slate-300">
+              <p className="font-medium text-slate-200">
+                Are you sure? This will immediately and permanently erase:
+              </p>
+              <ul className="space-y-1.5 pl-1 text-[11px] text-slate-400">
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                  <span>Their user account, session tokens, and login credentials</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                  <span>All linked MT5 trading accounts and trade history</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                  <span>Risk management settings, journal notes, and analytics</span>
+                </li>
+              </ul>
+            </div>
+
+            {deleteError && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                {deleteError}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDeleteModalUser(null)}
+                disabled={deleteLoading}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteUser}
+                disabled={deleteLoading}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-lg shadow-red-950/50 border border-red-500/30 transition flex items-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                {deleteLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting…</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Permanently</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Success Toast */}
+      {deleteSuccessToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 border border-emerald-500/30 text-emerald-400 shadow-2xl shadow-emerald-950/50 text-xs font-semibold animate-in slide-in-from-bottom-2 duration-200">
+          <Check className="w-4 h-4 text-emerald-400" />
+          <span>{deleteSuccessToast}</span>
         </div>
       )}
 

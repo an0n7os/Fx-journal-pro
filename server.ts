@@ -11940,24 +11940,37 @@ app.delete('/api/admin/users/:id', async (req, res) => {
 
     userDatabases.delete(id);
 
-    // Delete from users table (cascades to trading_accounts, trades, risk_settings, tickets, etc.)
-    const { error: delErr } = await supabase.from('users').delete().eq('id', id);
-    if (delErr) {
-      console.error('Error deleting user from users table:', delErr);
-      return res.status(500).json({ error: 'Failed to delete user' });
-    }
-
-    // Delete from Better Auth "user" table (cascades to session, account)
-    try {
-      await supabase.from('user').delete().eq('id', id);
-      if (targetUser.email) {
-        await supabase.from('user').delete().eq('email', targetUser.email);
+    // Fast parallel deletion across users and Better Auth user tables
+    if ((supabase as any)?.pool) {
+      const pool = (supabase as any).pool;
+      await Promise.allSettled([
+        pool.query('DELETE FROM "users" WHERE id = $1', [id]),
+        pool.query('DELETE FROM "user" WHERE id = $1', [id]),
+        targetUser.email ? pool.query('DELETE FROM "users" WHERE email = $1', [targetUser.email]) : Promise.resolve(),
+        targetUser.email ? pool.query('DELETE FROM "user" WHERE email = $1', [targetUser.email]) : Promise.resolve(),
+      ]);
+    } else {
+      const { error: delErr } = await supabase.from('users').delete().eq('id', id);
+      if (delErr) {
+        console.error('Error deleting user from users table:', delErr);
+        return res.status(500).json({ error: 'Failed to delete user' });
       }
-    } catch (e) {
-      console.warn('Error cleaning up Better Auth user table:', e);
+
+      try {
+        await supabase.from('user').delete().eq('id', id);
+        if (targetUser.email) {
+          await supabase.from('user').delete().eq('email', targetUser.email);
+        }
+      } catch (e) {
+        console.warn('Error cleaning up Better Auth user table:', e);
+      }
     }
 
-    await writeAuditLog(req, ctx, 'user.delete', 'user', id, { email: targetUser.email });
+    // Write audit log asynchronously to avoid adding latency
+    writeAuditLog(req, ctx, 'user.delete', 'user', id, { email: targetUser.email }).catch(err => {
+      console.warn('[audit log] user.delete failed:', err);
+    });
+
     return res.json({ success: true, message: `User ${targetUser.email} has been permanently deleted.` });
   }
 

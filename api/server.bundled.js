@@ -11327,20 +11327,32 @@ app.delete("/api/admin/users/:id", async (req, res) => {
       }
     }
     userDatabases.delete(id);
-    const { error: delErr } = await supabase.from("users").delete().eq("id", id);
-    if (delErr) {
-      console.error("Error deleting user from users table:", delErr);
-      return res.status(500).json({ error: "Failed to delete user" });
-    }
-    try {
-      await supabase.from("user").delete().eq("id", id);
-      if (targetUser.email) {
-        await supabase.from("user").delete().eq("email", targetUser.email);
+    if (supabase?.pool) {
+      const pool = supabase.pool;
+      await Promise.allSettled([
+        pool.query('DELETE FROM "users" WHERE id = $1', [id]),
+        pool.query('DELETE FROM "user" WHERE id = $1', [id]),
+        targetUser.email ? pool.query('DELETE FROM "users" WHERE email = $1', [targetUser.email]) : Promise.resolve(),
+        targetUser.email ? pool.query('DELETE FROM "user" WHERE email = $1', [targetUser.email]) : Promise.resolve()
+      ]);
+    } else {
+      const { error: delErr } = await supabase.from("users").delete().eq("id", id);
+      if (delErr) {
+        console.error("Error deleting user from users table:", delErr);
+        return res.status(500).json({ error: "Failed to delete user" });
       }
-    } catch (e) {
-      console.warn("Error cleaning up Better Auth user table:", e);
+      try {
+        await supabase.from("user").delete().eq("id", id);
+        if (targetUser.email) {
+          await supabase.from("user").delete().eq("email", targetUser.email);
+        }
+      } catch (e) {
+        console.warn("Error cleaning up Better Auth user table:", e);
+      }
     }
-    await writeAuditLog(req, ctx, "user.delete", "user", id, { email: targetUser.email });
+    writeAuditLog(req, ctx, "user.delete", "user", id, { email: targetUser.email }).catch((err) => {
+      console.warn("[audit log] user.delete failed:", err);
+    });
     return res.json({ success: true, message: `User ${targetUser.email} has been permanently deleted.` });
   }
   const db = req.userDb;
