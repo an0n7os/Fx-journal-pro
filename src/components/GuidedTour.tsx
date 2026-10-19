@@ -166,7 +166,7 @@ export default function GuidedTour({ step, accountCreated, variant = 'onboarding
                 </>
               ) : (
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  This is your MT5 Sync window. Create an MT5 Sync account, attach the Expert Advisor to your terminal, and your trades sync automatically.
+                  This is your MT5 Sync window. Connect your MT5 account, and your trades sync automatically in real time.
                 </p>
               )}
             </div>

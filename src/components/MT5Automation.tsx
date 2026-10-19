@@ -185,13 +185,13 @@ const ERROR_COPY: Record<string, string> = {
   MT5_NO_ACCOUNT_INFO: 'MT5 logged in, but the broker returned no account details. Verify that the account is active with your broker.',
   MT5_WRONG_LOGIN: 'The MT5 terminal is active on a different account number than expected. Check your account settings.',
   MT5_HISTORY_FAILED: 'Could not fetch trade history from the broker server. Check broker connectivity or server scan.',
-  VPS_SYNC_FAILED: 'Automatic sync failed to connect to your MT5 account. Verify credentials or use the Expert Advisor (EA) method.',
+  VPS_SYNC_FAILED: 'Automatic sync failed to connect to your MT5 account. Please verify your login, investor password, and broker server name.',
   WORKER_CRASH: 'The sync worker encountered an unexpected issue while communicating with MT5.',
   BACKEND_ERROR: 'Server communication error during sync. Please try again shortly.',
   EA_TIMESTAMP_SKEW: 'Computer system clock is skewed by more than 5 minutes. Please synchronize your system time.',
-  EA_WEBREQUEST_BLOCKED: 'MT5 WebRequest was blocked. Add the website URL in MT5 Tools → Options → Expert Advisors.',
-  BRIDGE_NOT_CONFIGURED: 'Automatic worker sync is not configured on this server. Please use the Expert Advisor method.',
-  VPS_NOT_CONFIGURED: 'Automatic VPS sync is not configured on this server. Please use the Expert Advisor method.'
+  EA_WEBREQUEST_BLOCKED: 'MT5 WebRequest was blocked.',
+  BRIDGE_NOT_CONFIGURED: 'Automatic worker sync is not configured on this server.',
+  VPS_NOT_CONFIGURED: 'Automatic VPS sync is not configured on this server.'
 };
 
 function timeAgo(iso?: string | null): string {
@@ -727,7 +727,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
         </div>
         <h3 className="dx-section-title">No Portfolio Account Selected</h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-          Create a portfolio account first — every account receives its own unique MT5 Expert Advisor.
+          Create a portfolio account first to connect your MetaTrader 5 account.
         </p>
         <button
           onClick={onRefresh}
@@ -929,8 +929,8 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
           <div className="flex-1 space-y-1">
             <p>Your sync is waiting, but nothing has picked it up yet.</p>
             <p className="font-medium opacity-90">
-              Your details are saved and the job stays in the queue — it will run as soon as Auto Sync is back online.
-              Nothing needs re-entering. To sync right now, use the MT5 EA method instead — it runs inside your own MT5 terminal.
+              Your details are saved and the job stays in the queue — it will run as soon as Auto Sync processes the queue.
+              Nothing needs re-entering.
             </p>
           </div>
         </div>
@@ -972,50 +972,13 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
               <div className="mt-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 text-[11px] font-normal space-y-1">
                 <p className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                  Auto Sync Worker Offline
+                  Auto Sync Worker Connecting…
                 </p>
                 <p>
-                  The background worker process is not active right now. If this validation takes longer than 1 minute, switch to the <strong>Expert Advisor (EA)</strong> method for instant direct syncing from your MT5 terminal.
+                  Waiting for the background sync worker to pick up this validation job. Please allow a few moments.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('ea')}
-                  className="mt-1 inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-                >
-                  Switch to Expert Advisor (EA) →
-                </button>
               </div>
             )}
-          </div>
-        </div>
-      )}
-      {phase === 'Validating' && !(status?.syncMethod === 'CLOUD' && status.cloudConnected) && status?.syncMethod !== 'VPS' && (
-        <div className="flex items-start gap-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-xl px-4 py-3.5">
-          <Loader2 className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-indigo-600 dark:text-indigo-400" />
-          <div className="flex-1 space-y-2">
-            <div>
-              <p className="font-bold text-sm text-indigo-900 dark:text-indigo-100">Waiting for MT5 Terminal connection…</p>
-              <p className="font-normal opacity-90 mt-0.5 leading-relaxed text-indigo-800 dark:text-indigo-200">
-                The server is listening for your Expert Advisor. Attach the downloaded EA file to an MT5 chart with <strong>Algo Trading</strong> enabled.
-              </p>
-            </div>
-            <div className="p-2.5 rounded-lg bg-white/70 dark:bg-slate-800/70 border border-indigo-200/60 dark:border-indigo-500/20 text-[11px] font-normal text-slate-600 dark:text-slate-300 space-y-1">
-              <p className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                <HelpCircle className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                If connecting takes longer than 30 seconds, please verify:
-              </p>
-              <ul className="list-disc list-inside space-y-1 ml-1 text-slate-600 dark:text-slate-300">
-                <li>
-                  <strong>MT5 WebRequest URL:</strong> In MT5 go to <em>Tools → Options → Expert Advisors</em>, check <strong>"Allow WebRequest for listed URL"</strong> and add <code className="px-1 py-0.5 bg-slate-100 dark:bg-slate-700 rounded font-mono text-[10px]">{window.location.origin}</code>.
-                </li>
-                <li>
-                  <strong>Algo Trading:</strong> Ensure the <em>Algo Trading</em> button in MT5 top toolbar is green (enabled).
-                </li>
-                <li>
-                  <strong>Check Experts Tab:</strong> Check the <strong>"Experts"</strong> tab at the bottom of MT5 for error codes (e.g. error <code>4060</code> means WebRequest is blocked).
-                </li>
-              </ul>
-            </div>
           </div>
         </div>
       )}
@@ -1065,13 +1028,6 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                 )}
                 {retrying ? 'Retrying…' : 'Retry Connection'}
               </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('ea')}
-                className="inline-flex items-center gap-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold px-4 py-2.5 rounded-xl transition cursor-pointer"
-              >
-                <Terminal className="h-3.5 w-3.5 text-indigo-500" /> Use Expert Advisor (EA)
-              </button>
             </div>
           </div>
         </div>
@@ -1080,8 +1036,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
         <div className="flex items-center gap-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-xl px-4 py-3">
           <WifiOff className="h-4 w-4 shrink-0" />
           <div className="flex-1">
-            This account's MT5 sync is disconnected. The EA token was revoked, so the old EA file will stop working.
-            Download a fresh copy to reconnect.
+            This account's MT5 sync is disconnected. Re-enter your MT5 investor password to reconnect.
           </div>
         </div>
       )}
@@ -1100,9 +1055,8 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
             <div className="flex-1">
               <h4 className="text-sm font-bold text-rose-700 dark:text-rose-300">Disconnect this MT5 account?</h4>
               <p className="text-xs text-rose-600/80 dark:text-rose-300/80 mt-1 leading-relaxed">
-                The EA authentication token will be <strong>permanently revoked</strong>. The old EA file in your
-                terminal will immediately stop syncing. To reconnect later, you'll download a fresh EA with a new token.
-                No trading data is deleted.
+                Your stored MT5 credentials will be securely removed. You can reconnect anytime with your investor password.
+                No existing trading data is deleted.
               </p>
               <div className="mt-4 flex gap-2">
                 <button
