@@ -450,7 +450,6 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
       {
         heading: 'Grievance & Compliance Contact',
         paragraphs: [
-          'Name: Akshayraj',
           'Email: contact@fxjournalpro.com',
           'We aim to respond to customer inquiries within 24–48 business hours.',
         ],
@@ -461,7 +460,7 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
       'Phone / WhatsApp: +91 81368 02573',
       'Instagram: @fx_journalpro | Telegram: @Contact_fxjournalpro',
       'Support Hours: Monday–Saturday, 9:00 AM–6:00 PM IST (Closed on National Holidays)',
-      'Grievance & Compliance Officer: Akshayraj (contact@fxjournalpro.com)',
+      'Grievance & Compliance Desk: contact@fxjournalpro.com',
       'Response Time: We aim to respond to customer inquiries within 24–48 business hours.',
     ],
   },
