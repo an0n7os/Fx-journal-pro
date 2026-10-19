@@ -101,6 +101,8 @@ const DEV_ADMIN_PASSWORD_HASH = (() => {
 
 const SUPER_ADMIN_EMAILS = new Set([
   'akshayrajak222@gmail.com',
+  'akshayrajpanamthode@gmail.com',
+  'jithinbhaskar11@gmail.com',
   ...(process.env.SUPER_ADMIN_EMAILS ? process.env.SUPER_ADMIN_EMAILS.split(',').map((e: string) => e.trim().toLowerCase()) : []),
   ...(DEV_ACCOUNT_EMAIL ? [DEV_ACCOUNT_EMAIL.toLowerCase().trim()] : []),
 ]);

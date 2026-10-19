@@ -2287,6 +2287,8 @@ var DEV_ADMIN_PASSWORD_HASH = (() => {
 })();
 var SUPER_ADMIN_EMAILS = /* @__PURE__ */ new Set([
   "akshayrajak222@gmail.com",
+  "akshayrajpanamthode@gmail.com",
+  "jithinbhaskar11@gmail.com",
   ...process.env.SUPER_ADMIN_EMAILS ? process.env.SUPER_ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase()) : [],
   ...DEV_ACCOUNT_EMAIL ? [DEV_ACCOUNT_EMAIL.toLowerCase().trim()] : []
 ]);
