@@ -11905,6 +11905,74 @@ app.post('/api/admin/users/:id/status', async (req, res) => {
   }
 });
 
+app.delete('/api/admin/users/:id', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'users.manage');
+  if (!ctx) return;
+  const { id } = req.params;
+
+  if (ctx.user?.id === id) {
+    return res.status(400).json({ error: 'You cannot delete your own account.' });
+  }
+
+  if (useSupabase) {
+    const { data: targetUser, error: fetchErr } = await supabase
+      .from('users')
+      .select('id, email, role')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr || !targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (targetUser.role === 'SUPER_ADMIN') {
+      if (ctx.role !== 'SUPER_ADMIN') {
+        return res.status(403).json({ error: 'Only a Super Admin can delete another Super Admin.' });
+      }
+      const { count } = await supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'SUPER_ADMIN');
+      if ((count ?? 0) <= 1) {
+        return res.status(400).json({ error: 'This is the last Super Admin account. Cannot delete.' });
+      }
+    }
+
+    userDatabases.delete(id);
+
+    // Delete from users table (cascades to trading_accounts, trades, risk_settings, tickets, etc.)
+    const { error: delErr } = await supabase.from('users').delete().eq('id', id);
+    if (delErr) {
+      console.error('Error deleting user from users table:', delErr);
+      return res.status(500).json({ error: 'Failed to delete user' });
+    }
+
+    // Delete from Better Auth "user" table (cascades to session, account)
+    try {
+      await supabase.from('user').delete().eq('id', id);
+      if (targetUser.email) {
+        await supabase.from('user').delete().eq('email', targetUser.email);
+      }
+    } catch (e) {
+      console.warn('Error cleaning up Better Auth user table:', e);
+    }
+
+    await writeAuditLog(req, ctx, 'user.delete', 'user', id, { email: targetUser.email });
+    return res.json({ success: true, message: `User ${targetUser.email} has been permanently deleted.` });
+  }
+
+  const db = (req as any).userDb;
+  const idx = db?.users?.findIndex((u: any) => u.id === id);
+  if (idx !== undefined && idx !== -1) {
+    const deleted = db.users.splice(idx, 1)[0];
+    userDatabases.delete(id);
+    await writeAuditLog(req, ctx, 'user.delete', 'user', id, { email: deleted.email });
+    return res.json({ success: true, message: `User ${deleted.email} deleted.` });
+  } else {
+    return res.status(404).json({ error: 'User not found' });
+  }
+});
+
 app.post('/api/admin/users/:id/plan', async (req, res) => {
   const ctx = await requirePermission(req, res, 'users.manage');
   if (!ctx) return;

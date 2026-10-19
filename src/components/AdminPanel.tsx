@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet, Sparkles,
+  Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet, Sparkles, Trash2,
 } from 'lucide-react';
 import { SupportTicket, Announcement } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -80,6 +80,7 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
     }
   }, [role]);
   const [partnerBusy, setPartnerBusy] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState<string | null>(null);
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({});
 
   // Assignment editor: which sub-admin is open, and who they can see.
@@ -381,6 +382,34 @@ Their referral link stops working and ` +
       }
     } catch (e) {
       alert('Failed to modify user status.');
+    }
+  };
+
+  const handleDeleteUser = async (u: any) => {
+    const confirmName = u.name || u.email;
+    if (!confirm(
+      `⚠️ PERMANENT DELETE WARNING\n\nAre you sure you want to delete user "${confirmName}" (${u.email})?\n\nThis will permanently delete:\n• Their account and login\n• All connected trading accounts and trades\n• All risk settings and journal data\n\nThis action CANNOT be undone.`
+    )) {
+      return;
+    }
+
+    setDeleteBusy(u.id);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}`, {
+        method: 'DELETE',
+        headers: { ...getAuthHeaders() }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        alert(data.message || `User ${u.email} deleted successfully.`);
+        setUsers(prev => prev.filter(x => x.id !== u.id));
+      } else {
+        alert(data.error || 'Failed to delete user.');
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Network error deleting user.');
+    } finally {
+      setDeleteBusy(null);
     }
   };
 
@@ -1063,23 +1092,35 @@ Their referral link stops working and ` +
                             )
                           )}
 
-                          {/* Suspend / Reactivate */}
+                          {/* Suspend / Reactivate / Delete */}
                           {!isSubAdmin && myPermissions.includes('users.manage') && (
-                            (!u.status || u.status === 'ACTIVE') ? (
+                            <>
+                              {(!u.status || u.status === 'ACTIVE') ? (
+                                <button
+                                  onClick={() => handleUpdateUserStatus(u.id, 'SUSPENDED')}
+                                  className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition cursor-pointer"
+                                >
+                                  Suspend
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleUpdateUserStatus(u.id, 'ACTIVE')}
+                                  className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition cursor-pointer"
+                                >
+                                  Reactivate
+                                </button>
+                              )}
+
                               <button
-                                onClick={() => handleUpdateUserStatus(u.id, 'SUSPENDED')}
-                                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition cursor-pointer"
+                                onClick={() => handleDeleteUser(u)}
+                                disabled={deleteBusy === u.id}
+                                title="Permanently delete user and all associated data"
+                                className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition disabled:opacity-40 cursor-pointer"
                               >
-                                Suspend
+                                <Trash2 className="w-3 h-3" />
+                                {deleteBusy === u.id ? 'Deleting…' : 'Delete'}
                               </button>
-                            ) : (
-                              <button
-                                onClick={() => handleUpdateUserStatus(u.id, 'ACTIVE')}
-                                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition cursor-pointer"
-                              >
-                                Reactivate
-                              </button>
-                            )
+                            </>
                           )}
                         </div>
                       </td>
