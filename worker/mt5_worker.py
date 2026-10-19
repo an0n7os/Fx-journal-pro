@@ -177,31 +177,64 @@ def kill_terminal_process() -> None:
         if TERMINAL_PATH and os.path.exists(TERMINAL_PATH):
             escaped_path = TERMINAL_PATH.replace("'", "''")
             cmd = f"Get-Process -Name 'terminal64' -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq '{escaped_path}' }} | Stop-Process -Force"
-            subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, timeout=10)
+            res = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, timeout=10)
+            if res.returncode != 0:
+                subprocess.run(["taskkill", "/F", "/IM", "terminal64.exe", "/T"], capture_output=True, timeout=5)
         else:
-            subprocess.run(["taskkill", "/F", "/IM", "terminal64.exe"], capture_output=True, timeout=5)
+            subprocess.run(["taskkill", "/F", "/IM", "terminal64.exe", "/T"], capture_output=True, timeout=5)
     except Exception as exc:  # noqa: BLE001
         log.warning("failed to kill terminal process: %s", exc)
 
 
 def terminal_login(job: Job) -> None:
-    """Start this worker's terminal and log it into the customer's account."""
+    """Start this worker's terminal and log it into the customer's account with auto-recovery."""
     init_kwargs: dict[str, Any] = {}
     if TERMINAL_PATH:
         init_kwargs["path"] = TERMINAL_PATH
 
-    # Initialize terminal IPC first
-    if not mt5.initialize(**init_kwargs):
-        code, message = mt5.last_error()
-        if code in (-10001, -10005):
-            kill_terminal_process()
-        raise SyncFailed(f"MT5 terminal IPC init failed ({code}): {message}", "MT5_INIT_FAILED")
+    def _attempt_login() -> tuple[bool, int, str]:
+        # Initialize terminal IPC first
+        if not mt5.initialize(**init_kwargs):
+            c, m = mt5.last_error()
+            return False, c, f"Terminal IPC init failed: {m}"
 
-    # Authorize account with broker
-    if not mt5.login(job.login, password=job.password, server=job.server):
-        code, message = mt5.last_error()
-        if code in (-10001, -10005):
-            kill_terminal_process()
+        # Authorize account with broker
+        if mt5.login(job.login, password=job.password, server=job.server):
+            return True, 0, "OK"
+
+        c, m = mt5.last_error()
+        return False, c, m
+
+    # Attempt 1
+    ok, code, message = _attempt_login()
+
+    # If first attempt failed (e.g. error -6 Authorization failed or IPC error), the MT5 terminal
+    # process is often in a stale socket, hung IPC, or previous broker session state.
+    # Automatically restart the terminal process and retry once to recover seamlessly without manual intervention!
+    if not ok:
+        log.warning(
+            "job %s: login attempt 1 failed (%s: %s). Auto-restarting MT5 terminal to clear stale state...",
+            job.id, code, message,
+        )
+        try:
+            mt5.shutdown()
+        except Exception:
+            pass
+        kill_terminal_process()
+        time.sleep(2.5)  # Allow Windows OS to release socket locks and terminal file handles
+
+        # Attempt 2 with fresh terminal instance
+        ok, code, message = _attempt_login()
+        if ok:
+            log.info("job %s: auto-recovery succeeded after terminal restart!", job.id)
+
+    if not ok:
+        # Terminal still failed; ensure broken process is closed so next job starts fresh
+        try:
+            mt5.shutdown()
+        except Exception:
+            pass
+        kill_terminal_process()
         raise SyncFailed(
             f"MT5 login failed ({code}): {message}. Verify server '{job.server}' is scanned in MT5.",
             "MT5_LOGIN_FAILED",
@@ -303,6 +336,7 @@ def run_job(job: Job) -> None:
         job.id, job.account_id, job.action, job.login, job.server, job.since_deal,
     )
     imported = 0
+    has_error = False
     try:
         terminal_login(job)
         deals = fetch_deals(job)
@@ -333,17 +367,22 @@ def run_job(job: Job) -> None:
         log.info("job %s: done, %s trades in the journal", job.id, imported)
 
     except LeaseLost as exc:
+        has_error = True
         # Someone else owns it now. Do not complete it — that would stomp on
         # the worker that took over.
         log.warning("job %s: lease lost (%s)", job.id, exc)
     except SyncFailed as exc:
+        has_error = True
         log.error("job %s: %s", job.id, exc)
         complete(job, ok=False, error=str(exc), code=exc.code, imported=imported)
     except Exception as exc:  # noqa: BLE001 - a worker must not die on one bad job
+        has_error = True
         log.exception("job %s: unexpected failure", job.id)
         complete(job, ok=False, error=f"{type(exc).__name__}: {exc}", code="WORKER_CRASH", imported=imported)
     finally:
         terminal_logout()
+        if has_error:
+            kill_terminal_process()
 
 
 def main() -> None:
