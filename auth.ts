@@ -345,6 +345,56 @@ export const auth = betterAuth({
           }
           return { data: user };
         },
+        after: async (user: any) => {
+          if (process.env.DATABASE_URL && user?.id) {
+            try {
+              const Pool = pg.Pool ?? (pg as any).default?.Pool;
+              if (Pool) {
+                const pool = new Pool({
+                  connectionString: process.env.DATABASE_URL,
+                  ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
+                  max: 2,
+                });
+                const now = new Date().toISOString();
+                await pool.query(
+                  `INSERT INTO users (id, email, name, last_login, created_at, role, status)
+                   VALUES ($1, $2, $3, $4, $4, $5, 'ACTIVE')
+                   ON CONFLICT (id) DO UPDATE SET last_login = EXCLUDED.last_login`,
+                  [user.id, user.email, user.name || '', now, user.role || 'USER']
+                );
+                await pool.end();
+              }
+            } catch (err) {
+              console.warn('[Better Auth after create hook] users sync skipped:', (err as any)?.message || err);
+            }
+          }
+        },
+      },
+    },
+    session: {
+      create: {
+        after: async (session: any) => {
+          if (process.env.DATABASE_URL && session?.userId) {
+            try {
+              const Pool = pg.Pool ?? (pg as any).default?.Pool;
+              if (Pool) {
+                const pool = new Pool({
+                  connectionString: process.env.DATABASE_URL,
+                  ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
+                  max: 2,
+                });
+                const now = new Date().toISOString();
+                await pool.query(
+                  `UPDATE users SET last_login = $1 WHERE id = $2`,
+                  [now, session.userId]
+                );
+                await pool.end();
+              }
+            } catch (err) {
+              console.warn('[Better Auth session create hook] last_login update skipped:', (err as any)?.message || err);
+            }
+          }
+        },
       },
     },
   },

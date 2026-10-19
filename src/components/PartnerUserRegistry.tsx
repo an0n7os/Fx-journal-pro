@@ -213,7 +213,7 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
 
                   {/* Last Activity */}
                   <td className="py-3.5 px-4 whitespace-nowrap">
-                    <div className="text-slate-200 font-medium text-xs">{formatDateTime(u.lastLogin)}</div>
+                    <div className="text-slate-200 font-medium text-xs">{formatDateTime(u.lastLogin || u.createdAt)}</div>
                     <div className="text-[11px] text-slate-400 mt-0.5">Joined: {formatDate(u.createdAt)}</div>
                   </td>
 

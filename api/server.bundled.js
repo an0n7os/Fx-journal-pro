@@ -2239,6 +2239,56 @@ var auth = betterAuth({
             };
           }
           return { data: user };
+        },
+        after: async (user) => {
+          if (process.env.DATABASE_URL && user?.id) {
+            try {
+              const Pool2 = pg2.Pool ?? pg2.default?.Pool;
+              if (Pool2) {
+                const pool = new Pool2({
+                  connectionString: process.env.DATABASE_URL,
+                  ssl: process.env.DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false },
+                  max: 2
+                });
+                const now = (/* @__PURE__ */ new Date()).toISOString();
+                await pool.query(
+                  `INSERT INTO users (id, email, name, last_login, created_at, role, status)
+                   VALUES ($1, $2, $3, $4, $4, $5, 'ACTIVE')
+                   ON CONFLICT (id) DO UPDATE SET last_login = EXCLUDED.last_login`,
+                  [user.id, user.email, user.name || "", now, user.role || "USER"]
+                );
+                await pool.end();
+              }
+            } catch (err) {
+              console.warn("[Better Auth after create hook] users sync skipped:", err?.message || err);
+            }
+          }
+        }
+      }
+    },
+    session: {
+      create: {
+        after: async (session) => {
+          if (process.env.DATABASE_URL && session?.userId) {
+            try {
+              const Pool2 = pg2.Pool ?? pg2.default?.Pool;
+              if (Pool2) {
+                const pool = new Pool2({
+                  connectionString: process.env.DATABASE_URL,
+                  ssl: process.env.DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false },
+                  max: 2
+                });
+                const now = (/* @__PURE__ */ new Date()).toISOString();
+                await pool.query(
+                  `UPDATE users SET last_login = $1 WHERE id = $2`,
+                  [now, session.userId]
+                );
+                await pool.end();
+              }
+            } catch (err) {
+              console.warn("[Better Auth session create hook] last_login update skipped:", err?.message || err);
+            }
+          }
         }
       }
     }
@@ -11013,8 +11063,8 @@ app.get("/api/admin/users", async (req, res) => {
         (other) => other.referred_by && (other.referred_by === u.id || other.referred_by === refCode)
       ).length;
       const camelU = toCamel(u);
-      let effectiveLastLogin = camelU.lastLogin || sessionLastActiveMap[u.id] || null;
-      if (!effectiveLastLogin && uTrades.length > 0) {
+      let effectiveLastLogin = camelU.lastLogin || (u.last_login instanceof Date ? u.last_login.toISOString() : u.last_login) || sessionLastActiveMap[u.id] || null;
+      if (uTrades.length > 0) {
         for (const t of uTrades) {
           const d = t.date || t.created_at || t.createdAt;
           if (d) {
@@ -11024,6 +11074,20 @@ app.get("/api/admin/users", async (req, res) => {
             }
           }
         }
+      }
+      if (uAccounts.length > 0) {
+        for (const a of uAccounts) {
+          const d = a.last_heartbeat_at || a.lastHeartbeatAt || a.created_at || a.createdAt;
+          if (d) {
+            const iso = d instanceof Date ? d.toISOString() : String(d);
+            if (!effectiveLastLogin || iso > effectiveLastLogin) {
+              effectiveLastLogin = iso;
+            }
+          }
+        }
+      }
+      if (!effectiveLastLogin) {
+        effectiveLastLogin = camelU.createdAt || (u.created_at instanceof Date ? u.created_at.toISOString() : u.created_at) || (/* @__PURE__ */ new Date()).toISOString();
       }
       return {
         ...sanitizeUser(camelU),

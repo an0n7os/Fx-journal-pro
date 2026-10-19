@@ -11519,8 +11519,10 @@ app.get('/api/admin/users', async (req, res) => {
       // 1. Explicit last_login
       // 2. Active session updatedAt
       // 3. Most recent trade date
-      let effectiveLastLogin = camelU.lastLogin || sessionLastActiveMap[u.id] || null;
-      if (!effectiveLastLogin && uTrades.length > 0) {
+      // 4. Most recent account heartbeat / creation
+      // 5. Signup date (created_at)
+      let effectiveLastLogin = camelU.lastLogin || (u.last_login instanceof Date ? u.last_login.toISOString() : u.last_login) || sessionLastActiveMap[u.id] || null;
+      if (uTrades.length > 0) {
         for (const t of uTrades) {
           const d = t.date || t.created_at || t.createdAt;
           if (d) {
@@ -11530,6 +11532,20 @@ app.get('/api/admin/users', async (req, res) => {
             }
           }
         }
+      }
+      if (uAccounts.length > 0) {
+        for (const a of uAccounts) {
+          const d = a.last_heartbeat_at || a.lastHeartbeatAt || a.created_at || a.createdAt;
+          if (d) {
+            const iso = d instanceof Date ? d.toISOString() : String(d);
+            if (!effectiveLastLogin || iso > effectiveLastLogin) {
+              effectiveLastLogin = iso;
+            }
+          }
+        }
+      }
+      if (!effectiveLastLogin) {
+        effectiveLastLogin = camelU.createdAt || (u.created_at instanceof Date ? u.created_at.toISOString() : u.created_at) || new Date().toISOString();
       }
 
       return {
