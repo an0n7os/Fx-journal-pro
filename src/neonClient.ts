@@ -3,7 +3,7 @@ const { Pool } = pg;
 
 interface QueryFilter {
   column: string;
-  op: '=' | '!=' | 'IN' | 'NOT IN' | 'IS' | 'IS NOT' | 'LIKE' | 'ILIKE';
+  op: '=' | '!=' | 'IN' | 'NOT IN' | 'IS' | 'IS NOT' | 'LIKE' | 'ILIKE' | '>' | '>=' | '<' | '<=';
   value?: any;
 }
 
@@ -52,6 +52,45 @@ export class NeonQueryBuilder {
 
   in(column: string, values: any[]) {
     this.filters.push({ column, op: 'IN', value: values });
+    return this;
+  }
+
+  ilike(column: string, value: any) {
+    this.filters.push({ column, op: 'ILIKE', value });
+    return this;
+  }
+
+  like(column: string, value: any) {
+    this.filters.push({ column, op: 'LIKE', value });
+    return this;
+  }
+
+  gt(column: string, value: any) {
+    this.filters.push({ column, op: '>', value });
+    return this;
+  }
+
+  gte(column: string, value: any) {
+    this.filters.push({ column, op: '>=', value });
+    return this;
+  }
+
+  lt(column: string, value: any) {
+    this.filters.push({ column, op: '<', value });
+    return this;
+  }
+
+  lte(column: string, value: any) {
+    this.filters.push({ column, op: '<=', value });
+    return this;
+  }
+
+  is(column: string, value: any) {
+    if (value === null) {
+      this.filters.push({ column, op: 'IS', value: null });
+    } else {
+      this.filters.push({ column, op: '=', value });
+    }
     return this;
   }
 
