@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet, Sparkles, Trash2, AlertTriangle,
@@ -110,6 +110,16 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
   // User search & filtering
   const [userSearch, setUserSearch] = useState('');
   const [planFilter, setPlanFilter] = useState<'ALL' | 'PRO' | 'FREE'>('ALL');
+  const [partnerFilter, setPartnerFilter] = useState<string>('ALL');
+
+  // Partner inspection
+  const [inspectPartner, setInspectPartner] = useState<any | null>(null);
+  const [customerModalPartner, setCustomerModalPartner] = useState<any | null>(null);
+  const [customerModalSearch, setCustomerModalSearch] = useState('');
+  const [partnerApiUsers, setPartnerApiUsers] = useState<any[]>([]);
+  const [partnerApiLoading, setPartnerApiLoading] = useState(false);
+  const [copiedCustomerId, setCopiedCustomerId] = useState<string | null>(null);
+  const [copiedPartnerRefLink, setCopiedPartnerRefLink] = useState(false);
 
   // Billing search & filters
   const [billingSearch, setBillingSearch] = useState('');
@@ -310,6 +320,32 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
   useEffect(() => {
     if (myRole === 'SUB_ADMIN') setActiveTab('assigned');
   }, [myRole]);
+
+  // Fetch detailed customer overview when customerModalPartner is set
+  useEffect(() => {
+    if (!customerModalPartner) {
+      setPartnerApiUsers([]);
+      setCustomerModalSearch('');
+      return;
+    }
+    let cancelled = false;
+    setPartnerApiLoading(true);
+    fetch(`/api/subadmin/overview?subAdminId=${encodeURIComponent(customerModalPartner.id)}&type=partner`, {
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!cancelled && d?.users) {
+          setPartnerApiUsers(d.users);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setPartnerApiLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [customerModalPartner]);
 
   /**
    * Upgrade to Partner.
@@ -599,12 +635,61 @@ Their referral link stops working and ` +
       (u.email || '').toLowerCase().includes(userSearch.toLowerCase()) ||
       (u.referralCode || '').toLowerCase().includes(userSearch.toLowerCase());
     const matchesPlan = planFilter === 'ALL' ? true : planFilter === 'PRO' ? !!u.isPro : !u.isPro;
-    return matchesSearch && matchesPlan;
+    const matchesPartner = partnerFilter === 'ALL' ? true : (
+      u.referredBy === partnerFilter ||
+      u.referred_by === partnerFilter ||
+      (partners.find(p => p.id === partnerFilter)?.referralCode &&
+       (u.referralCode === partners.find(p => p.id === partnerFilter)?.referralCode ||
+        u.referredBy === partners.find(p => p.id === partnerFilter)?.referralCode ||
+        u.referred_by === partners.find(p => p.id === partnerFilter)?.referralCode))
+    );
+    return matchesSearch && matchesPlan && matchesPartner;
   });
 
   const totalProCount = users.filter(u => !!u.isPro).length;
   const totalFreeCount = users.filter(u => !u.isPro).length;
   const totalReferralEarnings = users.reduce((acc, u) => acc + (u.referralIncome || 0), 0);
+
+  // Computed customers list for customerModalPartner (merges users registry with server overview)
+  const partnerCustomers = useMemo(() => {
+    if (!customerModalPartner) return [];
+    const pId = String(customerModalPartner.id || '').trim();
+    const pCode = String(customerModalPartner.referralCode || '').trim().toUpperCase();
+
+    const matchedMap = new Map<string, any>();
+
+    // 1. Gather all matching users from users registry
+    for (const u of users) {
+      const refBy = String(u.referredBy || u.referred_by || '').trim();
+      const codeMatch = Boolean(pCode && (
+        refBy.toUpperCase() === pCode || 
+        String(u.referralCode || '').trim().toUpperCase() === pCode
+      ));
+      if (refBy === pId || codeMatch) {
+        matchedMap.set(u.id, { ...u });
+      }
+    }
+
+    // 2. Merge with partnerApiUsers returned from /api/subadmin/overview
+    for (const apiU of partnerApiUsers) {
+      if (matchedMap.has(apiU.id)) {
+        matchedMap.set(apiU.id, { ...matchedMap.get(apiU.id), ...apiU });
+      } else {
+        matchedMap.set(apiU.id, apiU);
+      }
+    }
+
+    let list = Array.from(matchedMap.values());
+    if (customerModalSearch.trim()) {
+      const q = customerModalSearch.toLowerCase().trim();
+      list = list.filter((u: any) =>
+        (u.name || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q) ||
+        (u.id || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [customerModalPartner, users, partnerApiUsers, customerModalSearch]);
 
   return (
     <div id="admin-management-panel" className="dx-dark-surface bg-[#0b0f19] text-slate-200 border border-slate-800/80 rounded-2xl p-6 shadow-2xl backdrop-blur-xl">
@@ -893,7 +978,25 @@ Their referral link stops working and ` +
               />
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-between sm:justify-end">
+              {!isSubAdmin && partners.length > 0 && (
+                <div className="relative">
+                  <select
+                    value={partnerFilter}
+                    onChange={(e) => setPartnerFilter(e.target.value)}
+                    className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500 transition cursor-pointer font-medium max-w-[260px] truncate"
+                    title="Filter traders by referring Partner"
+                  >
+                    <option value="ALL">All Partners &amp; Direct Traders</option>
+                    {partners.map(p => (
+                      <option key={p.id} value={p.id}>
+                        Partner: {p.name || p.email} ({p.referralCode || 'No code'}) — {p.linkedUsers || 0} traders
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="flex rounded-xl bg-slate-800/80 p-1 border border-slate-700/80 text-xs">
                 {(['ALL', 'PRO', 'FREE'] as const).map(filter => (
                   <button
@@ -905,7 +1008,7 @@ Their referral link stops working and ` +
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    {filter === 'ALL' ? `All (${users.length})` : filter === 'PRO' ? `Pro (${totalProCount})` : `Free (${totalFreeCount})`}
+                    {filter === 'ALL' ? `All (${filteredUsers.length})` : filter === 'PRO' ? `Pro (${totalProCount})` : `Free (${totalFreeCount})`}
                   </button>
                 ))}
               </div>
@@ -1045,6 +1148,14 @@ Their referral link stops working and ` +
                           <Gift className="h-3 w-3 text-violet-400 shrink-0" />
                           <span className="font-bold">{u.referralCode || 'FX-100'}</span>
                         </div>
+                        {u.referredBy && (
+                          <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                            <span className="text-slate-500">Partner:</span>
+                            <span className="text-violet-300 font-semibold truncate max-w-[130px]">
+                              {partners.find(p => p.id === u.referredBy || p.referralCode === u.referredBy)?.name || u.referredBy}
+                            </span>
+                          </div>
+                        )}
                         <div className="text-[10.5px] text-slate-400 mt-1 flex items-center gap-1.5 whitespace-nowrap">
                           <span>Ref: <strong className="text-white font-semibold">{u.referralCount || 0}</strong></span>
                           <span className="text-slate-600">•</span>
@@ -1222,29 +1333,47 @@ Their referral link stops working and ` +
                         <th className="px-4 py-3 font-bold text-center">Sharing trades</th>
                         <th className="px-4 py-3 font-bold text-center">Paid</th>
                         <th className="px-5 py-3 font-bold text-right">Referral income</th>
+                        <th className="px-5 py-3 font-bold text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {partners.map((p) => (
-                        <tr key={p.id} className="border-b border-slate-800/60 last:border-0">
-                          <td className="px-5 py-3">
-                            <p className="font-semibold text-slate-200">{p.name}</p>
-                            <p className="text-[11px] text-slate-500">{p.email}</p>
-                          </td>
-                          <td className="px-4 py-3">
-                            {p.referralCode
-                              ? <span className="font-mono text-[11px] text-violet-300">{p.referralCode}</span>
-                              : <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="px-4 py-3 text-center font-bold text-slate-200">{p.linkedUsers}</td>
-                          {/* Consent is per user, so this is always <= Users. */}
-                          <td className="px-4 py-3 text-center text-slate-400">{p.sharingTrades}</td>
-                          <td className="px-4 py-3 text-center text-slate-400">{p.paidReferrals}</td>
-                          <td className="px-5 py-3 text-right font-extrabold text-emerald-400">
-                            ₹{Number(p.referralIncome || 0).toLocaleString('en-IN')}
-                          </td>
-                        </tr>
-                      ))}
+                      {partners.map((p) => {
+                        const isSelected = inspectPartner?.id === p.id;
+                        return (
+                          <tr key={p.id} className={`border-b border-slate-800/60 last:border-0 transition ${isSelected ? 'bg-violet-950/30' : 'hover:bg-slate-800/30'}`}>
+                            <td className="px-5 py-3">
+                              <p className="font-semibold text-slate-200">{p.name}</p>
+                              <p className="text-[11px] text-slate-500">{p.email}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              {p.referralCode
+                                ? <span className="font-mono text-[11px] text-violet-300">{p.referralCode}</span>
+                                : <span className="text-slate-600">—</span>}
+                            </td>
+                            <td className="px-4 py-3 text-center font-bold text-slate-200">{p.linkedUsers}</td>
+                            {/* Consent is per user, so this is always <= Users. */}
+                            <td className="px-4 py-3 text-center text-slate-400">{p.sharingTrades}</td>
+                            <td className="px-4 py-3 text-center text-slate-400">{p.paidReferrals}</td>
+                            <td className="px-5 py-3 text-right font-extrabold text-emerald-400">
+                              ₹{Number(p.referralIncome || 0).toLocaleString('en-IN')}
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCustomerModalPartner(p);
+                                  setInspectPartner(p);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white shadow-md shadow-violet-600/25 active:scale-95"
+                                title="Inspect all customers under this partner"
+                              >
+                                <Users className="h-3.5 w-3.5" />
+                                <span>View Customers ({p.linkedUsers || 0})</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1252,11 +1381,61 @@ Their referral link stops working and ` +
             </div>
           )}
 
-          <SubAdminConsole subAdminId={myRole === 'SUB_ADMIN' ? undefined : (assignFor?.id || undefined)} />
-          {myRole !== 'SUB_ADMIN' && !assignFor && (
-            <p className="text-[11px] text-slate-500">
-              No sub-admin selected, so this shows nothing. Open Team &amp; Roles and choose one.
-            </p>
+          {/* Partner Network Inspector for Super Admin */}
+          {inspectPartner && (
+            <div id="partner-inspector-section" className="p-5 rounded-2xl bg-slate-900/90 border border-violet-500/40 shadow-xl space-y-4 scroll-mt-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 rounded-xl bg-violet-600/20 text-violet-300 border border-violet-500/30">
+                    <Users className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-extrabold text-white">
+                        Referred Customers: <span className="text-violet-300">{inspectPartner.name || inspectPartner.email}</span>
+                      </h4>
+                      <span className="font-mono text-xs text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/20">
+                        {inspectPartner.referralCode || 'NO CODE'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Viewing all registered traders connected under this partner's referral code.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPartnerFilter(inspectPartner.id);
+                      setActiveTab('users');
+                    }}
+                    className="px-3 py-1.5 rounded-xl border border-violet-500/40 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 text-xs font-semibold transition cursor-pointer"
+                  >
+                    Open in User Registry
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectPartner(null)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition cursor-pointer"
+                  >
+                    Close View
+                  </button>
+                </div>
+              </div>
+              <SubAdminConsole subAdminId={inspectPartner.id} variant="partner" />
+            </div>
+          )}
+
+          {!inspectPartner && (
+            <>
+              <SubAdminConsole subAdminId={myRole === 'SUB_ADMIN' ? undefined : (assignFor?.id || undefined)} />
+              {myRole !== 'SUB_ADMIN' && !assignFor && (
+                <p className="text-[11px] text-slate-500">
+                  Select a partner above with "View Customers" or choose a sub-admin in Team &amp; Roles to inspect trader cards.
+                </p>
+              )}
+            </>
           )}
         </div>
       )}
@@ -2877,6 +3056,269 @@ Their referral link stops working and ` +
         <div className="fixed bottom-6 right-6 z-[99999] flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 border border-emerald-500/30 text-emerald-400 shadow-2xl shadow-emerald-950/50 text-xs font-semibold animate-in slide-in-from-bottom-2 duration-200">
           <Check className="w-4 h-4 text-emerald-400" />
           <span>{deleteSuccessToast}</span>
+        </div>,
+        document.body
+      )}
+
+      {/* Super Admin: Referred Customers Modal for Partner (Mounted via Portal) */}
+      {customerModalPartner && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
+          onClick={() => setCustomerModalPartner(null)}
+        >
+          <div
+            className="bg-[#0c101d] border border-violet-500/40 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-[0_25px_70px_-15px_rgba(139,92,246,0.35)] overflow-hidden text-left relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top glowing violet accent */}
+            <div className="h-1 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.8)]" />
+
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-800/80 flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0">
+                  <Users className="w-5 h-5 text-violet-300" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-base text-white">
+                      Referred Customers: {customerModalPartner.name || customerModalPartner.email}
+                    </h3>
+                    <span className="font-mono text-xs font-bold text-violet-300 bg-violet-500/15 px-2 py-0.5 rounded border border-violet-500/30">
+                      {customerModalPartner.referralCode || 'NO CODE'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {customerModalPartner.email} • {partnerCustomers.length} registered {partnerCustomers.length === 1 ? 'trader' : 'traders'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCustomerModalPartner(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mini Summary Chips */}
+            <div className="px-5 py-3 bg-slate-900/60 border-b border-slate-800/60 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+              <div className="p-2 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Linked</span>
+                <span className="text-sm font-extrabold text-white">{partnerCustomers.length}</span>
+              </div>
+              <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                <span className="text-[10px] uppercase font-bold text-amber-400 block">Pro Members</span>
+                <span className="text-sm font-extrabold text-amber-300">{partnerCustomers.filter(u => !!u.isPro).length}</span>
+              </div>
+              <div className="p-2 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Free Basic</span>
+                <span className="text-sm font-extrabold text-slate-300">{partnerCustomers.filter(u => !u.isPro).length}</span>
+              </div>
+              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-[10px] uppercase font-bold text-emerald-400 block">Sharing Trades</span>
+                <span className="text-sm font-extrabold text-emerald-300">{partnerCustomers.filter(u => u.allowPartnerTradeView || u.tradeAccess).length}</span>
+              </div>
+            </div>
+
+            {/* Customer Search Bar (shown when there are customers) */}
+            {partnerCustomers.length > 2 && (
+              <div className="px-5 pt-3 pb-1">
+                <div className="relative">
+                  <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="text"
+                    value={customerModalSearch}
+                    onChange={(e) => setCustomerModalSearch(e.target.value)}
+                    placeholder="Search customer by name, email or ID..."
+                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Customers List Section */}
+            <div className="p-5 overflow-y-auto space-y-3 flex-1 scrollbar-thin">
+              {partnerApiLoading && partnerCustomers.length === 0 && (
+                <div className="py-12 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                  <RefreshCw className="h-5 w-5 animate-spin text-violet-400" />
+                  <span>Loading referred customers...</span>
+                </div>
+              )}
+
+              {!partnerApiLoading && partnerCustomers.length === 0 && (
+                <div className="py-10 px-4 text-center border border-slate-800/80 rounded-2xl bg-slate-900/40 space-y-3">
+                  <Users className="w-10 h-10 text-slate-600 mx-auto" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-slate-300">No Customers Linked Yet</p>
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                      No traders have registered using {customerModalPartner.name || 'this partner'}'s code (<span className="font-mono text-violet-400">{customerModalPartner.referralCode}</span>) yet.
+                    </p>
+                  </div>
+                  {customerModalPartner.referralCode && (
+                    <div className="pt-2 flex items-center justify-center gap-2">
+                      <span className="font-mono text-xs px-3 py-1.5 rounded-xl bg-slate-800 text-violet-300 border border-slate-700 select-all">
+                        {window.location.origin}/?ref={customerModalPartner.referralCode}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${window.location.origin}/?ref=${customerModalPartner.referralCode}`);
+                          setCopiedPartnerRefLink(true);
+                          setTimeout(() => setCopiedPartnerRefLink(false), 2000);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        {copiedPartnerRefLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedPartnerRefLink ? 'Copied' : 'Copy Link'}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {partnerCustomers.map((cust: any) => {
+                const isProUser = Boolean(cust.isPro);
+                const isSharingTrades = Boolean(cust.allowPartnerTradeView || cust.tradeAccess);
+                const joinDateStr = cust.createdAt || cust.joinedAt || cust.referredAt;
+                const isCopied = copiedCustomerId === cust.id;
+
+                return (
+                  <div
+                    key={cust.id}
+                    className="p-4 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800/80 hover:border-violet-500/30 transition shadow-sm space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-600/30 to-purple-600/30 border border-violet-500/30 flex items-center justify-center text-white font-extrabold text-sm uppercase shrink-0">
+                          {(cust.name || cust.email || 'U').slice(0, 2)}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-white">{cust.name || 'Unnamed Trader'}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              isProUser 
+                                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' 
+                                : 'bg-slate-800 text-slate-400 border-slate-700'
+                            }`}>
+                              {isProUser ? 'PRO MEMBER' : 'FREE BASIC'}
+                            </span>
+                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              {cust.status || 'ACTIVE'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
+                            <span>{cust.email}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(cust.id);
+                                setCopiedCustomerId(cust.id);
+                                setTimeout(() => setCopiedCustomerId(null), 1500);
+                              }}
+                              className="font-mono text-[10px] text-slate-500 hover:text-slate-300 transition flex items-center gap-1 cursor-pointer"
+                              title="Copy user ID"
+                            >
+                              <span>({cust.id.slice(0, 8)}…)</span>
+                              {isCopied ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomerModalPartner(null);
+                            setUserSearch(cust.email);
+                            setActiveTab('users');
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
+                        >
+                          User Registry
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomerModalPartner(null);
+                            setGrantProModalUser(cust);
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold transition cursor-pointer flex items-center gap-1"
+                        >
+                          <Crown className="w-3 h-3" />
+                          <span>{isProUser ? 'Manage Pro' : 'Grant Pro'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-3">
+                        <span>Joined: <strong className="text-slate-300 font-medium">{formatDateTime(joinDateStr)}</strong></span>
+                        {cust.tradesCount !== undefined && (
+                          <span>Trades: <strong className="text-slate-300 font-medium">{cust.tradesCount}</strong></span>
+                        )}
+                        {cust.accountsCount !== undefined && (
+                          <span>Accounts: <strong className="text-slate-300 font-medium">{cust.accountsCount}</strong></span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {isSharingTrades ? (
+                          <span className="text-emerald-400 font-medium flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" /> Trades shared with partner
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 flex items-center gap-1">
+                            <Lock className="w-3 h-3" /> Trade telemetry private
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-800/80 bg-slate-900/60 flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setPartnerFilter(customerModalPartner.id);
+                  setCustomerModalPartner(null);
+                  setActiveTab('users');
+                }}
+                className="px-3.5 py-2 rounded-xl border border-violet-500/40 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 text-xs font-bold transition cursor-pointer"
+              >
+                Open in User Registry (Filtered)
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const p = customerModalPartner;
+                    setCustomerModalPartner(null);
+                    setInspectPartner(p);
+                    setTimeout(() => {
+                      document.getElementById('partner-inspector-section')?.scrollIntoView({ behavior: 'smooth' });
+                    }, 100);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold transition cursor-pointer"
+                >
+                  Inspect in Telemetry Console
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomerModalPartner(null)}
+                  className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold transition cursor-pointer shadow-md shadow-violet-600/20"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>,
         document.body
       )}

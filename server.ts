@@ -9182,7 +9182,7 @@ app.get('/api/subadmin/overview', async (req, res) => {
     // own role so a partner's network is read from referrals and a sub-admin's
     // from assignments, rather than assuming one of the two.
     targetSubAdminId = String(req.query.subAdminId);
-    scopeRole = (await lookupUserRole(targetSubAdminId)) || (req.query.type === 'partner' ? 'PARTNER' : 'SUB_ADMIN');
+    scopeRole = req.query.type === 'partner' ? 'PARTNER' : ((await lookupUserRole(targetSubAdminId)) || 'SUB_ADMIN');
   } else if (!SCOPED_ROLES.has(ctx.role)) {
     scopeRole = req.query.type === 'partner' ? 'PARTNER' : 'SUB_ADMIN';
   }
@@ -11398,11 +11398,26 @@ app.get('/api/admin/partners', async (req, res) => {
       creditPayment(referrerOf[pay.userId || pay.user_id], Number(pay.amount) || 0);
     }
   } else {
-    const [{ data: ps }, { data: prof }, { data: refs }] = await Promise.all([
-      supabase.from('users').select('id, email, name, is_pro, status, created_at').eq('role', 'PARTNER'),
+    const [{ data: prof }, { data: refs }, { data: partnerUsers }] = await Promise.all([
       supabase.from('partner_profiles').select('user_id, referral_code'),
       supabase.from('users').select('id, referred_by, allow_partner_trade_view').not('referred_by', 'is', null),
+      supabase.from('users').select('id, email, name, is_pro, status, created_at, role').eq('role', 'PARTNER'),
     ]);
+    const partnerIdSet = new Set<string>([
+      ...(prof || []).map((p: any) => p.user_id),
+      ...(partnerUsers || []).map((u: any) => u.id),
+    ]);
+    const allPartnerIds = Array.from(partnerIdSet).filter(Boolean);
+    let ps: any[] = partnerUsers || [];
+    if (allPartnerIds.length > 0) {
+      const { data: matchedUsers } = await supabase
+        .from('users')
+        .select('id, email, name, is_pro, status, created_at, role')
+        .in('id', allPartnerIds);
+      if (matchedUsers && matchedUsers.length > 0) {
+        ps = matchedUsers;
+      }
+    }
     partners = (ps || []).map(toCamel);
     for (const p of prof || []) profiles[(p as any).user_id] = (p as any).referral_code;
     const referrerOf: Record<string, string> = {};
