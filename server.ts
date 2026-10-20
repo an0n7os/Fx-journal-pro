@@ -9874,21 +9874,26 @@ const findPartnerByCode = async (rawCode: string): Promise<{
     console.warn('[findPartnerByCode] Error searching primary partner code:', err);
   }
 
-  // 2. Check custom links stored in users.preferences
+  // 2. Check custom links in partner_profiles table directly
   try {
-    const { data: partnerUsers } = await supabase
-      .from('users')
-      .select('id, preferences')
-      .eq('role', 'PARTNER');
-
-    for (const u of partnerUsers || []) {
-      const links = (prefsValue(u.preferences, 'partnerLinks') || []) as ReferralLink[];
+    const { data: allP } = await supabase.from('partner_profiles').select('user_id, referral_code, links, offer_price');
+    for (const p of allP || []) {
+      const rawLinks = p.links;
+      let links: ReferralLink[] = [];
+      if (Array.isArray(rawLinks)) {
+        links = rawLinks;
+      } else if (typeof rawLinks === 'string') {
+        try {
+          const parsed = JSON.parse(rawLinks);
+          if (Array.isArray(parsed)) links = parsed;
+        } catch {}
+      }
       const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
       if (link) {
         return {
-          userId: u.id,
+          userId: p.user_id,
           code: link.code,
-          offerPrice: link.offerPrice || prefsValue(u.preferences, 'partnerOfferPrice') || 499,
+          offerPrice: link.offerPrice || p.offer_price || 499,
           isActive: link.isActive !== false,
           linkId: link.id,
           label: link.label,
@@ -9896,27 +9901,37 @@ const findPartnerByCode = async (rawCode: string): Promise<{
       }
     }
   } catch (err) {
-    console.warn('[findPartnerByCode] Error searching custom links in users:', err);
+    console.warn('[findPartnerByCode] Error searching custom links in partner_profiles:', err);
   }
 
-  // 3. Fallback: check custom links in partner_profiles if column exists
+  // 3. Fallback: Check custom links in users.preferences for any partner user
   try {
-    const { data: allP } = await supabase.from('partner_profiles').select('user_id, referral_code, links');
-    for (const p of allP || []) {
-      const links = (p.links || []) as ReferralLink[];
-      const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
-      if (link) {
-        return {
-          userId: p.user_id,
-          code: link.code,
-          offerPrice: link.offerPrice || 499,
-          isActive: link.isActive !== false,
-          linkId: link.id,
-          label: link.label,
-        };
+    const { data: allP } = await supabase.from('partner_profiles').select('user_id');
+    const partnerUserIds = (allP || []).map((p: any) => p.user_id).filter(Boolean);
+    if (partnerUserIds.length > 0) {
+      const { data: partnerUsers } = await supabase
+        .from('users')
+        .select('id, preferences')
+        .in('id', partnerUserIds);
+
+      for (const u of partnerUsers || []) {
+        const links = (prefsValue(u.preferences, 'partnerLinks') || []) as ReferralLink[];
+        const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
+        if (link) {
+          return {
+            userId: u.id,
+            code: link.code,
+            offerPrice: link.offerPrice || prefsValue(u.preferences, 'partnerOfferPrice') || 499,
+            isActive: link.isActive !== false,
+            linkId: link.id,
+            label: link.label,
+          };
+        }
       }
     }
-  } catch {}
+  } catch (err) {
+    console.warn('[findPartnerByCode] Error searching custom links in users:', err);
+  }
 
   return null;
 };
