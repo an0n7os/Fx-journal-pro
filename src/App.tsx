@@ -445,7 +445,7 @@ export default function App() {
   // the Partner Portal rather than the Admin panel, so the role itself has to
   // reach the UI — isAdmin alone cannot tell the two apart.
   const [adminRole, setAdminRole] = useState<string>('USER');
-  const isPartner = adminRole === 'PARTNER' || adminRole === 'SUPER_ADMIN' || adminRole === 'ADMIN';
+  const isPartner = adminRole === 'PARTNER' || adminRole === 'SUB_ADMIN' || adminRole === 'SUPER_ADMIN' || adminRole === 'ADMIN';
 
   // Who referred this user, and whether they have agreed to let that partner
   // read their trading data. Both come from the server; the toggle below is a

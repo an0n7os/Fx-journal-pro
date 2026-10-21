@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet, Sparkles, Trash2, AlertTriangle,
+  Users, CreditCard, AlertCircle, FileText, Plus, RefreshCw, BarChart3, Shield, Bug, Lightbulb, UserCheck, Crown, TrendingUp, Gift, Activity, Search, UserPlus, Lock, Check, X, ShieldAlert, DollarSign, Copy, CheckCheck, Wallet, Sparkles, Trash2, AlertTriangle, Ticket, Link2,
 } from 'lucide-react';
 import { SupportTicket, Announcement } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -120,6 +120,15 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
   const [partnerApiLoading, setPartnerApiLoading] = useState(false);
   const [copiedCustomerId, setCopiedCustomerId] = useState<string | null>(null);
   const [copiedPartnerRefLink, setCopiedPartnerRefLink] = useState(false);
+  const [copiedCouponKey, setCopiedCouponKey] = useState<string | null>(null);
+
+  // Partner coupon creation & management inside customer modal
+  const [showAddPartnerCoupon, setShowAddPartnerCoupon] = useState(false);
+  const [newCouponCode, setNewCouponCode] = useState('');
+  const [newCouponLabel, setNewCouponLabel] = useState('');
+  const [newCouponPrice, setNewCouponPrice] = useState<number>(399);
+  const [creatingPartnerCoupon, setCreatingPartnerCoupon] = useState(false);
+  const [partnerCouponError, setPartnerCouponError] = useState<string | null>(null);
 
   // Billing search & filters
   const [billingSearch, setBillingSearch] = useState('');
@@ -346,6 +355,61 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
       });
     return () => { cancelled = true; };
   }, [customerModalPartner]);
+
+  const handleCreatePartnerCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customerModalPartner) return;
+    setCreatingPartnerCoupon(true);
+    setPartnerCouponError(null);
+    try {
+      const res = await fetch(`/api/admin/partners/${customerModalPartner.id}/links`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          code: newCouponCode.trim().toUpperCase(),
+          label: newCouponLabel.trim() || 'Custom Coupon',
+          offerPrice: newCouponPrice,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to create coupon code.');
+
+      const updatedLinks = [data.link, ...(customerModalPartner.links || [])];
+      const updatedPartner = { ...customerModalPartner, links: updatedLinks };
+      setCustomerModalPartner(updatedPartner);
+      setPartners(prev => prev.map(p => p.id === customerModalPartner.id ? updatedPartner : p));
+
+      setNewCouponCode('');
+      setNewCouponLabel('');
+      setNewCouponPrice(399);
+      setShowAddPartnerCoupon(false);
+    } catch (err: any) {
+      setPartnerCouponError(err.message || 'Failed to create coupon code.');
+    } finally {
+      setCreatingPartnerCoupon(false);
+    }
+  };
+
+  const handleDeletePartnerCoupon = async (linkId: string, code: string) => {
+    if (!customerModalPartner) return;
+    if (!confirm(`Are you sure you want to delete coupon code "${code}"?`)) return;
+    try {
+      const res = await fetch(`/api/admin/partners/${customerModalPartner.id}/links/${linkId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete coupon code.');
+      }
+      const updatedLinks = (customerModalPartner.links || []).filter((l: any) => l.id !== linkId);
+      const updatedPartner = { ...customerModalPartner, links: updatedLinks };
+      setCustomerModalPartner(updatedPartner);
+      setPartners(prev => prev.map(p => p.id === customerModalPartner.id ? updatedPartner : p));
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete coupon code.');
+    }
+  };
 
   /**
    * Upgrade to Partner.
@@ -655,16 +719,22 @@ Their referral link stops working and ` +
     if (!customerModalPartner) return [];
     const pId = String(customerModalPartner.id || '').trim();
     const pCode = String(customerModalPartner.referralCode || '').trim().toUpperCase();
+    const allPartnerCodes = new Set<string>();
+    if (pCode) allPartnerCodes.add(pCode);
+    if (Array.isArray(customerModalPartner.links)) {
+      for (const l of customerModalPartner.links) {
+        if (l.code) allPartnerCodes.add(String(l.code).trim().toUpperCase());
+      }
+    }
 
     const matchedMap = new Map<string, any>();
 
     // 1. Gather all matching users from users registry
     for (const u of users) {
       const refBy = String(u.referredBy || u.referred_by || '').trim();
-      const codeMatch = Boolean(pCode && (
-        refBy.toUpperCase() === pCode || 
-        String(u.referralCode || '').trim().toUpperCase() === pCode
-      ));
+      const refByUpper = refBy.toUpperCase();
+      const uRefCode = String(u.referralCode || '').trim().toUpperCase();
+      const codeMatch = allPartnerCodes.has(refByUpper) || allPartnerCodes.has(uRefCode);
       if (refBy === pId || codeMatch) {
         matchedMap.set(u.id, { ...u });
       }
@@ -1346,9 +1416,33 @@ Their referral link stops working and ` +
                               <p className="text-[11px] text-slate-500">{p.email}</p>
                             </td>
                             <td className="px-4 py-3">
-                              {p.referralCode
-                                ? <span className="font-mono text-[11px] text-violet-300">{p.referralCode}</span>
-                                : <span className="text-slate-600">—</span>}
+                              {p.referralCode ? (
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-mono text-[11px] font-bold text-violet-300">{p.referralCode}</span>
+                                    <span className="text-[9.5px] text-slate-500 font-medium">₹{p.offerPrice || 499}</span>
+                                  </div>
+                                  {Array.isArray(p.links) && p.links.length > 0 && (
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      {p.links.map((l: any) => (
+                                        <span
+                                          key={l.id || l.code}
+                                          title={`${l.label || 'Coupon'}: ₹${l.offerPrice} (Earns ₹${l.mentorEarns})`}
+                                          className={`text-[9.5px] font-mono px-1.5 py-0.5 rounded border ${
+                                            l.isActive
+                                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                              : 'bg-slate-800 text-slate-500 border-slate-700'
+                                          }`}
+                                        >
+                                          {l.code}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-center font-bold text-slate-200">{p.linkedUsers}</td>
                             {/* Consent is per user, so this is always <= Users. */}
@@ -3119,6 +3213,183 @@ Their referral link stops working and ` +
               <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                 <span className="text-[10px] uppercase font-bold text-emerald-400 block">Sharing Trades</span>
                 <span className="text-sm font-extrabold text-emerald-300">{partnerCustomers.filter(u => u.allowPartnerTradeView || u.tradeAccess).length}</span>
+              </div>
+            </div>
+
+            {/* Referral Links & Campaign Coupons Section */}
+            <div className="px-5 py-4 bg-slate-900/40 border-b border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Ticket className="w-4 h-4 text-violet-400" />
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    Partner Referral Links &amp; Coupons ({1 + (customerModalPartner.links?.length || 0)})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddPartnerCoupon(!showAddPartnerCoupon)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 text-[11px] font-bold transition cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>{showAddPartnerCoupon ? 'Cancel' : '+ New Coupon'}</span>
+                </button>
+              </div>
+
+              {/* Form to create new coupon for this partner */}
+              {showAddPartnerCoupon && (
+                <form onSubmit={handleCreatePartnerCoupon} className="p-3.5 rounded-xl bg-slate-950/80 border border-violet-500/30 space-y-3 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-violet-300">Generate Coupon Code for {customerModalPartner.name || customerModalPartner.email}</span>
+                    <span className="text-[10px] text-slate-400">Offer Price: ₹199 - ₹499</span>
+                  </div>
+
+                  {partnerCouponError && (
+                    <p className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2">
+                      {partnerCouponError}
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Coupon Code</label>
+                      <input
+                        type="text"
+                        required
+                        value={newCouponCode}
+                        onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
+                        placeholder="e.g. FESTIVAL50"
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-white focus:outline-none focus:border-violet-500 uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Campaign Label</label>
+                      <input
+                        type="text"
+                        value={newCouponLabel}
+                        onChange={(e) => setNewCouponLabel(e.target.value)}
+                        placeholder="e.g. Festival Offer"
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-violet-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Student Price (₹)</label>
+                      <input
+                        type="number"
+                        min={199}
+                        max={499}
+                        required
+                        value={newCouponPrice}
+                        onChange={(e) => setNewCouponPrice(Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-white focus:outline-none focus:border-violet-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPartnerCoupon(false)}
+                      className="px-3 py-1 rounded-lg border border-slate-700 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={creatingPartnerCoupon || !newCouponCode.trim()}
+                      className="px-3.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      {creatingPartnerCoupon ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                      <span>{creatingPartnerCoupon ? 'Generating...' : 'Generate Coupon'}</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Coupons list */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto scrollbar-thin pr-1">
+                {/* Primary Default Coupon */}
+                <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-xs font-black text-violet-300">{customerModalPartner.referralCode || 'NO CODE'}</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300">Default</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 block truncate">Student: ₹{customerModalPartner.offerPrice || 499}</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(customerModalPartner.referralCode);
+                        setCopiedCouponKey('primary-code');
+                        setTimeout(() => setCopiedCouponKey(null), 2000);
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px] font-semibold border border-slate-700 transition cursor-pointer"
+                      title="Copy code"
+                    >
+                      {copiedCouponKey === 'primary-code' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/?ref=${customerModalPartner.referralCode}`);
+                        setCopiedCouponKey('primary-link');
+                        setTimeout(() => setCopiedCouponKey(null), 2000);
+                      }}
+                      className="p-1.5 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 text-[10px] font-semibold border border-violet-500/30 transition cursor-pointer"
+                      title="Copy referral URL"
+                    >
+                      {copiedCouponKey === 'primary-link' ? <Check className="w-3 h-3 text-emerald-400" /> : <Link2 className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Multiple Campaign Coupons */}
+                {Array.isArray(customerModalPartner.links) && customerModalPartner.links.map((link: any) => (
+                  <div key={link.id || link.code} className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-black text-emerald-300">{link.code}</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">₹{link.offerPrice}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 block truncate">{link.label || 'Campaign'} • Earns ₹{link.mentorEarns}</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(link.code);
+                          setCopiedCouponKey(`code-${link.id}`);
+                          setTimeout(() => setCopiedCouponKey(null), 2000);
+                        }}
+                        className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px] font-semibold border border-slate-700 transition cursor-pointer"
+                        title="Copy code"
+                      >
+                        {copiedCouponKey === `code-${link.id}` ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(link.referralUrl || `${window.location.origin}/?ref=${link.code}`);
+                          setCopiedCouponKey(`link-${link.id}`);
+                          setTimeout(() => setCopiedCouponKey(null), 2000);
+                        }}
+                        className="p-1.5 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 text-[10px] font-semibold border border-violet-500/30 transition cursor-pointer"
+                        title="Copy referral URL"
+                      >
+                        {copiedCouponKey === `link-${link.id}` ? <Check className="w-3 h-3 text-emerald-400" /> : <Link2 className="w-3 h-3" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePartnerCoupon(link.id, link.code)}
+                        className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-[10px] font-semibold border border-rose-500/20 transition cursor-pointer"
+                        title="Delete coupon"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 

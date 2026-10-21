@@ -9288,6 +9288,30 @@ app.get('/api/subadmin/overview', async (req, res) => {
     return { date, count: running };
   });
 
+  let referralInfo: any = null;
+  if (targetSubAdminId) {
+    try {
+      const pData = await getPartnerData(targetSubAdminId);
+      if (pData?.referralCode) {
+        const standardPrice = 499;
+        referralInfo = {
+          referralCode: pData.referralCode,
+          referralUrl: partnerReferralUrl(req, pData.referralCode),
+          offerPrice: pData.offerPrice || standardPrice,
+          links: (pData.links || []).map((l: any) => ({
+            ...l,
+            offerPrice: l.offerPrice || pData.offerPrice || standardPrice,
+            referralUrl: partnerReferralUrl(req, l.code),
+            mentorEarns: Math.max(0, (l.offerPrice || pData.offerPrice || standardPrice) - 199),
+            studentSaves: Math.max(0, standardPrice - (l.offerPrice || pData.offerPrice || standardPrice)),
+          })),
+        };
+      }
+    } catch (e) {
+      console.warn('[subadmin/overview] Error fetching partner data:', e);
+    }
+  }
+
   res.json({
     subAdminId: targetSubAdminId,
     stats: {
@@ -9300,6 +9324,7 @@ app.get('/api/subadmin/overview', async (req, res) => {
     },
     growth,
     users: cards,
+    referral: referralInfo,
   });
 });
 
@@ -11358,6 +11383,77 @@ app.get('/api/admin/partners/:id/adjustments', async (req, res) => {
   res.json({ adjustments, adjustmentTotal: sumAdjustments(adjustments) });
 });
 
+// ── Admin: create custom referral link / coupon code for a specific partner ─
+app.post('/api/admin/partners/:id/links', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.manage');
+  if (!ctx) return;
+  const targetPartnerId = String(req.params.id);
+
+  let code = String(req.body?.code || '').trim().toUpperCase();
+  const label = String(req.body?.label || 'Special Offer').trim();
+  let offerPrice = Number(req.body?.offerPrice);
+
+  if (isNaN(offerPrice) || offerPrice < 199 || offerPrice > 499) {
+    offerPrice = 499;
+  }
+  offerPrice = Math.round(offerPrice);
+
+  if (!code) {
+    code = generateReferralCode(label || 'COUPON');
+    for (let i = 0; i < 5 && !(await isCodeAvailable(code, targetPartnerId)); i++) {
+      code = generateReferralCode(label || 'COUPON');
+    }
+  } else {
+    if (!CODE_PATTERN.test(code)) {
+      return res.status(400).json({ error: 'Use 4-16 letters and numbers only, no spaces or symbols.' });
+    }
+    if (['ADMIN', 'SUPPORT', 'FXJOURNALPRO', 'OFFICIAL'].includes(code)) {
+      return res.status(400).json({ error: 'That code is reserved. Please choose another.' });
+    }
+    if (!(await isCodeAvailable(code, targetPartnerId))) {
+      return res.status(409).json({ error: 'That code is already in use. Please choose another.' });
+    }
+  }
+
+  const newLink: ReferralLink = {
+    id: `link_${crypto.randomUUID().slice(0, 8)}`,
+    code,
+    label: label || 'Custom Offer',
+    offerPrice,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  };
+
+  const { links: existingLinks } = await getPartnerData(targetPartnerId);
+  const curLinks = [newLink, ...(existingLinks || [])];
+  await savePartnerLinks(targetPartnerId, curLinks);
+
+  res.json({
+    success: true,
+    link: {
+      ...newLink,
+      referralUrl: partnerReferralUrl(req, newLink.code),
+      mentorEarns: Math.max(0, newLink.offerPrice - 199),
+      studentSaves: Math.max(0, 499 - newLink.offerPrice),
+    },
+    message: `Coupon code ${newLink.code} created successfully for partner!`,
+  });
+});
+
+// ── Admin: delete a referral link / coupon code for a partner ──────────────
+app.delete('/api/admin/partners/:id/links/:linkId', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'partner.manage');
+  if (!ctx) return;
+  const targetPartnerId = String(req.params.id);
+  const { linkId } = req.params;
+
+  const { links: existingLinks } = await getPartnerData(targetPartnerId);
+  const nextLinks = (existingLinks || []).filter((l) => l.id !== linkId);
+  await savePartnerLinks(targetPartnerId, nextLinks);
+
+  res.json({ success: true, message: 'Coupon code deleted successfully.' });
+});
+
 // ── Admin: every partner and how big their network is ─────────────────────
 app.get('/api/admin/partners', async (req, res) => {
   const ctx = await requirePermission(req, res, 'partner.manage');
@@ -11440,29 +11536,57 @@ app.get('/api/admin/partners', async (req, res) => {
     }
   }
 
+  // Load full partner data (including custom campaign links and offer price) in parallel
+  const partnerProfilesMap: Record<string, any> = {};
+  await Promise.all(
+    partners.map(async (p) => {
+      try {
+        const pData = await getPartnerData(p.id);
+        partnerProfilesMap[p.id] = pData;
+      } catch (err) {
+        partnerProfilesMap[p.id] = { referralCode: '', offerPrice: 499, links: [] };
+      }
+    })
+  );
+
   // Manual credits count here too, or this roster and the partner's own
   // payout screen would report different balances for the same person — the
   // exact mismatch referralEarningsByReferrer was written to end.
   const adjustments = await adjustmentTotalsByPartner();
 
   res.json({
-    partners: partners.map((p) => ({
-      id: p.id,
-      name: p.name || String(p.email || '').split('@')[0],
-      email: p.email,
-      isPro: !!(p.isPro ?? p.is_pro),
-      status: p.status || 'ACTIVE',
-      joinedAt: p.createdAt || p.created_at || null,
-      referralCode: profiles[p.id] || null,
-      referralUrl: profiles[p.id] ? partnerReferralUrl(req, profiles[p.id]) : null,
-      linkedUsers: counts[p.id] || 0,
-      sharingTrades: sharing[p.id] || 0,
-      paidReferrals: paidCounts[p.id] || 0,
-      referralIncome: Math.round(((income[p.id] || 0) + (adjustments[p.id] || 0)) * 100) / 100,
-      // Split out so the roster can show "of which manual" rather than a
-      // figure that does not reconcile against paidReferrals.
-      adjustmentTotal: Math.round((adjustments[p.id] || 0) * 100) / 100,
-    })).sort((a, b) => b.referralIncome - a.referralIncome || b.linkedUsers - a.linkedUsers),
+    partners: partners.map((p) => {
+      const pProf = partnerProfilesMap[p.id] || {};
+      const pCode = pProf.referralCode || profiles[p.id] || null;
+      const standardPrice = 499;
+      const pLinks = (pProf.links || []).map((l: any) => ({
+        ...l,
+        offerPrice: l.offerPrice || pProf.offerPrice || standardPrice,
+        referralUrl: partnerReferralUrl(req, l.code),
+        mentorEarns: Math.max(0, (l.offerPrice || pProf.offerPrice || standardPrice) - 199),
+        studentSaves: Math.max(0, standardPrice - (l.offerPrice || pProf.offerPrice || standardPrice)),
+      }));
+
+      return {
+        id: p.id,
+        name: p.name || String(p.email || '').split('@')[0],
+        email: p.email,
+        isPro: !!(p.isPro ?? p.is_pro),
+        status: p.status || 'ACTIVE',
+        joinedAt: p.createdAt || p.created_at || null,
+        referralCode: pCode,
+        referralUrl: pCode ? partnerReferralUrl(req, pCode) : null,
+        offerPrice: pProf.offerPrice || standardPrice,
+        links: pLinks,
+        linkedUsers: counts[p.id] || 0,
+        sharingTrades: sharing[p.id] || 0,
+        paidReferrals: paidCounts[p.id] || 0,
+        referralIncome: Math.round(((income[p.id] || 0) + (adjustments[p.id] || 0)) * 100) / 100,
+        // Split out so the roster can show "of which manual" rather than a
+        // figure that does not reconcile against paidReferrals.
+        adjustmentTotal: Math.round((adjustments[p.id] || 0) * 100) / 100,
+      };
+    }).sort((a, b) => b.referralIncome - a.referralIncome || b.linkedUsers - a.linkedUsers),
     totals: {
       partners: partners.length,
       linkedUsers: Object.values(counts).reduce((a, b) => a + b, 0),

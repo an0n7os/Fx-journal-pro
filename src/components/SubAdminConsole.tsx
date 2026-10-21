@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Users, Crown, Activity, TrendingUp, ArrowLeft, Calendar, BookOpen,
   BarChart3, Clock, Lock, RefreshCw, Search, AlertCircle, ChevronRight,
+  Link2, Copy, Check, Ticket, Sparkles, ExternalLink, Tag,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -44,6 +45,21 @@ interface Overview {
   };
   growth: { date: string; count: number }[];
   users: OverviewUser[];
+  referral?: {
+    referralCode: string;
+    referralUrl: string;
+    offerPrice?: number;
+    links?: {
+      id: string;
+      code: string;
+      label?: string;
+      offerPrice: number;
+      isActive: boolean;
+      referralUrl?: string;
+      mentorEarns: number;
+      studentSaves: number;
+    }[];
+  } | null;
 }
 
 interface Analysis {
@@ -194,6 +210,26 @@ export default function SubAdminConsole({
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [accessDenied, setAccessDenied] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const copyText = async (text: string, key: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch {
+      setError('Copying is blocked in this browser.');
+    }
+  };
 
   const getAuthHeaders = () => {
     const headers: Record<string, string> = {};
@@ -483,6 +519,168 @@ export default function SubAdminConsole({
           </button>
         </div>
       </div>
+
+      {/* Referral Link & Campaign Coupons Hub */}
+      {overview?.referral?.referralCode && (
+        <div className="bg-slate-900/80 border border-violet-500/30 rounded-2xl p-5 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="p-2 rounded-xl bg-violet-600/20 text-violet-300 border border-violet-500/30">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <div>
+                <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                  <span>Referral Link &amp; Campaign Coupons</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 font-semibold border border-violet-500/30">
+                    Live
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-400">
+                  Share your referral link or custom coupon codes with traders. Anyone who signs up or applies your coupon appears below.
+                </p>
+              </div>
+            </div>
+            {overview.referral.links && overview.referral.links.length > 0 && (
+              <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                {overview.referral.links.length} Active {overview.referral.links.length === 1 ? 'Campaign' : 'Campaigns'}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Primary Referral Link */}
+            <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="h-4 w-4 text-violet-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Primary Referral Link</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                    Standard (₹{overview.referral.offerPrice || 499})
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 mb-3 select-all">
+                  <p className="font-mono text-xs text-slate-200 truncate">
+                    {overview.referral.referralUrl}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => copyText(overview.referral!.referralUrl, 'primary-link')}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold transition shadow-sm cursor-pointer"
+                >
+                  {copiedKey === 'primary-link' ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span>{copiedKey === 'primary-link' ? 'Copied Link!' : 'Copy Link'}</span>
+                </button>
+                <a
+                  href={overview.referral.referralUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs transition cursor-pointer"
+                  title="Test link in new tab"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            </div>
+
+            {/* Primary Coupon Code */}
+            <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Ticket className="h-4 w-4 text-violet-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Primary Coupon Code</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    Earn: ₹{Math.max(0, (overview.referral.offerPrice || 499) - 199)}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 mb-3 flex items-center justify-between">
+                  <span className="font-mono text-lg font-black tracking-widest text-white">
+                    {overview.referral.referralCode}
+                  </span>
+                  <span className="text-xs text-slate-400">Student: ₹{overview.referral.offerPrice || 499}</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => copyText(overview.referral!.referralCode, 'primary-code')}
+                className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition border border-slate-700 cursor-pointer"
+              >
+                {copiedKey === 'primary-code' ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                <span>{copiedKey === 'primary-code' ? 'Copied Code!' : 'Copy Code'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Multiple Campaign Coupons Section */}
+          {overview.referral.links && overview.referral.links.length > 0 && (
+            <div className="pt-2 border-t border-slate-800/80">
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                  <Tag className="h-3.5 w-3.5 text-violet-400" />
+                  <span>Campaign Coupon Codes ({overview.referral.links.length})</span>
+                </div>
+                <span className="text-[11px] text-slate-500">Custom discount coupons for promotions</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                {overview.referral.links.map((link) => (
+                  <div key={link.id} className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-slate-700 transition flex flex-col justify-between gap-2">
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className="font-mono text-sm font-black tracking-wider text-violet-300">
+                          {link.code}
+                        </span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                          link.isActive ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'
+                        }`}>
+                          {link.isActive ? 'Active' : 'Off'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 font-medium truncate">{link.label || 'Custom Offer'}</p>
+                      <div className="flex items-center gap-2 mt-1 text-[10.5px]">
+                        <span className="text-emerald-400 font-semibold">₹{link.offerPrice}</span>
+                        {link.studentSaves > 0 && (
+                          <span className="text-slate-500 line-through">₹499</span>
+                        )}
+                        <span className="text-slate-400">• Earns: ₹{link.mentorEarns}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 pt-1 border-t border-slate-900">
+                      <button
+                        type="button"
+                        onClick={() => copyText(link.code, `code-${link.id}`)}
+                        className="flex-1 py-1 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-200 border border-slate-800 flex items-center justify-center gap-1 transition cursor-pointer"
+                        title="Copy coupon code"
+                      >
+                        {copiedKey === `code-${link.id}` ? <Check className="h-3 w-3 text-emerald-300" /> : <Copy className="h-3 w-3" />}
+                        <span>{copiedKey === `code-${link.id}` ? 'Copied' : 'Code'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyText(link.referralUrl || `${window.location.origin}/?ref=${link.code}`, `link-${link.id}`)}
+                        className="flex-1 py-1 px-2 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 text-[11px] font-semibold text-violet-300 border border-violet-500/30 flex items-center justify-center gap-1 transition cursor-pointer"
+                        title="Copy direct signup link"
+                      >
+                        {copiedKey === `link-${link.id}` ? <Check className="h-3 w-3 text-emerald-300" /> : <Link2 className="h-3 w-3" />}
+                        <span>{copiedKey === `link-${link.id}` ? 'Copied' : 'Link'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <StatTile icon={Users} label={isPartner ? 'Referred users' : 'Assigned users'} value={overview?.stats.totalUsers ?? 0} tone="violet" />
