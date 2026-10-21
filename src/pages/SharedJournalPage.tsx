@@ -156,6 +156,14 @@ export default function SharedJournalPage({
     }).format(val);
   };
 
+  const formatPrice = (val: any) => {
+    if (val === null || val === undefined || val === '') return '—';
+    const num = Number(val);
+    if (isNaN(num)) return String(val);
+    if (Number.isInteger(num)) return num.toString();
+    return parseFloat(num.toFixed(5)).toString();
+  };
+
   const formatDateTime = (val: string | null | undefined): string => {
     if (!val) return '—';
     try {
@@ -624,7 +632,7 @@ export default function SharedJournalPage({
                       setCurrentPage(1);
                     }}
                     placeholder="Search pair or comments..."
-                    className="pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-violet-500 w-44"
+                    className="pl-8 pr-3 py-2 bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-lg w-full sm:w-48 focus:ring-violet-500 focus:border-violet-500 placeholder:text-slate-500"
                   />
                 </div>
 
@@ -634,7 +642,7 @@ export default function SharedJournalPage({
                     setJournalFilterSymbol(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-violet-500"
+                  className="bg-slate-950 border border-slate-800 text-xs rounded-lg px-3 py-2 text-slate-300 focus:ring-violet-500 focus:border-violet-500"
                 >
                   <option value="ALL">All Symbols</option>
                   {availableSymbols.map((sym) => (
@@ -650,7 +658,7 @@ export default function SharedJournalPage({
                     setJournalFilterType(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-violet-500"
+                  className="bg-slate-950 border border-slate-800 text-xs rounded-lg px-3 py-2 text-slate-300 focus:ring-violet-500 focus:border-violet-500"
                 >
                   <option value="ALL">All Types</option>
                   <option value="BUY">Buy</option>
@@ -659,74 +667,99 @@ export default function SharedJournalPage({
               </div>
 
               <div className="text-xs text-slate-400 font-medium">
-                Showing {paginatedTrades.length} of {filteredTrades.length} trades
+                Showing <span className="text-white font-bold">{filteredTrades.length > 0 ? (currentPage - 1) * tradesPerPage + 1 : 0}</span> to <span className="text-white font-bold">{Math.min(currentPage * tradesPerPage, filteredTrades.length)}</span> of <span className="text-white font-bold">{filteredTrades.length}</span> trades
               </div>
             </div>
 
-            {/* Table */}
-            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60 shadow-xl">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 text-[11px] font-semibold">
-                    <th className="py-3 px-4 whitespace-nowrap">Entry Time</th>
-                    <th className="py-3 px-4 whitespace-nowrap">Exit Time</th>
-                    <th className="py-3 px-4">Symbol</th>
-                    <th className="py-3 px-4">Type</th>
-                    <th className="py-3 px-4 text-center">Volume</th>
-                    <th className="py-3 px-4 text-center">Entry</th>
-                    <th className="py-3 px-4 text-center">Exit</th>
-                    <th className="py-3 px-4 text-right">Net Profit</th>
-                    <th className="py-3 px-4 text-center">Emotion</th>
+            {/* Desktop Table (Matching Image 1 UI/UX) */}
+            <div className="hidden md:block overflow-x-auto border border-slate-800 rounded-xl relative shadow-2xl bg-[#0a0d14]">
+              <table className="w-full text-center border-collapse text-xs">
+                <thead className="sticky top-0 bg-[#0a0d14] z-10 border-b border-[#1f2937]">
+                  <tr className="text-white font-bold text-[11.5px] tracking-wide uppercase">
+                    <th className="py-4 px-4 font-bold text-center">SYMBOL</th>
+                    <th className="py-4 px-4 font-bold border-l border-[#1f2937] text-center">TYPE</th>
+                    <th className="py-4 px-4 font-bold border-l border-[#1f2937] text-center">ENTRY</th>
+                    <th className="py-4 px-4 font-bold border-l border-[#1f2937] text-center">EXIT</th>
+                    <th className="py-4 px-4 font-bold border-l border-[#1f2937] text-center">ENTRY TIME</th>
+                    <th className="py-4 px-4 font-bold border-l border-[#1f2937] text-center">EXIT TIME</th>
+                    <th className="py-4 px-4 font-bold border-l border-[#1f2937] text-center">VOLUME</th>
+                    <th className="py-4 px-4 font-bold border-l border-[#1f2937] text-center">NET PROFIT</th>
+                    <th className="py-4 px-4 font-bold border-l border-[#1f2937] text-center">EMOTION</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/40">
+                <tbody>
                   {paginatedTrades.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-xs text-slate-500">
+                      <td colSpan={9} className="text-center py-12 text-slate-500 text-xs">
                         No trade records match the chosen filter.
                       </td>
                     </tr>
                   ) : (
                     paginatedTrades.map((t) => {
-                      const isProfit = (Number(t.profit) || Number(t.pnl) || 0) >= 0;
+                      const entryDate = t.date || t.openTime || t.entryTime ? new Date(t.date || t.openTime || t.entryTime) : null;
+                      const exitDate = t.exitTime || t.closeTime ? new Date(t.exitTime || t.closeTime) : null;
+                      const profit = Number(t.profit) || Number(t.pnl) || 0;
+                      const isProfit = profit >= 0;
                       return (
-                        <tr key={t.id} className="hover:bg-slate-800/40 transition">
-                          <td className="py-3 px-4 text-slate-300 whitespace-nowrap font-mono text-[11px]">
-                            {formatDateTime(t.date || t.openTime || t.entryTime)}
+                        <tr key={t.id} className="border-b border-[#1f2937] hover:bg-white/[0.02] transition">
+                          <td className="py-4 px-4 font-medium text-slate-200 whitespace-nowrap text-center uppercase tracking-wide">
+                            {t.symbol}
                           </td>
-                          <td className="py-3 px-4 text-slate-300 whitespace-nowrap font-mono text-[11px]">
-                            {formatDateTime(t.exitTime || t.closeTime)}
-                          </td>
-                          <td className="py-3 px-4 font-bold text-white">{t.symbol}</td>
-                          <td className="py-3 px-4">
+                          <td className="py-4 px-4 border-l border-[#1f2937] text-center">
                             <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                t.type === 'Buy'
-                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                  : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                              className={`inline-flex items-center justify-center px-4 py-1.5 rounded-full text-[11px] font-bold ${
+                                String(t.type).toLowerCase() === 'buy'
+                                  ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
+                                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                               }`}
                             >
                               {t.type}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-center text-slate-300 font-mono">
+                          <td className="py-4 px-4 border-l border-[#1f2937] font-medium text-slate-300 text-center font-mono">
+                            {formatPrice(t.entryPrice ?? t.entry_price)}
+                          </td>
+                          <td className="py-4 px-4 border-l border-[#1f2937] font-medium text-slate-300 text-center font-mono">
+                            {formatPrice(t.exitPrice ?? t.exit_price)}
+                          </td>
+                          <td className="py-4 px-4 border-l border-[#1f2937] text-slate-300 text-center">
+                            {entryDate && !isNaN(entryDate.getTime()) ? (
+                              <div className="flex flex-col items-center justify-center gap-0.5">
+                                <span className="font-medium text-[11.5px] text-slate-200 whitespace-nowrap">
+                                  {entryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                                <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                                  {entryDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500">—</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 border-l border-[#1f2937] text-slate-300 text-center">
+                            {exitDate && !isNaN(exitDate.getTime()) ? (
+                              <div className="flex flex-col items-center justify-center gap-0.5">
+                                <span className="font-medium text-[11.5px] text-slate-200 whitespace-nowrap">
+                                  {exitDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                                <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                                  {exitDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500">—</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 border-l border-[#1f2937] font-medium text-slate-300 text-center font-mono">
                             {t.lotSize ?? t.lots ?? '—'}
                           </td>
-                          <td className="py-3 px-4 text-center text-slate-300 font-mono">
-                            {t.entryPrice ?? '—'}
+                          <td className="py-4 px-4 border-l border-[#1f2937] text-center font-mono">
+                            <span className={`font-medium ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {isProfit ? '+' : ''}{formatCurrency(profit)}
+                            </span>
                           </td>
-                          <td className="py-3 px-4 text-center text-slate-300 font-mono">
-                            {t.exitPrice ?? '—'}
-                          </td>
-                          <td
-                            className={`py-3 px-4 text-right font-extrabold font-mono ${
-                              isProfit ? 'text-emerald-400' : 'text-rose-400'
-                            }`}
-                          >
-                            {formatCurrency(Number(t.profit) || Number(t.pnl) || 0)}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-300">
+                          <td className="py-4 px-4 border-l border-[#1f2937] text-center">
+                            <span className="inline-flex items-center justify-center text-[11px] font-medium bg-slate-800 text-slate-300 px-3 py-1 rounded-full">
                               {t.emotion || 'Calm'}
                             </span>
                           </td>
@@ -738,26 +771,86 @@ export default function SharedJournalPage({
               </table>
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-xs text-slate-400">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <div className="flex items-center gap-1">
+            {/* Mobile View */}
+            <div className="md:hidden flex flex-col space-y-0 rounded-xl border border-slate-800 bg-[#0a0d14] overflow-hidden">
+              {paginatedTrades.length === 0 ? (
+                <div className="text-center py-10 text-slate-500 text-xs">
+                  No matching recorded trades. Clear filters to see trades.
+                </div>
+              ) : (
+                paginatedTrades.map((t) => {
+                  const isProfit = (Number(t.profit) || Number(t.pnl) || 0) >= 0;
+                  const profit = Number(t.profit) || Number(t.pnl) || 0;
+                  const entryDate = t.date || t.openTime || t.entryTime ? new Date(t.date || t.openTime || t.entryTime) : null;
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex flex-col p-4 border-b border-[#1f2937] last:border-b-0 hover:bg-white/[0.02] transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-extrabold text-[14px] text-slate-200 tracking-wide uppercase">
+                          {t.symbol}
+                        </span>
+                        <span className={`font-bold text-[13px] font-mono ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {isProfit ? '+' : ''}{formatCurrency(profit)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <span
+                          className={`inline-flex items-center px-3 py-0.5 rounded-full text-[10px] font-bold ${
+                            String(t.type).toLowerCase() === 'buy'
+                              ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
+                              : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                          } uppercase tracking-wide`}
+                        >
+                          {t.type}
+                        </span>
+                        <span className="text-[12px] text-slate-400 font-mono">{t.lotSize ?? t.lots ?? 0} lots</span>
+                        {t.emotion && (
+                          <span className="ml-auto text-[10px] font-medium bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full">
+                            {t.emotion}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-slate-400">
+                        <div className="flex items-center font-mono text-[11px]">
+                          <span>{formatPrice(t.entryPrice ?? t.entry_price)}</span>
+                          <span className="mx-2 text-slate-500">&rarr;</span>
+                          <span>{formatPrice(t.exitPrice ?? t.exit_price)}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          {entryDate && !isNaN(entryDate.getTime()) ? entryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Pagination Controls (Matching Image 1 UI/UX) */}
+            {filteredTrades.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2 pt-2">
+                <div className="text-xs text-slate-400 font-medium">
+                  Showing <span className="text-white font-bold">{(currentPage - 1) * tradesPerPage + 1}</span> to <span className="text-white font-bold">{Math.min(currentPage * tradesPerPage, filteredTrades.length)}</span> of <span className="text-white font-bold">{filteredTrades.length}</span> trades
+                </div>
+                <div className="flex items-center gap-3">
                   <button
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white disabled:opacity-40 transition"
+                    className="px-4 py-2 rounded-lg text-xs font-bold bg-[#0a0d14] border border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800 transition cursor-pointer"
                   >
-                    <ChevronLeft className="h-4 w-4" />
+                    Previous
                   </button>
+                  <span className="text-xs font-bold text-slate-300">
+                    Page {currentPage} of {totalPages}
+                  </span>
                   <button
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
-                    className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white disabled:opacity-40 transition"
+                    className="px-4 py-2 rounded-lg text-xs font-bold bg-[#0a0d14] border border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800 transition cursor-pointer"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    Next
                   </button>
                 </div>
               </div>

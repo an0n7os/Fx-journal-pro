@@ -9617,7 +9617,7 @@ export default function App() {
             )}
 
             {/* Bottom Tab Bar */}
-            <div className={`md:hidden fixed bottom-0 left-0 right-0 z-[60] transition-all duration-300 ease-in-out ${(showTradeModal || showAccountModal || showEditAccountModal || showTicketModal || showExportModal || showPasteModal || showSignOutModal || deleteConfirmTradeId !== null || showGuidedTour)
+            <div className={`md:hidden fixed bottom-0 left-0 right-0 z-[60] transition-all duration-300 ease-in-out ${(showTradeModal || showAccountModal || showEditAccountModal || showTicketModal || showExportModal || showPasteModal || showSignOutModal || deleteConfirmTradeId !== null || showGuidedTour || showShareModal || showProModal)
               ? 'translate-y-full opacity-0 pointer-events-none'
               : 'translate-y-0 opacity-100'
               }`}>
@@ -9688,7 +9688,7 @@ export default function App() {
             {/* Floating Action Button (FAB) — Add Trade on mobile */}
             {/* Hidden while the More sheet is open — the button floated on top
                 of the menu and covered one of its rows. */}
-            {ADD_TRADE_TABS.has(activeTab) && !showTradeModal && !showAccountModal && !showMobileMore && (
+            {ADD_TRADE_TABS.has(activeTab) && !showTradeModal && !showAccountModal && !showMobileMore && !showShareModal && !showProModal && (
               <button
                 onClick={() => {
                   if (isMentorReadOnlyMode) { alert('Adding trades is disabled in Mentor Read-Only Mode.'); return; }

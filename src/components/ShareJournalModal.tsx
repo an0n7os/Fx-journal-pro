@@ -231,10 +231,10 @@ export default function ShareJournalModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn overscroll-contain modal-backdrop-contain">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-[#0f172a] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn overscroll-contain modal-backdrop-contain">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-[#0f172a] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[min(92vh,calc(100dvh-1.5rem))]">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/40">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/40 shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white">
               <Share2 className="h-5 w-5" />
@@ -264,7 +264,7 @@ export default function ShareJournalModal({
 
         {/* PRO Restriction Guard */}
         {!isPro ? (
-          <div className="p-6 sm:p-8 text-center space-y-5">
+          <div className="p-5 sm:p-8 text-center space-y-5 overflow-y-auto flex-1 min-h-0">
             <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-violet-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-xl">
               <Lock className="h-8 w-8" />
             </div>
@@ -312,7 +312,7 @@ export default function ShareJournalModal({
         ) : (
           <>
             {/* Pro User Tabs */}
-            <div className="flex border-b border-slate-100 dark:border-slate-800/80 px-6 pt-2 bg-slate-50/30 dark:bg-slate-900/20">
+            <div className="flex border-b border-slate-100 dark:border-slate-800/80 px-4 sm:px-6 pt-2 bg-slate-50/30 dark:bg-slate-900/20 shrink-0">
               <button
                 onClick={() => setActiveTab('create')}
                 className={`pb-3 text-xs font-bold border-b-2 transition flex items-center gap-2 mr-6 ${
@@ -339,151 +339,154 @@ export default function ShareJournalModal({
 
             {/* Tab 1: Create Share Link */}
             {activeTab === 'create' && (
-              <div className="p-6 overflow-y-auto space-y-6">
-                {/* 1. Sections to Share */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-2">
-                    1. Select Sections to Share
-                  </label>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                    Choose one or more sections to include in the link. Only selected areas will be accessible.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {availableSections.map((sec) => {
-                      const Icon = sec.icon;
-                      const isSelected = selectedSections.includes(sec.id);
-                      return (
-                        <div
-                          key={sec.id}
-                          onClick={() => toggleSection(sec.id)}
-                          className={`cursor-pointer p-3.5 rounded-xl border transition-all select-none flex items-start gap-3 ${
-                            isSelected
-                              ? 'border-violet-500 bg-violet-50/50 dark:bg-violet-950/20 shadow-sm'
-                              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/40'
-                          }`}
-                        >
+              <>
+                <div className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6 flex-1 min-h-0">
+                  {/* 1. Sections to Share */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-2">
+                      1. Select Sections to Share
+                    </label>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                      Choose one or more sections to include in the link. Only selected areas will be accessible.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {availableSections.map((sec) => {
+                        const Icon = sec.icon;
+                        const isSelected = selectedSections.includes(sec.id);
+                        return (
                           <div
-                            className={`p-2 rounded-lg border shrink-0 ${sec.color}`}
+                            key={sec.id}
+                            onClick={() => toggleSection(sec.id)}
+                            className={`cursor-pointer p-3.5 rounded-xl border transition-all select-none flex items-start gap-3 ${
+                              isSelected
+                                ? 'border-violet-500 bg-violet-50/50 dark:bg-violet-950/20 shadow-sm'
+                                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/40'
+                            }`}
                           >
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                {sec.label}
-                              </span>
-                              <div
-                                className={`w-4 h-4 rounded flex items-center justify-center transition ${
-                                  isSelected
-                                    ? 'bg-violet-600 text-white'
-                                    : 'border border-slate-300 dark:border-slate-600'
-                                }`}
-                              >
-                                {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
-                              </div>
+                            <div
+                              className={`p-2 rounded-lg border shrink-0 ${sec.color}`}
+                            >
+                              <Icon className="h-4 w-4" />
                             </div>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                              {sec.desc}
-                            </p>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                  {sec.label}
+                                </span>
+                                <div
+                                  className={`w-4 h-4 rounded flex items-center justify-center transition ${
+                                    isSelected
+                                      ? 'bg-violet-600 text-white'
+                                      : 'border border-slate-300 dark:border-slate-600'
+                                  }`}
+                                >
+                                  {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                                {sec.desc}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
 
-                {/* 2. Months of Data */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-2">
-                    2. Select Months of Data
-                  </label>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                    Trades and metrics will be strictly confined to this timeframe. Older history is completely hidden.
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {monthOptions.map((opt) => {
-                      const isSelected = selectedMonths === opt.value;
-                      return (
+                  {/* 2. Months of Data */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-2">
+                      2. Select Months of Data
+                    </label>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                      Trades and metrics will be strictly confined to this timeframe. Older history is completely hidden.
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {monthOptions.map((opt) => {
+                        const isSelected = selectedMonths === opt.value;
+                        return (
+                          <button
+                            key={String(opt.value)}
+                            type="button"
+                            onClick={() => setSelectedMonths(opt.value as any)}
+                            className={`p-2.5 rounded-lg border text-xs font-semibold text-center transition ${
+                              isSelected
+                                ? 'border-violet-500 bg-violet-500 text-white shadow-md shadow-violet-500/20'
+                                : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Privacy Badge */}
+                  <div className="p-3.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/30 flex items-center gap-3 text-xs text-emerald-800 dark:text-emerald-300">
+                    <Shield className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <span>
+                      <strong>Privacy Guarantee:</strong> Account logins, broker passwords, email address, and unselected tabs are never exposed through this link.
+                    </span>
+                  </div>
+
+                  {errorMsg && (
+                    <div className="p-3 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-xs font-medium">
+                      {errorMsg}
+                    </div>
+                  )}
+
+                  {/* Generated Link Result */}
+                  {generatedLink && (
+                    <div className="p-4 rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/50 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-violet-900 dark:text-violet-200 flex items-center gap-1.5">
+                          <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+                          Share Link Ready!
+                        </span>
+                        <span className="text-[10px] text-violet-600 dark:text-violet-400 font-medium">
+                          {generatedLink.sections.join(', ')} ·{' '}
+                          {generatedLink.months === 'all'
+                            ? 'All Time'
+                            : `${generatedLink.months} Months`}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={generatedLink.url}
+                          className="bg-white dark:bg-slate-900 border border-violet-200 dark:border-violet-800 text-xs rounded-lg px-3 py-2 text-slate-700 dark:text-slate-200 flex-1 truncate font-mono select-all"
+                        />
                         <button
-                          key={String(opt.value)}
-                          type="button"
-                          onClick={() => setSelectedMonths(opt.value as any)}
-                          className={`p-2.5 rounded-lg border text-xs font-semibold text-center transition ${
-                            isSelected
-                              ? 'border-violet-500 bg-violet-500 text-white shadow-md shadow-violet-500/20'
-                              : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-                          }`}
+                          onClick={() => handleCopy(generatedLink.url)}
+                          className="px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold flex items-center gap-1.5 transition shrink-0 shadow-sm"
                         >
-                          {opt.label}
+                          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          {copied ? 'Copied!' : 'Copy'}
                         </button>
-                      );
-                    })}
-                  </div>
+                        <a
+                          href={generatedLink.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-2 rounded-lg border border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition shrink-0"
+                          title="Open in new tab"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Privacy Badge */}
-                <div className="p-3.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/30 flex items-center gap-3 text-xs text-emerald-800 dark:text-emerald-300">
-                  <Shield className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  <span>
-                    <strong>Privacy Guarantee:</strong> Account logins, broker passwords, email address, and unselected tabs are never exposed through this link.
-                  </span>
-                </div>
-
-                {errorMsg && (
-                  <div className="p-3 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-xs font-medium">
-                    {errorMsg}
-                  </div>
-                )}
-
-                {/* Generated Link Result */}
-                {generatedLink && (
-                  <div className="p-4 rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/50 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-violet-900 dark:text-violet-200 flex items-center gap-1.5">
-                        <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-                        Share Link Ready!
-                      </span>
-                      <span className="text-[10px] text-violet-600 dark:text-violet-400 font-medium">
-                        {generatedLink.sections.join(', ')} ·{' '}
-                        {generatedLink.months === 'all'
-                          ? 'All Time'
-                          : `${generatedLink.months} Months`}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={generatedLink.url}
-                        className="bg-white dark:bg-slate-900 border border-violet-200 dark:border-violet-800 text-xs rounded-lg px-3 py-2 text-slate-700 dark:text-slate-200 flex-1 truncate font-mono select-all"
-                      />
-                      <button
-                        onClick={() => handleCopy(generatedLink.url)}
-                        className="px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold flex items-center gap-1.5 transition shrink-0 shadow-sm"
-                      >
-                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                        {copied ? 'Copied!' : 'Copy'}
-                      </button>
-                      <a
-                        href={generatedLink.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2 rounded-lg border border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition shrink-0"
-                        title="Open in new tab"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    </div>
-                  </div>
-                )}
-
-                {/* Generate Button */}
-                <div className="pt-2">
+                {/* Sticky Footer with Generate Button */}
+                <div className="p-3.5 sm:p-4 border-t border-slate-100 dark:border-slate-800/80 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-sm shrink-0">
                   <button
+                    type="button"
                     onClick={handleGenerate}
                     disabled={generating}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-500/20 disabled:opacity-50 transition flex items-center justify-center gap-2"
+                    className="w-full py-3 sm:py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-500/20 disabled:opacity-50 transition flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
                   >
                     {generating ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -493,12 +496,12 @@ export default function ShareJournalModal({
                     {generating ? 'Generating Link...' : 'Generate Share Link'}
                   </button>
                 </div>
-              </div>
+              </>
             )}
 
             {/* Tab 2: Manage Active Links */}
             {activeTab === 'manage' && (
-              <div className="p-6 overflow-y-auto space-y-4">
+              <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 min-h-0">
                 {loadingLinks ? (
                   <div className="py-12 text-center text-xs text-slate-400">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-violet-500" />
