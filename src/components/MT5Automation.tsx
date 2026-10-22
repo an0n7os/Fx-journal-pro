@@ -256,8 +256,9 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const [vpsServer, setVpsServer] = useState('');
   const [vpsPassword, setVpsPassword] = useState('');
   const [vpsBusy, setVpsBusy] = useState(false);
-  const [vpsError, setVpsError] = useState('');
   const [vpsSyncing, setVpsSyncing] = useState(false);
+  const [syncProgressText, setSyncProgressText] = useState<string>('');
+  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string>('');
   const [showVideo, setShowVideo] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showPasswordTip, setShowPasswordTip] = useState(false);
@@ -546,12 +547,14 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
     }
   }
 
-  // ── VPS sync handlers ──────────────────────────────────────────────────
+  // ── VPS sync handlers with smart polling & live progress ─────────────
 
   async function handleVpsConnect() {
     if (!account) return;
     setVpsBusy(true);
     setVpsError('');
+    setSyncSuccessMsg('');
+    setSyncProgressText('Authenticating with MT5 broker server...');
     try {
       const res = await authFetch('/api/mt5/vps/connect', {
         method: 'POST',
@@ -571,12 +574,64 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
       setVpsPassword('');
       setVpsLogin('');
       setVpsServer('');
-      await pollStatus();
-      onRefresh();
+
+      const targetJobId = d.jobId;
+      setSyncProgressText('Worker connecting to MT5 terminal...');
+
+      // Smart polling: wait until worker authenticates and finishes
+      const startTime = Date.now();
+      const maxWaitMs = 45000;
+      let completed = false;
+
+      while (Date.now() - startTime < maxWaitMs) {
+        await new Promise((r) => setTimeout(r, 1800));
+        try {
+          const statusRes = await authFetch(`/api/mt5/${account.id}/status`);
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            setStatus(statusData);
+
+            const matchingJob = targetJobId
+              ? (statusData.connectJobs || []).find((j: any) => j.id === targetJobId)
+              : (statusData.connectJobs || []).slice(-1)[0];
+
+            if (matchingJob) {
+              if (matchingJob.status === 'RUNNING') {
+                setSyncProgressText('Credentials verified! Downloading initial trade history...');
+              } else if (matchingJob.status === 'DONE') {
+                setSyncSuccessMsg('Connected successfully! Initial trades imported into journal.');
+                completed = true;
+                onRefresh();
+                break;
+              } else if (matchingJob.status === 'FAILED') {
+                setVpsError(matchingJob.error || matchingJob.errorMessage || 'MT5 authorization failed. Please check login number, investor password and server name.');
+                completed = true;
+                break;
+              }
+            } else if (statusData.status === 'Connected') {
+              setSyncSuccessMsg('Connected successfully! Trades imported.');
+              completed = true;
+              onRefresh();
+              break;
+            }
+          }
+        } catch {
+          // ignore transient poll error
+        }
+      }
+
+      if (!completed) {
+        await pollStatus();
+        onRefresh();
+      }
     } catch (e) {
       setVpsError('Could not connect to MT5. Please try again.');
     } finally {
       setVpsBusy(false);
+      setTimeout(() => {
+        setSyncProgressText('');
+        setSyncSuccessMsg('');
+      }, 5000);
     }
   }
 
@@ -584,6 +639,8 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
     if (!account) return;
     setVpsSyncing(true);
     setVpsError('');
+    setSyncSuccessMsg('');
+    setSyncProgressText('Queuing MT5 sync job...');
     try {
       const res = await authFetch('/api/mt5/vps/sync', {
         method: 'POST',
@@ -595,15 +652,65 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
         setVpsError(d.error || 'Sync request failed. Please try again.');
         return;
       }
-      if (d.alreadyQueued) {
-        setVpsError('');
+
+      const targetJobId = d.jobId;
+      setSyncProgressText('Waiting for MT5 worker to claim job...');
+
+      // Smart polling: wait for background worker to claim and sync deals
+      const startTime = Date.now();
+      const maxWaitMs = 45000; // 45 seconds max wait
+      let completed = false;
+
+      while (Date.now() - startTime < maxWaitMs) {
+        await new Promise((r) => setTimeout(r, 1800));
+        try {
+          const statusRes = await authFetch(`/api/mt5/${account.id}/status`);
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            setStatus(statusData);
+
+            const matchingJob = targetJobId
+              ? (statusData.connectJobs || []).find((j: any) => j.id === targetJobId)
+              : (statusData.connectJobs || []).slice(-1)[0];
+
+            if (matchingJob) {
+              if (matchingJob.status === 'RUNNING') {
+                setSyncProgressText('Connected to MT5 terminal! Downloading new trades & closed deals...');
+              } else if (matchingJob.status === 'DONE') {
+                const count = statusData.syncTradeCount ?? 0;
+                setSyncSuccessMsg(`Sync complete! ${count} trades updated in your journal.`);
+                completed = true;
+                onRefresh();
+                break;
+              } else if (matchingJob.status === 'FAILED') {
+                setVpsError(matchingJob.error || matchingJob.errorMessage || 'MT5 Sync failed. Please verify your investor password or broker server.');
+                completed = true;
+                break;
+              }
+            } else if (statusData.status === 'Connected') {
+              setSyncSuccessMsg('Sync complete! Journal updated.');
+              completed = true;
+              onRefresh();
+              break;
+            }
+          }
+        } catch {
+          // ignore transient errors
+        }
       }
-      await pollStatus();
-      onRefresh();
+
+      if (!completed) {
+        await pollStatus();
+        onRefresh();
+      }
     } catch (e) {
       setVpsError('Sync request failed. Please try again.');
     } finally {
       setVpsSyncing(false);
+      setTimeout(() => {
+        setSyncProgressText('');
+        setSyncSuccessMsg('');
+      }, 5000);
     }
   }
 
