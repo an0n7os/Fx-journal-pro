@@ -257,6 +257,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const [vpsPassword, setVpsPassword] = useState('');
   const [vpsBusy, setVpsBusy] = useState(false);
   const [vpsSyncing, setVpsSyncing] = useState(false);
+  const [vpsError, setVpsError] = useState('');
   const [syncProgressText, setSyncProgressText] = useState<string>('');
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string>('');
   const [showVideo, setShowVideo] = useState(false);
