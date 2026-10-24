@@ -8961,12 +8961,12 @@ export default function App() {
                                   WhatsApp: +91 81368 02573 <Phone className="h-3 w-3 shrink-0" />
                                 </a>
                                 <a
-                                  href="https://www.instagram.com/fx_journalpro/"
+                                  href="https://www.instagram.com/tmfxjournalpro/"
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-xs font-bold text-pink-600 dark:text-pink-400 hover:underline inline-flex items-center gap-1.5"
                                 >
-                                  @fx_journalpro <Instagram className="h-3 w-3 shrink-0" />
+                                  @tmfxjournalpro <Instagram className="h-3 w-3 shrink-0" />
                                 </a>
                               </div>
                             </div>

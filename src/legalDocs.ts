@@ -436,7 +436,7 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
       {
         heading: 'Social Channels',
         paragraphs: [
-          'Instagram: @fx_journalpro',
+          'Instagram: @tmfxjournalpro',
           'Telegram: @Contact_fxjournalpro',
         ],
       },
@@ -458,7 +458,7 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
     body: [
       'Customer Support Email: contact@fxjournalpro.com',
       'Phone / WhatsApp: +91 81368 02573',
-      'Instagram: @fx_journalpro | Telegram: @Contact_fxjournalpro',
+      'Instagram: @tmfxjournalpro | Telegram: @Contact_fxjournalpro',
       'Support Hours: Monday–Saturday, 9:00 AM–6:00 PM IST (Closed on National Holidays)',
       'Grievance & Compliance Desk: contact@fxjournalpro.com',
       'Response Time: We aim to respond to customer inquiries within 24–48 business hours.',

@@ -153,7 +153,7 @@ function WhatsAppIcon({ className = 'h-4 w-4' }: { className?: string }) {
 // so the footer never ships a link that goes nowhere.
 const SOCIAL_LINKS: { label: string; href: string; icon: any }[] = [
   { label: 'WhatsApp', href: 'https://wa.me/918136802573', icon: WhatsAppIcon },
-  { label: 'Instagram', href: 'https://www.instagram.com/fx_journalpro/', icon: Instagram },
+  { label: 'Instagram', href: 'https://www.instagram.com/tmfxjournalpro/', icon: Instagram },
   { label: 'Telegram Support', href: 'https://t.me/Contact_fxjournalpro', icon: Send },
   // { label: 'Discord Server', href: 'https://discord.gg/fxjournalpro', icon: MessageSquare },
   { label: 'X (Twitter)', href: 'https://x.com/FXJOURNALPRO', icon: Twitter },
@@ -1901,12 +1901,12 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
                         Official Instagram
                       </span>
                       <a
-                        href="https://www.instagram.com/fx_journalpro/"
+                        href="https://www.instagram.com/tmfxjournalpro/"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-sm font-semibold text-white hover:text-pink-400 transition-colors block"
                       >
-                        @fx_journalpro
+                        @tmfxjournalpro
                       </a>
                       <p className="text-[11px] text-slate-400 mt-0.5">Updates, market tips &amp; community</p>
                     </div>
