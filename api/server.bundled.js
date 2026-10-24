@@ -1607,6 +1607,38 @@ var NeonQueryBuilder = class {
     this.filters.push({ column, op: "IN", value: values });
     return this;
   }
+  ilike(column, value) {
+    this.filters.push({ column, op: "ILIKE", value });
+    return this;
+  }
+  like(column, value) {
+    this.filters.push({ column, op: "LIKE", value });
+    return this;
+  }
+  gt(column, value) {
+    this.filters.push({ column, op: ">", value });
+    return this;
+  }
+  gte(column, value) {
+    this.filters.push({ column, op: ">=", value });
+    return this;
+  }
+  lt(column, value) {
+    this.filters.push({ column, op: "<", value });
+    return this;
+  }
+  lte(column, value) {
+    this.filters.push({ column, op: "<=", value });
+    return this;
+  }
+  is(column, value) {
+    if (value === null) {
+      this.filters.push({ column, op: "IS", value: null });
+    } else {
+      this.filters.push({ column, op: "=", value });
+    }
+    return this;
+  }
   not(column, operator, value) {
     if (operator === "is" && value === null) {
       this.filters.push({ column, op: "IS NOT", value: null });
@@ -5627,7 +5659,7 @@ var PRO_FEATURE_MESSAGES = {
   mt5Sync: "MT5 sync is a Pro feature. On the free plan you can add trades manually.",
   liveChart: "Live Chart is a Pro feature. Upgrade to chart your trades against live market data.",
   aiMentor: "AI Mentor is a Pro feature. Upgrade to get coaching on your trading.",
-  unlimitedAccounts: `The free plan is limited to ${FREE_ACCOUNT_LIMIT} portfolio account. Upgrade to Pro for unlimited broker and prop firm accounts.`,
+  unlimitedAccounts: "Upgrade to Pro for unlimited MT5 broker and prop firm sync accounts.",
   proReports: `The free plan reports cover the last ${FREE_REPORT_DAYS} days in CSV. Excel and PDF reports over any period are a Pro feature.`,
   whatsappAlerts: "WhatsApp news reminders are a Pro feature.",
   notebook: "Trader Notebook is a Pro feature. Upgrade to unlock rich-text notes, custom dates, templates, and trade planning."
@@ -5664,7 +5696,7 @@ app.get("/api/plan/entitlements", (req, res) => {
     plan: pro ? "pro" : "free",
     isPro: pro,
     limits: {
-      accounts: pro ? null : FREE_ACCOUNT_LIMIT,
+      accounts: null,
       reportDays: pro ? null : FREE_REPORT_DAYS,
       reportFormats: pro ? ["csv", "xlsx", "pdf"] : ["csv"]
     },
@@ -5819,17 +5851,11 @@ app.post("/api/accounts", async (req, res) => {
   if (!db.accounts) db.accounts = [];
   if (!db.riskSettings) db.riskSettings = [];
   const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType, login, server, investorPassword, brokerCommission } = req.body;
-  const existingUserAccounts = db.accounts.filter((acc) => {
-    const isOwner = acc.userId === currentUser.id || acc.user_id === currentUser.id;
-    if (!isOwner) return false;
-    if (isMt5Sync && isDefaultDemoAccount(acc)) return false;
-    return true;
-  });
-  if (!hasPro(currentUser) && existingUserAccounts.length >= FREE_ACCOUNT_LIMIT) {
+  if (isMt5Sync && !hasPro(currentUser)) {
     return res.status(403).json({
-      error: PRO_FEATURE_MESSAGES.unlimitedAccounts,
+      error: PRO_FEATURE_MESSAGES.mt5Sync || "MT5 sync is a Pro feature. On the free plan you can add trades manually.",
       proRequired: true,
-      feature: "unlimitedAccounts"
+      feature: "mt5Sync"
     });
   }
   if (!name || !broker) {
@@ -9325,7 +9351,7 @@ app.get("/api/subadmin/overview", async (req, res) => {
   let scopeRole = req.query.type === "partner" ? "PARTNER" : ctx.role;
   if (!SCOPED_ROLES.has(ctx.role) && req.query.subAdminId) {
     targetSubAdminId = String(req.query.subAdminId);
-    scopeRole = await lookupUserRole(targetSubAdminId) || (req.query.type === "partner" ? "PARTNER" : "SUB_ADMIN");
+    scopeRole = req.query.type === "partner" ? "PARTNER" : await lookupUserRole(targetSubAdminId) || "SUB_ADMIN";
   } else if (!SCOPED_ROLES.has(ctx.role)) {
     scopeRole = req.query.type === "partner" ? "PARTNER" : "SUB_ADMIN";
   }
@@ -9400,6 +9426,29 @@ app.get("/api/subadmin/overview", async (req, res) => {
     running += growthCounts[date];
     return { date, count: running };
   });
+  let referralInfo = null;
+  if (targetSubAdminId) {
+    try {
+      const pData = await getPartnerData(targetSubAdminId);
+      if (pData?.referralCode) {
+        const standardPrice = 499;
+        referralInfo = {
+          referralCode: pData.referralCode,
+          referralUrl: partnerReferralUrl(req, pData.referralCode),
+          offerPrice: pData.offerPrice || standardPrice,
+          links: (pData.links || []).map((l) => ({
+            ...l,
+            offerPrice: l.offerPrice || pData.offerPrice || standardPrice,
+            referralUrl: partnerReferralUrl(req, l.code),
+            mentorEarns: Math.max(0, (l.offerPrice || pData.offerPrice || standardPrice) - 199),
+            studentSaves: Math.max(0, standardPrice - (l.offerPrice || pData.offerPrice || standardPrice))
+          }))
+        };
+      }
+    } catch (e) {
+      console.warn("[subadmin/overview] Error fetching partner data:", e);
+    }
+  }
   res.json({
     subAdminId: targetSubAdminId,
     stats: {
@@ -9411,7 +9460,8 @@ app.get("/api/subadmin/overview", async (req, res) => {
       sharingTrades: cards.filter((c) => c.tradeAccess).length
     },
     growth,
-    users: cards
+    users: cards,
+    referral: referralInfo
   });
 });
 app.get("/api/subadmin/user/:id", async (req, res) => {
@@ -9771,15 +9821,25 @@ var findPartnerByCode = async (rawCode) => {
     console.warn("[findPartnerByCode] Error searching primary partner code:", err);
   }
   try {
-    const { data: partnerUsers } = await supabase.from("users").select("id, preferences").eq("role", "PARTNER");
-    for (const u of partnerUsers || []) {
-      const links = prefsValue(u.preferences, "partnerLinks") || [];
+    const { data: allP } = await supabase.from("partner_profiles").select("user_id, referral_code, links, offer_price");
+    for (const p of allP || []) {
+      const rawLinks = p.links;
+      let links = [];
+      if (Array.isArray(rawLinks)) {
+        links = rawLinks;
+      } else if (typeof rawLinks === "string") {
+        try {
+          const parsed = JSON.parse(rawLinks);
+          if (Array.isArray(parsed)) links = parsed;
+        } catch {
+        }
+      }
       const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
       if (link) {
         return {
-          userId: u.id,
+          userId: p.user_id,
           code: link.code,
-          offerPrice: link.offerPrice || prefsValue(u.preferences, "partnerOfferPrice") || 499,
+          offerPrice: link.offerPrice || p.offer_price || 499,
           isActive: link.isActive !== false,
           linkId: link.id,
           label: link.label
@@ -9787,25 +9847,30 @@ var findPartnerByCode = async (rawCode) => {
       }
     }
   } catch (err) {
-    console.warn("[findPartnerByCode] Error searching custom links in users:", err);
+    console.warn("[findPartnerByCode] Error searching custom links in partner_profiles:", err);
   }
   try {
-    const { data: allP } = await supabase.from("partner_profiles").select("user_id, referral_code, links");
-    for (const p of allP || []) {
-      const links = p.links || [];
-      const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
-      if (link) {
-        return {
-          userId: p.user_id,
-          code: link.code,
-          offerPrice: link.offerPrice || 499,
-          isActive: link.isActive !== false,
-          linkId: link.id,
-          label: link.label
-        };
+    const { data: allP } = await supabase.from("partner_profiles").select("user_id");
+    const partnerUserIds = (allP || []).map((p) => p.user_id).filter(Boolean);
+    if (partnerUserIds.length > 0) {
+      const { data: partnerUsers } = await supabase.from("users").select("id, preferences").in("id", partnerUserIds);
+      for (const u of partnerUsers || []) {
+        const links = prefsValue(u.preferences, "partnerLinks") || [];
+        const link = links.find((l) => l.code && l.code.toLowerCase() === lower);
+        if (link) {
+          return {
+            userId: u.id,
+            code: link.code,
+            offerPrice: link.offerPrice || prefsValue(u.preferences, "partnerOfferPrice") || 499,
+            isActive: link.isActive !== false,
+            linkId: link.id,
+            label: link.label
+          };
+        }
       }
     }
-  } catch {
+  } catch (err) {
+    console.warn("[findPartnerByCode] Error searching custom links in users:", err);
   }
   return null;
 };
@@ -10929,6 +10994,65 @@ app.get("/api/admin/partners/:id/adjustments", async (req, res) => {
   const adjustments = await readPartnerAdjustments(req.params.id);
   res.json({ adjustments, adjustmentTotal: sumAdjustments(adjustments) });
 });
+app.post("/api/admin/partners/:id/links", async (req, res) => {
+  const ctx = await requirePermission(req, res, "partner.manage");
+  if (!ctx) return;
+  const targetPartnerId = String(req.params.id);
+  let code = String(req.body?.code || "").trim().toUpperCase();
+  const label = String(req.body?.label || "Special Offer").trim();
+  let offerPrice = Number(req.body?.offerPrice);
+  if (isNaN(offerPrice) || offerPrice < 199 || offerPrice > 499) {
+    offerPrice = 499;
+  }
+  offerPrice = Math.round(offerPrice);
+  if (!code) {
+    code = generateReferralCode(label || "COUPON");
+    for (let i = 0; i < 5 && !await isCodeAvailable(code, targetPartnerId); i++) {
+      code = generateReferralCode(label || "COUPON");
+    }
+  } else {
+    if (!CODE_PATTERN.test(code)) {
+      return res.status(400).json({ error: "Use 4-16 letters and numbers only, no spaces or symbols." });
+    }
+    if (["ADMIN", "SUPPORT", "FXJOURNALPRO", "OFFICIAL"].includes(code)) {
+      return res.status(400).json({ error: "That code is reserved. Please choose another." });
+    }
+    if (!await isCodeAvailable(code, targetPartnerId)) {
+      return res.status(409).json({ error: "That code is already in use. Please choose another." });
+    }
+  }
+  const newLink = {
+    id: `link_${crypto4.randomUUID().slice(0, 8)}`,
+    code,
+    label: label || "Custom Offer",
+    offerPrice,
+    isActive: true,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  const { links: existingLinks } = await getPartnerData(targetPartnerId);
+  const curLinks = [newLink, ...existingLinks || []];
+  await savePartnerLinks(targetPartnerId, curLinks);
+  res.json({
+    success: true,
+    link: {
+      ...newLink,
+      referralUrl: partnerReferralUrl(req, newLink.code),
+      mentorEarns: Math.max(0, newLink.offerPrice - 199),
+      studentSaves: Math.max(0, 499 - newLink.offerPrice)
+    },
+    message: `Coupon code ${newLink.code} created successfully for partner!`
+  });
+});
+app.delete("/api/admin/partners/:id/links/:linkId", async (req, res) => {
+  const ctx = await requirePermission(req, res, "partner.manage");
+  if (!ctx) return;
+  const targetPartnerId = String(req.params.id);
+  const { linkId } = req.params;
+  const { links: existingLinks } = await getPartnerData(targetPartnerId);
+  const nextLinks = (existingLinks || []).filter((l) => l.id !== linkId);
+  await savePartnerLinks(targetPartnerId, nextLinks);
+  res.json({ success: true, message: "Coupon code deleted successfully." });
+});
 app.get("/api/admin/partners", async (req, res) => {
   const ctx = await requirePermission(req, res, "partner.manage");
   if (!ctx) return;
@@ -10959,11 +11083,23 @@ app.get("/api/admin/partners", async (req, res) => {
       creditPayment(referrerOf[pay.userId || pay.user_id], Number(pay.amount) || 0);
     }
   } else {
-    const [{ data: ps }, { data: prof }, { data: refs }] = await Promise.all([
-      supabase.from("users").select("id, email, name, is_pro, status, created_at").eq("role", "PARTNER"),
+    const [{ data: prof }, { data: refs }, { data: partnerUsers }] = await Promise.all([
       supabase.from("partner_profiles").select("user_id, referral_code"),
-      supabase.from("users").select("id, referred_by, allow_partner_trade_view").not("referred_by", "is", null)
+      supabase.from("users").select("id, referred_by, allow_partner_trade_view").not("referred_by", "is", null),
+      supabase.from("users").select("id, email, name, is_pro, status, created_at, role").eq("role", "PARTNER")
     ]);
+    const partnerIdSet = /* @__PURE__ */ new Set([
+      ...(prof || []).map((p) => p.user_id),
+      ...(partnerUsers || []).map((u) => u.id)
+    ]);
+    const allPartnerIds = Array.from(partnerIdSet).filter(Boolean);
+    let ps = partnerUsers || [];
+    if (allPartnerIds.length > 0) {
+      const { data: matchedUsers } = await supabase.from("users").select("id, email, name, is_pro, status, created_at, role").in("id", allPartnerIds);
+      if (matchedUsers && matchedUsers.length > 0) {
+        ps = matchedUsers;
+      }
+    }
     partners = (ps || []).map(toCamel);
     for (const p of prof || []) profiles[p.user_id] = p.referral_code;
     const referrerOf = {};
@@ -10981,25 +11117,50 @@ app.get("/api/admin/partners", async (req, res) => {
       }
     }
   }
+  const partnerProfilesMap = {};
+  await Promise.all(
+    partners.map(async (p) => {
+      try {
+        const pData = await getPartnerData(p.id);
+        partnerProfilesMap[p.id] = pData;
+      } catch (err) {
+        partnerProfilesMap[p.id] = { referralCode: "", offerPrice: 499, links: [] };
+      }
+    })
+  );
   const adjustments = await adjustmentTotalsByPartner();
   res.json({
-    partners: partners.map((p) => ({
-      id: p.id,
-      name: p.name || String(p.email || "").split("@")[0],
-      email: p.email,
-      isPro: !!(p.isPro ?? p.is_pro),
-      status: p.status || "ACTIVE",
-      joinedAt: p.createdAt || p.created_at || null,
-      referralCode: profiles[p.id] || null,
-      referralUrl: profiles[p.id] ? partnerReferralUrl(req, profiles[p.id]) : null,
-      linkedUsers: counts[p.id] || 0,
-      sharingTrades: sharing[p.id] || 0,
-      paidReferrals: paidCounts[p.id] || 0,
-      referralIncome: Math.round(((income[p.id] || 0) + (adjustments[p.id] || 0)) * 100) / 100,
-      // Split out so the roster can show "of which manual" rather than a
-      // figure that does not reconcile against paidReferrals.
-      adjustmentTotal: Math.round((adjustments[p.id] || 0) * 100) / 100
-    })).sort((a, b) => b.referralIncome - a.referralIncome || b.linkedUsers - a.linkedUsers),
+    partners: partners.map((p) => {
+      const pProf = partnerProfilesMap[p.id] || {};
+      const pCode = pProf.referralCode || profiles[p.id] || null;
+      const standardPrice = 499;
+      const pLinks = (pProf.links || []).map((l) => ({
+        ...l,
+        offerPrice: l.offerPrice || pProf.offerPrice || standardPrice,
+        referralUrl: partnerReferralUrl(req, l.code),
+        mentorEarns: Math.max(0, (l.offerPrice || pProf.offerPrice || standardPrice) - 199),
+        studentSaves: Math.max(0, standardPrice - (l.offerPrice || pProf.offerPrice || standardPrice))
+      }));
+      return {
+        id: p.id,
+        name: p.name || String(p.email || "").split("@")[0],
+        email: p.email,
+        isPro: !!(p.isPro ?? p.is_pro),
+        status: p.status || "ACTIVE",
+        joinedAt: p.createdAt || p.created_at || null,
+        referralCode: pCode,
+        referralUrl: pCode ? partnerReferralUrl(req, pCode) : null,
+        offerPrice: pProf.offerPrice || standardPrice,
+        links: pLinks,
+        linkedUsers: counts[p.id] || 0,
+        sharingTrades: sharing[p.id] || 0,
+        paidReferrals: paidCounts[p.id] || 0,
+        referralIncome: Math.round(((income[p.id] || 0) + (adjustments[p.id] || 0)) * 100) / 100,
+        // Split out so the roster can show "of which manual" rather than a
+        // figure that does not reconcile against paidReferrals.
+        adjustmentTotal: Math.round((adjustments[p.id] || 0) * 100) / 100
+      };
+    }).sort((a, b) => b.referralIncome - a.referralIncome || b.linkedUsers - a.linkedUsers),
     totals: {
       partners: partners.length,
       linkedUsers: Object.values(counts).reduce((a, b) => a + b, 0),

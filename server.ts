@@ -4307,7 +4307,7 @@ const PRO_FEATURE_MESSAGES: Record<ProFeature, string> = {
   mt5Sync: 'MT5 sync is a Pro feature. On the free plan you can add trades manually.',
   liveChart: 'Live Chart is a Pro feature. Upgrade to chart your trades against live market data.',
   aiMentor: 'AI Mentor is a Pro feature. Upgrade to get coaching on your trading.',
-  unlimitedAccounts: `The free plan is limited to ${FREE_ACCOUNT_LIMIT} portfolio account. Upgrade to Pro for unlimited broker and prop firm accounts.`,
+  unlimitedAccounts: 'Upgrade to Pro for unlimited MT5 broker and prop firm sync accounts.',
   proReports: `The free plan reports cover the last ${FREE_REPORT_DAYS} days in CSV. Excel and PDF reports over any period are a Pro feature.`,
   whatsappAlerts: 'WhatsApp news reminders are a Pro feature.',
   notebook: 'Trader Notebook is a Pro feature. Upgrade to unlock rich-text notes, custom dates, templates, and trade planning.',
@@ -4371,7 +4371,7 @@ app.get('/api/plan/entitlements', (req, res) => {
     plan: pro ? 'pro' : 'free',
     isPro: pro,
     limits: {
-      accounts: pro ? null : FREE_ACCOUNT_LIMIT,
+      accounts: null,
       reportDays: pro ? null : FREE_REPORT_DAYS,
       reportFormats: pro ? ['csv', 'xlsx', 'pdf'] : ['csv'],
     },
@@ -4588,20 +4588,14 @@ app.post('/api/accounts', async (req, res) => {
 
   const { name, broker, platform, accountType, currency, startingBalance, isMt5Sync, institutionType, login, server, investorPassword, brokerCommission } = req.body;
 
-  // Account limit check for Free vs Pro
-  // If user is adding an MT5 synced account, default demo account will be removed to make room,
-  // so filter out default demo accounts when calculating active account count.
-  const existingUserAccounts = db.accounts.filter((acc: any) => {
-    const isOwner = acc.userId === currentUser.id || acc.user_id === currentUser.id;
-    if (!isOwner) return false;
-    if (isMt5Sync && isDefaultDemoAccount(acc)) return false;
-    return true;
-  });
-  if (!hasPro(currentUser) && existingUserAccounts.length >= FREE_ACCOUNT_LIMIT) {
+  // Account limit check for Free vs Pro:
+  // Manual accounts are unlimited for all users (including free tier).
+  // MT5 synced accounts require Pro.
+  if (isMt5Sync && !hasPro(currentUser)) {
     return res.status(403).json({
-      error: PRO_FEATURE_MESSAGES.unlimitedAccounts,
+      error: PRO_FEATURE_MESSAGES.mt5Sync || 'MT5 sync is a Pro feature. On the free plan you can add trades manually.',
       proRequired: true,
-      feature: 'unlimitedAccounts',
+      feature: 'mt5Sync',
     });
   }
 

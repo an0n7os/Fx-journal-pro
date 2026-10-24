@@ -5279,7 +5279,7 @@ export default function App() {
                         ? (proDaysLeft !== null
                           ? `${proDaysLeft} day${proDaysLeft === 1 ? '' : 's'} left${subscription?.cancelAtPeriodEnd ? ' · ends then' : ''}`
                           : 'All features unlocked')
-                        : `${accounts.length} of 1 portfolio · 30-day reports`}
+                        : `${accounts.length} manual ${accounts.length === 1 ? 'portfolio' : 'portfolios'} · 30-day reports`}
                     </span>
                   </div>
                   {isProActive ? (
@@ -8779,7 +8779,7 @@ export default function App() {
                                           : proUntilLabel
                                             ? `Pro is active until ${proUntilLabel}.`
                                             : 'Pro is active.'
-                                      : 'One trading account, manual trade logging, full analytics, calendar, FX news, live charts and the calculators.'}
+                                      : 'Unlimited manual trading accounts, manual trade logging, full analytics, calendar, FX news, live charts and calculators.'}
                                   </p>
                                 </div>
                                 <div className="text-right">

@@ -43,7 +43,7 @@ ok('setup: free user signed in', !!free.cookie);
 const ent = await api('/api/plan/entitlements', { cookie: free.cookie });
 ok('free: entitlements readable', ent.status === 200, `status ${ent.status}`);
 ok('free: plan is free', ent.json?.plan === 'free', String(ent.json?.plan));
-ok('free: 1 account limit', ent.json?.limits?.accounts === 1, String(ent.json?.limits?.accounts));
+ok('free: accounts limit is null (unlimited manual)', ent.json?.limits?.accounts === null, String(ent.json?.limits?.accounts));
 ok('free: 30 day reports', ent.json?.limits?.reportDays === 30, String(ent.json?.limits?.reportDays));
 ok('free: csv only', JSON.stringify(ent.json?.limits?.reportFormats) === '["csv"]', JSON.stringify(ent.json?.limits?.reportFormats));
 
@@ -73,20 +73,18 @@ ok('free: MT5 refusal asks for upgrade', cloudConnect.json?.proRequired === true
 const cloudSync = await api('/api/mt5/cloud/sync', { method: 'POST', cookie: free.cookie, body: {} });
 ok('free: MT5 cloud sync refused', cloudSync.status === 403, `status ${cloudSync.status}`);
 
-// ── portfolio limit ───────────────────────────────────────────────────────
-// Signup already creates the one portfolio the free plan allows, so the very
-// next account is the one that has to be refused.
+// ── portfolio accounts ───────────────────────────────────────────────────
+// Signup creates the initial portfolio, and free users can create unlimited manual accounts.
 const startingAccounts = await api('/api/accounts', { cookie: free.cookie });
-ok('free: signup created one portfolio',
-  (startingAccounts.json?.accounts || []).length === 1,
+ok('free: signup created default portfolio',
+  (startingAccounts.json?.accounts || []).length >= 1,
   String((startingAccounts.json?.accounts || []).length));
 
 const acc2 = await api('/api/accounts', {
   method: 'POST', cookie: free.cookie,
   body: { name: 'Second', broker: 'Test', currency: 'USD', startingBalance: 10000 },
 });
-ok('free: second account refused', acc2.status === 403, `status ${acc2.status}`);
-ok('free: account refusal asks for upgrade', acc2.json?.proRequired === true);
+ok('free: second manual account allowed', acc2.status === 200, `status ${acc2.status}`);
 
 const mt5Acc = await api('/api/accounts', {
   method: 'POST', cookie: free.cookie,

@@ -28,16 +28,14 @@ const accountId = acc.json?.accounts?.[0]?.id;
 ok('accounts: default portfolio created', !!accountId);
 
 // --- account lifecycle ---------------------------------------------------
-// A new account is on the free plan, which allows one trading account, and the
-// default portfolio above already used it. A second one must be refused.
+// Free plan allows unlimited manual trading accounts.
 const created = await api('/api/accounts', {
   method: 'POST', cookie,
   body: { name: 'Prop Challenge', broker: 'FTMO', startingBalance: 25000, currency: 'USD' },
 });
-ok('accounts: free plan stops at one account', created.status === 403, `status ${created.status}`);
-ok('accounts: refusal says Pro is the way out', created.json?.proRequired === true);
+ok('accounts: free plan can create multiple manual accounts', created.status === 200, `status ${created.status}`);
 
-// Free plan is manual entry only.
+// Free plan is manual entry only; MT5 sync requires Pro.
 const mt5Attempt = await api('/api/accounts', {
   method: 'POST', cookie,
   body: { name: 'Synced', broker: 'Exness', isMt5Sync: true },

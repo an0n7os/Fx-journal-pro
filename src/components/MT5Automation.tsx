@@ -21,7 +21,8 @@ import {
   Landmark,
   X,
   Info,
-  HelpCircle
+  HelpCircle,
+  Check
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -1349,29 +1350,85 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                 </div>
               )}
 
-              <div className="flex items-center gap-3 flex-wrap">
-                <button
-                  onClick={handleVpsSync}
-                  disabled={vpsSyncing || phase === 'Queued'}
-                  id="vps-sync-now-btn"
-                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition disabled:opacity-50 cursor-pointer shadow-xs"
-                >
-                  {vpsSyncing || phase === 'Queued'
-                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : <RefreshCw className="h-4 w-4" />}
-                  {vpsSyncing ? 'Connecting…' : phase === 'Queued' ? 'Connecting…' : 'Sync Now'}
-                </button>
+              {/* Premium Sync Guidance & Action Card */}
+              <div className="relative overflow-hidden rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.08] via-slate-50/80 to-slate-100/60 dark:from-emerald-950/30 dark:via-slate-900/70 dark:to-slate-950/90 p-4 sm:p-5 shadow-lg shadow-emerald-950/5 dark:shadow-emerald-950/20">
+                {/* Subtle emerald ambient glow */}
+                <div className="pointer-events-none absolute -top-12 -right-12 h-36 w-36 rounded-full bg-emerald-500/15 blur-2xl" />
 
-                <a
-                  href={getWhatsAppHelpUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 border border-slate-200 dark:border-slate-700 hover:border-emerald-500/40 bg-slate-50 dark:bg-slate-800/60 hover:bg-emerald-500/10 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 text-xs font-bold px-4 py-2.5 rounded-xl transition cursor-pointer shadow-xs"
-                  title="Contact WhatsApp support for MT5 sync assistance"
-                >
-                  <WhatsAppIcon className="h-4 w-4 text-emerald-500" />
-                  <span>WhatsApp Support</span>
-                </a>
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-2 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-xs">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                        </span>
+                        MT5 Live Sync Ready
+                      </span>
+                      <span className="text-[11px] text-slate-400 dark:text-slate-500">•</span>
+                      <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        {status.lastSyncTime ? `Last synced: ${timeAgo(status.lastSyncTime)}` : 'First-time sync ready'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+                        Click “Sync Now” to import your latest MT5 trades
+                      </h4>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mt-1">
+                        Placed or closed new positions in MT5? Click <strong className="text-emerald-600 dark:text-emerald-400 font-bold">Sync Now</strong> anytime to pull the newest trades, update profit/loss, and refresh your account balance & equity instantly.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 sm:gap-4 pt-0.5 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 font-medium">
+                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        Imports newly closed orders & commissions
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 font-medium">
+                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        Updates live balance & equity in seconds
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 font-medium">
+                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        No manual CSV uploads needed
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Buttons */}
+                  <div className="flex sm:flex-row md:flex-col lg:flex-row items-stretch sm:items-center gap-2.5 shrink-0 pt-2 md:pt-0">
+                    <button
+                      onClick={handleVpsSync}
+                      disabled={vpsSyncing || phase === 'Queued'}
+                      id="vps-sync-now-btn"
+                      className="group relative inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-600 text-white text-xs sm:text-sm font-black px-6 py-3 rounded-xl transition-all duration-200 shadow-md shadow-emerald-600/30 hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 cursor-pointer"
+                    >
+                      {vpsSyncing || phase === 'Queued' ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin text-white" />
+                          <span>Connecting to MT5…</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 text-emerald-100 group-hover:rotate-180 transition-transform duration-500" />
+                          <span>Sync Now</span>
+                        </>
+                      )}
+                    </button>
+
+                    <a
+                      href={getWhatsAppHelpUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700/80 hover:border-emerald-500/40 bg-white dark:bg-slate-800/80 hover:bg-emerald-500/10 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 text-xs font-bold px-4 py-3 rounded-xl transition cursor-pointer shadow-xs"
+                      title="Contact WhatsApp support for MT5 sync assistance"
+                    >
+                      <WhatsAppIcon className="h-4 w-4 text-emerald-500" />
+                      <span>WhatsApp Support</span>
+                    </a>
+                  </div>
+                </div>
               </div>
 
             </div>

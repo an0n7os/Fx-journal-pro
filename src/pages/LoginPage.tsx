@@ -320,7 +320,7 @@ const security = [
 
 const faqs = [
   { q: 'Can I cancel Pro anytime?', a: 'Yes. Pro is billed monthly and you can cancel whenever you like — you keep access until the end of the period you have paid for, and your journal stays intact on the free plan afterwards.' },
-  { q: 'Is there a free plan?', a: 'Yes. The free plan covers one trading account with manual trade logging, full analytics, the calendar and FX news — no card required. Pro adds unlimited accounts, MT5 automatic sync, live charts, the AI Mentor and full history export for ₹499 (about $5.90) per 30 days.' },
+  { q: 'Is there a free plan?', a: 'Yes. The free plan covers unlimited manual trading accounts with manual trade logging, full analytics, the calendar and FX news — no card required. Pro adds MT5 automatic sync, live charts, the AI Mentor and full history export for ₹499 (about $5.90) per 30 days.' },
   { q: 'What is a trading journal?', a: 'A trading journal is a record of your trades used to review performance, identify strengths and weaknesses, and improve consistency. FX Journal Pro automates this with MT5 auto-sync and AI-driven analysis.' },
   { q: 'Does FX Journal Pro work with MetaTrader 5?', a: 'Yes. MT5 automatic sync is a Pro feature: install the Expert Advisor once and your trades, balance and equity sync in real time. On the free plan you add trades manually, or paste an MT5 report.' },
   { q: 'Do I need to enter trades manually?', a: 'On the free plan, yes — logging a trade takes a few seconds. On Pro the MT5 Expert Advisor imports them automatically in real time, and you can still add or edit any trade by hand.' },
@@ -1663,7 +1663,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
               <p className="text-[13px] text-slate-400 mt-2">For traders getting started. No card required.</p>
               <ul className="mt-6 space-y-2.5 flex-1">
                 {[
-                  'One trading account',
+                  'Unlimited manual trading accounts',
                   'Manual trade logging',
                   'Limited analytics & calendar',
                   'Export the last 30 days'
