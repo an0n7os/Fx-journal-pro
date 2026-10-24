@@ -34,6 +34,16 @@ import {
 } from 'recharts';
 import { TradingAccount } from '../types';
 
+function WhatsAppIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
+
+const SUPPORT_WHATSAPP = '918136802573';
+
 interface MT5AutomationProps {
   account: TradingAccount | null;
   authFetch: (url: string, options?: RequestInit) => Promise<Response>;
@@ -266,6 +276,18 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
   const [activeTab, setActiveTab] = useState<'ea' | 'investor' | 'vps'>('vps');
   const [connectElapsed, setConnectElapsed] = useState(0);
   const [retrying, setRetrying] = useState(false);
+
+  const getWhatsAppHelpUrl = (issueContext?: string) => {
+    const parts: string[] = ['Hi FX Journal Pro Support, I need help with my MT5 account.'];
+    if (account?.name) parts.push(`Account Name: ${account.name}`);
+    const login = status?.terminalLogin || vpsLogin || account?.eaTerminalLogin || account?.mt5Login;
+    if (login) parts.push(`MT5 Login: ${login}`);
+    const srv = status?.terminalServer || vpsServer || account?.eaTerminalServer || account?.mt5Server;
+    if (srv) parts.push(`Server: ${srv}`);
+    if (issueContext) parts.push(`Issue Details: ${issueContext}`);
+    const msg = parts.join('\n');
+    return `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+  };
 
   // The server decides: it knows whether a worker can run here at all.
   // Defaults to false so a status that has not arrived yet never advertises a
@@ -1054,6 +1076,17 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
               {' '}Please make sure you are using the read-only <strong>Investor password</strong>, not your main account password.
               Re-enter your credentials below and try again.
             </p>
+            <div className="pt-1.5">
+              <a
+                href={getWhatsAppHelpUrl('Incorrect MT5 Investor Password')}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-700 dark:text-rose-300 hover:text-emerald-500 dark:hover:text-emerald-400 transition cursor-pointer"
+              >
+                <WhatsAppIcon className="h-3.5 w-3.5 text-emerald-500" />
+                <span>Need help with your investor password? Chat on WhatsApp</span>
+              </a>
+            </div>
           </div>
         </div>
       )}
@@ -1122,7 +1155,7 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
               )}
             </div>
 
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex items-center gap-3 pt-1 flex-wrap">
               <button
                 type="button"
                 onClick={handleRetryConnection}
@@ -1136,6 +1169,15 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                 )}
                 {retrying ? 'Retrying…' : 'Retry Connection'}
               </button>
+              <a
+                href={getWhatsAppHelpUrl(latestError?.errorCode || latestError?.errorMessage || 'MT5 Connection Issue')}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition cursor-pointer shadow-xs"
+              >
+                <WhatsAppIcon className="h-3.5 w-3.5" />
+                <span>Contact WhatsApp Support</span>
+              </a>
             </div>
           </div>
         </div>
@@ -1193,29 +1235,41 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
       {/* ── VPS Auto Sync Tab ──────────────────────────────────────────── */}
       {activeTab === 'vps' && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-5">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               <RefreshCw className="h-5 w-5 text-emerald-500" />
               <h3 className="dx-section-title">MT5 Auto Sync</h3>
             </div>
-            {/* The badge used to read "VPS Connected" whenever credentials were
-                stored, which is a statement about this account, not about the
-                worker. It said connected on a deployment where no worker had
-                ever run. */}
-            {status?.syncMethod === 'VPS' && status.cloudConnected && (
-              workerOnline ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-1">
-                  <Wifi className="h-3 w-3" /> Auto Sync ready
-                </span>
-              ) : (
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-[10px] font-bold px-2.5 py-1"
-                  title="Your MT5 details are saved. Auto Sync is not running yet, so queued syncs are waiting."
-                >
-                  <WifiOff className="h-3 w-3" /> Auto Sync offline
-                </span>
-              )
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              <a
+                href={getWhatsAppHelpUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-xs font-bold transition shadow-xs cursor-pointer"
+                title="Facing any MT5 issues? Chat with support on WhatsApp"
+              >
+                <WhatsAppIcon className="h-3.5 w-3.5 text-emerald-500" />
+                <span>Help / WhatsApp</span>
+              </a>
+              {/* The badge used to read "VPS Connected" whenever credentials were
+                  stored, which is a statement about this account, not about the
+                  worker. It said connected on a deployment where no worker had
+                  ever run. */}
+              {status?.syncMethod === 'VPS' && status.cloudConnected && (
+                workerOnline ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-1">
+                    <Wifi className="h-3 w-3" /> Auto Sync ready
+                  </span>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-[10px] font-bold px-2.5 py-1"
+                    title="Your MT5 details are saved. Auto Sync is not running yet, so queued syncs are waiting."
+                  >
+                    <WifiOff className="h-3 w-3" /> Auto Sync offline
+                  </span>
+                )
+              )}
+            </div>
           </div>
 
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
@@ -1226,8 +1280,20 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
           </p>
 
           {vpsError && (
-            <div className="flex items-center gap-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded-xl px-4 py-3">
-              <AlertTriangle className="h-4 w-4 shrink-0" /> {vpsError}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{vpsError}</span>
+              </div>
+              <a
+                href={getWhatsAppHelpUrl(vpsError)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer shadow-xs"
+              >
+                <WhatsAppIcon className="h-3.5 w-3.5" />
+                <span>Help via WhatsApp</span>
+              </a>
             </div>
           )}
 
@@ -1288,13 +1354,24 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                   onClick={handleVpsSync}
                   disabled={vpsSyncing || phase === 'Queued'}
                   id="vps-sync-now-btn"
-                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition disabled:opacity-50"
+                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition disabled:opacity-50 cursor-pointer shadow-xs"
                 >
                   {vpsSyncing || phase === 'Queued'
                     ? <Loader2 className="h-4 w-4 animate-spin" />
                     : <RefreshCw className="h-4 w-4" />}
                   {vpsSyncing ? 'Connecting…' : phase === 'Queued' ? 'Connecting…' : 'Sync Now'}
                 </button>
+
+                <a
+                  href={getWhatsAppHelpUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 border border-slate-200 dark:border-slate-700 hover:border-emerald-500/40 bg-slate-50 dark:bg-slate-800/60 hover:bg-emerald-500/10 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 text-xs font-bold px-4 py-2.5 rounded-xl transition cursor-pointer shadow-xs"
+                  title="Contact WhatsApp support for MT5 sync assistance"
+                >
+                  <WhatsAppIcon className="h-4 w-4 text-emerald-500" />
+                  <span>WhatsApp Support</span>
+                </a>
               </div>
 
             </div>
@@ -1376,15 +1453,27 @@ export default function MT5Automation({ account, authFetch, onRefresh }: MT5Auto
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={vpsBusy}
-                id="vps-connect-btn"
-                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition disabled:opacity-50"
-              >
-                {vpsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                {vpsBusy ? 'Connecting…' : 'Connect & Start Sync'}
-              </button>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="submit"
+                  disabled={vpsBusy}
+                  id="vps-connect-btn"
+                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  {vpsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  {vpsBusy ? 'Connecting…' : 'Connect & Start Sync'}
+                </button>
+
+                <a
+                  href={getWhatsAppHelpUrl('Assistance with connecting MT5')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 border border-slate-200 dark:border-slate-700 hover:border-emerald-500/40 bg-slate-50 dark:bg-slate-800/60 hover:bg-emerald-500/10 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 text-xs font-bold px-4 py-2.5 rounded-xl transition cursor-pointer shadow-xs"
+                >
+                  <WhatsAppIcon className="h-4 w-4 text-emerald-500" />
+                  <span>Having trouble? Chat on WhatsApp</span>
+                </a>
+              </div>
 
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-2">
                 <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />

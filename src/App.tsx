@@ -8,7 +8,7 @@ import {
   Clock, Heart, Edit3, Image as ImageIcon, Eye, EyeOff, RefreshCw,
   Terminal, Globe, Bell, CreditCard, Info, Activity, Sun, Moon, Upload,
   FileSpreadsheet, FileText, Mail, Wrench, X, Newspaper, Trophy, Lock, MessageSquare, MoreHorizontal, Users,
-  Settings, Instagram, Phone, GraduationCap, Share2, Loader2, ShieldCheck, CheckCheck, Camera
+  Settings, Instagram, Phone, GraduationCap, Share2, Loader2, ShieldCheck, CheckCheck, Camera, Crown
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -9857,7 +9857,14 @@ export default function App() {
                       <Edit3 className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-bold text-slate-800 dark:text-white text-sm group-hover:text-violet-400 transition-colors">Manual Account Opening</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-800 dark:text-white text-sm group-hover:text-violet-400 transition-colors">
+                          Manual Account Opening
+                        </span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          FREE
+                        </span>
+                      </div>
                       <div className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">Create an empty portfolio to manually log your trades one-by-one.</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
@@ -9865,6 +9872,11 @@ export default function App() {
 
                   <button
                     onClick={() => {
+                      if (!user?.isPro) {
+                        setShowAccountModal(false);
+                        setShowProModal(true);
+                        return;
+                      }
                       setAccountCreationMethod('mt5');
                       setNewAccName('');
                       setNewAccBroker('');
@@ -9880,7 +9892,15 @@ export default function App() {
                       <Terminal className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-bold text-slate-800 dark:text-white text-sm group-hover:text-violet-400 transition-colors">MT5 Sync Account</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-800 dark:text-white text-sm group-hover:text-violet-400 transition-colors">
+                          MT5 Sync Account
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-violet-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30 shadow-xs">
+                          <Crown className="w-2.5 h-2.5 text-amber-500 fill-amber-500/80" />
+                          PRO
+                        </span>
+                      </div>
                       <div className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">Connect directly using MT5 Login, Server, and Account or Investor Password.</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
@@ -10181,6 +10201,18 @@ export default function App() {
                 >
                   {actionLoading ? 'Connecting MT5 Account...' : 'Connect MT5 Account'}
                 </button>
+
+                <div className="text-center pt-1">
+                  <a
+                    href="https://wa.me/918136802573?text=Hi%20FX%20Journal%20Pro%20Support%2C%20I%20need%20help%20connecting%20my%20MT5%20account."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-emerald-500 dark:hover:text-emerald-400 font-semibold transition cursor-pointer"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Need help connecting MT5? Chat on WhatsApp</span>
+                  </a>
+                </div>
               </div>
             )}
           </div>
