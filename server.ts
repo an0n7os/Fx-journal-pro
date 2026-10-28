@@ -1915,6 +1915,17 @@ const CloudDisconnectSchema = z.object({
   accountId: boundedString(64)
 }).strict();
 
+// Normalize known MT5 broker server typos (e.g. ElefinTrade-Server -> Elefin-Trade)
+function normalizeMt5Server(server: string): string {
+  if (!server) return '';
+  const trimmed = server.trim();
+  const low = trimmed.toLowerCase().replace(/[\s_-]/g, '');
+  if (low === 'elefintradeserver' || low === 'elefintrade' || low === 'elefinserver' || low === 'elefin' || low === 'elefintradelive') {
+    return 'Elefin-Trade';
+  }
+  return trimmed;
+}
+
 // Parse and validate an EA body against a schema; on failure reply 400 and return null
 function validateEaBody(res: any, schema: any, body: any): any | null {
   const parsed = schema.safeParse(body);
@@ -4646,7 +4657,7 @@ app.post('/api/accounts', async (req, res) => {
     // authenticate or validate.
     eaStatus: 'Not Connected',
     ...(login ? { mt5Login: String(login).trim(), eaTerminalLogin: String(login).trim() } : {}),
-    ...(server ? { mt5Server: String(server).trim(), eaTerminalServer: String(server).trim() } : {}),
+    ...(server ? { mt5Server: normalizeMt5Server(String(server).trim()), eaTerminalServer: normalizeMt5Server(String(server).trim()) } : {}),
     // Storing a password is not a connection. This said Connected the moment
     // the form was submitted, on the dead MetaApi method, and queued nothing —
     // so the customer saw "Connected" against an empty journal forever and had
@@ -6502,7 +6513,7 @@ app.post('/api/mt5/worker/claim', async (req, res) => {
           },
           credentials: {
             login: String(account.mt5Login || ''),
-            server: String(account.mt5Server || ''),
+            server: normalizeMt5Server(String(account.mt5Server || '')),
             investorPassword: password,
           },
           sinceDeal: account.eaLastDealId || 0,
@@ -6787,7 +6798,7 @@ app.post('/api/mt5/vps/connect', async (req, res) => {
   account.passwordEncNonce = '';
   account.passwordKmsKeyId = enc.keyId;
   account.mt5Login = body.login;
-  account.mt5Server = body.server;
+  account.mt5Server = normalizeMt5Server(body.server);
   account.isMt5Sync = true;
   account.isDefaultDemo = false;
   if (account.accountType === 'Demo' && (account.broker === 'MT5 Demo Broker' || account.broker === 'Demo Broker')) {

@@ -119,6 +119,14 @@ def _post(path: str, payload: dict[str, Any], timeout: int = 60) -> dict[str, An
     return response.json()
 
 
+def normalize_server(server: str) -> str:
+    s = (server or "").strip()
+    low = s.lower().replace(" ", "").replace("_", "").replace("-", "")
+    if low in ("elefintradeserver", "elefintrade", "elefinserver", "elefintradelive", "elefin"):
+        return "Elefin-Trade"
+    return s
+
+
 def claim_job() -> Job | None:
     data = _post("/worker/claim", {"workerId": WORKER_ID, "terminal": TERMINAL_PATH[-40:]})
     job = data.get("job")
@@ -133,7 +141,7 @@ def claim_job() -> Job | None:
         action=job.get("action", "SYNC_NOW"),
         account_id=job["accountId"],
         login=int(login_raw),
-        server=str(creds.get("server") or "").strip(),
+        server=normalize_server(str(creds.get("server") or "")),
         password=str(creds.get("investorPassword") or ""),
         since_deal=int(data.get("sinceDeal") or 0),
         backfill_days=int(data.get("backfillDays") or 90),
@@ -250,6 +258,9 @@ def terminal_login(job: Job) -> None:
         time.sleep(2.5)  # Allow Windows OS to release socket locks and terminal file handles
 
         # Attempt 2 with fresh terminal instance
+        # If server was non-standard Elefin name, ensure it falls back to Elefin-Trade
+        if "elefin" in job.server.lower() and job.server != "Elefin-Trade":
+            job.server = "Elefin-Trade"
         ok, code, message = _attempt_login()
         if ok:
             log.info("job %s: auto-recovery succeeded after terminal restart!", job.id)
