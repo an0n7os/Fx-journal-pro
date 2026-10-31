@@ -119,6 +119,29 @@ const afterRevoke = await api(`/api/shared/${token}`);
 ok('a revoked link stops answering', afterRevoke.status === 404, `status ${afterRevoke.status}`);
 
 // ── report ────────────────────────────────────────────────────────────────
+// Selected dashboard account must not mix another portfolio's trades.
+const second = await api('/api/accounts', { method: 'POST', cookie: owner.cookie,
+  body: { name: 'Other portfolio', broker: 'QA', startingBalance: 1000 } });
+const selectedId = second.json?.account?.id;
+ok('second portfolio created for scope regression', !!selectedId);
+await api('/api/trades', { method: 'POST', cookie: owner.cookie, body: {
+  accountId: selectedId, symbol: 'GBPUSD', type: 'Buy', lotSize: 0.1,
+  entryPrice: 1.1, exitPrice: 1.2, profit: 100, commission: -7, swap: -2,
+} });
+const scoped = await api('/api/shared-links', { method: 'POST', cookie: owner.cookie,
+  body: { accountId: selectedId, sections: ['dashboard', 'journal', 'analysis'], months: 'all' } });
+const publicScoped = await api(`/api/shared/${scoped.json?.link?.token}`, { cookie: viewer.cookie });
+ok('selected account link is created', scoped.status === 201);
+ok('shared journal contains only selected portfolio', publicScoped.json?.stats?.totalTrades === 1);
+ok('shared net P/L includes commission and swap', publicScoped.json?.stats?.netProfit === 91);
+ok('shared journal carries matching net P/L', publicScoped.json?.trades?.[0]?.netProfit === 91);
+ok('shared chart matches dashboard net P/L', publicScoped.json?.equityCurve?.at(-1)?.equity === 1091);
+ok('shared starting capital equals selected account', publicScoped.json?.portfolio?.startingCapital === 1000);
+ok('shared current balance equals dashboard account', publicScoped.json?.portfolio?.currentBalance === 1091);
+ok('shared account growth uses starting capital', publicScoped.json?.portfolio?.growthPercent === 9.1);
+const forgedScope = await api('/api/shared-links', { method: 'POST', cookie: viewer.cookie,
+  body: { accountId: selectedId, sections: ['journal'], months: 'all' } });
+ok('another user cannot share this portfolio', [403, 404].includes(forgedScope.status));
 console.log('');
 for (const r of out) console.log(`${r.p ? 'PASS' : 'FAIL'}  ${r.n}${r.d ? `  (${r.d})` : ''}`);
 const passed = out.filter((r) => r.p).length;

@@ -220,6 +220,7 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
 CREATE TABLE IF NOT EXISTS shared_journal_links (
   token TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
+  account_id TEXT,
   user_name TEXT,
   sections JSONB NOT NULL DEFAULT '["dashboard", "journal"]'::jsonb,
   months TEXT NOT NULL DEFAULT 'all',

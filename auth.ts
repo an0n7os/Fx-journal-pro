@@ -8,11 +8,9 @@ import path from 'path';
 import crypto from 'node:crypto';
 import pg from 'pg';
 const getNodeRequire = () => {
-  if (typeof require !== 'undefined') return require;
-  if (typeof import.meta !== 'undefined' && import.meta?.url) {
-    return createRequire(import.meta.url);
-  }
-  return createRequire(path.join(process.cwd(), 'dummy.js'));
+  // The production bundle is ESM. esbuild's synthetic `require` exists but
+  // cannot load node:sqlite, so always create a real Node require here.
+  return createRequire(import.meta.url);
 };
 
 const IS_SERVERLESS = !!(

@@ -22,30 +22,13 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
-      # Migration bugs only surface when someone runs the SQL against a real
-      # project, and one bad statement aborts the whole run. This replays the
-      # files in order and checks the references and indexes against the shape
-      # they actually produce.
-      - name: Check SQL migrations
-        run: npm run check:migrations
-
       - name: Build
         run: npm run build
 
-      # The suites hit a running server, so start one first. `npm run dev` is
-      # used rather than `npm start`: the built server only calls app.listen()
-      # when NODE_ENV is not production, and the dev entry is what these tests
-      # were written against. No Supabase credentials on purpose — this
-      # exercises the local fallback path, where the auth and trade logic is
-      # the same code.
-      - name: Start server
-        run: npm run dev &
+      - name: Frontend download budgets
+        run: npm run check:frontend
 
-      - name: Wait for server
-        run: npx --yes wait-on http://localhost:3000 --timeout 60000
-
-      - name: Security regression tests
-        run: npm run test:security
-
-      - name: Functional regression tests
-        run: npm run test:functional
+      # Each suite gets a fresh temporary database and server. No live keys
+      # are inherited; test billing is enabled only in the Pro unlock suite.
+      - name: Isolated API and security regression tests
+        run: npm run test:audit

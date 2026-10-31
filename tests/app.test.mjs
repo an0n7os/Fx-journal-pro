@@ -25,6 +25,7 @@ ok('auth: sign in', login.status === 200);
 
 const acc = await api('/api/accounts', { cookie });
 const accountId = acc.json?.accounts?.[0]?.id;
+const initialBalance = acc.json?.accounts?.[0]?.currentBalance;
 ok('accounts: default portfolio created', !!accountId);
 
 // --- account lifecycle ---------------------------------------------------
@@ -58,8 +59,8 @@ const t1 = await api('/api/trades', {
 });
 ok('trades: create', t1.status === 200, `status ${t1.status}`);
 ok('trades: symbol uppercased', t1.json?.trade?.symbol === 'EURUSD', t1.json?.trade?.symbol);
-ok('trades: balance math', t1.json?.updatedAccount?.currentBalance === 10991,
-  `balance ${t1.json?.updatedAccount?.currentBalance} (expected 10000 + 1000 - 7 - 2)`);
+ok('trades: balance math', t1.json?.updatedAccount?.currentBalance === initialBalance + 991,
+  `balance ${t1.json?.updatedAccount?.currentBalance} (expected ${initialBalance} + 1000 - 7 - 2)`);
 
 const losing = await api('/api/trades', {
   method: 'POST', cookie,
@@ -78,13 +79,13 @@ ok('trades: edit', edited.status === 200 && edited.json?.trade?.profit === 1200)
 
 const afterEdit = await api('/api/accounts', { cookie });
 const balAfterEdit = afterEdit.json?.accounts?.find((a) => a.id === accountId)?.currentBalance;
-ok('trades: balance follows edit', balAfterEdit === 10937, `balance ${balAfterEdit}`);
+ok('trades: balance follows edit', balAfterEdit === initialBalance + 937, `balance ${balAfterEdit}`);
 
 const del = await api(`/api/trades/${losing.json.trade.id}`, { method: 'DELETE', cookie });
 ok('trades: delete', del.status === 200);
 const afterDel = await api('/api/accounts', { cookie });
 const balAfterDel = afterDel.json?.accounts?.find((a) => a.id === accountId)?.currentBalance;
-ok('trades: balance reverses on delete', balAfterDel === 11191, `balance ${balAfterDel}`);
+ok('trades: balance reverses on delete', balAfterDel === initialBalance + 1191, `balance ${balAfterDel}`);
 
 // --- validation ----------------------------------------------------------
 const badTrade = await api('/api/trades', { method: 'POST', cookie, body: { accountId, symbol: 'X' } });
@@ -160,3 +161,4 @@ for (const r of out) console.log(`${r.p ? 'PASS' : 'FAIL'}  ${r.n}${r.d ? `  (${
 const failed = out.filter((r) => !r.p);
 console.log(`\n${out.length - failed.length}/${out.length} passed`);
 if (failed.length) console.log('FAILING:\n' + failed.map((f) => ` - ${f.n} (${f.d})`).join('\n'));
+process.exitCode = failed.length ? 1 : 0;

@@ -11,7 +11,6 @@ import {
 import Logo from '../components/Logo';
 import FXNewsPreview from '../components/FXNewsPreview';
 import { LEGAL_DOCS, type LegalDocKey } from '../legalDocs';
-import { supabase } from '../supabaseClient';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { signIn } from '../lib/auth-client';
 import { useScrollLock } from '../lib/useScrollLock';
@@ -808,6 +807,7 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
     try {
       if (isSupabaseConfigured) {
         try {
+          const { supabase } = await import('../supabaseClient');
           const { data: supabaseData, error: supabaseError } = await supabase.auth.signInWithPassword({
             email: authEmail,
             password: authPassword

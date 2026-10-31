@@ -109,8 +109,8 @@ const trade = await api('/api/trades', {
 ok('trade saves', trade.status === 200, `status ${trade.status} ${trade.json?.error || ''}`);
 ok('symbol normalised to uppercase', trade.json?.trade?.symbol === 'EURUSD', trade.json?.trade?.symbol);
 ok('balance updates by profit minus costs',
-  trade.json?.updatedAccount?.currentBalance === 10494,
-  `balance ${trade.json?.updatedAccount?.currentBalance} (expected 10000 + 500 - 5 - 1)`);
+  trade.json?.updatedAccount?.currentBalance === 1494,
+  `balance ${trade.json?.updatedAccount?.currentBalance} (expected 1000 + 500 - 5 - 1)`);
 
 const junkTrade = await api('/api/trades', {
   method: 'POST', cookie,
@@ -127,8 +127,8 @@ section('6. Free-plan limits hold');
 const secondAccount = await api('/api/accounts', {
   method: 'POST', cookie, body: { name: 'Second', broker: 'FTMO', startingBalance: 5000 },
 });
-ok('second account blocked on Free', secondAccount.status === 403, `status ${secondAccount.status}`);
-ok('and the message points at Pro', secondAccount.json?.proRequired === true);
+ok('second manual account allowed on Free', secondAccount.status === 200, `status ${secondAccount.status}`);
+ok('manual account creation does not require Pro', secondAccount.json?.proRequired !== true);
 
 const mt5Account = await api('/api/accounts', {
   method: 'POST', cookie, body: { name: 'Synced', broker: 'Exness', isMt5Sync: true },

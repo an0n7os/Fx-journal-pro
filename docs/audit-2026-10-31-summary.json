@@ -1,0 +1,131 @@
+{
+  "date": "2026-10-31",
+  "suites": 23,
+  "passed": 593,
+  "total": 593,
+  "dependencyVulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 8,
+    "high": 0,
+    "critical": 0,
+    "total": 8
+  },
+  "suitesSummary": [
+    {
+      "suite": "admin-inspect.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "app.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "billing-rbac.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "concurrency.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "functional.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "journey.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "mt5-ea.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "mt5-vps.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "notebook.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "partner-adjustment.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "partner-links.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "partner.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "payment-replay.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "plan-gates.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "pro-unlock.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "production-guards.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "profile-plan.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "security.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "shared-journal.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "subadmin-scope.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "subadmin.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "tenant-isolation.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "suite": "webhook-signature.test.mjs",
+      "passed": true,
+      "exitCode": 0
+    }
+  ]
+}

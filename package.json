@@ -12,14 +12,16 @@
     "launch:check": "node scripts/launch-check.mjs",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=api/server.bundled.js",
     "vercel-build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=api/server.bundled.js",
-    "start": "node dist/server.cjs",
+    "start": "node api/server.bundled.js",
     "clean": "rm -rf dist server.cjs",
     "lint": "tsc --noEmit",
+    "check:frontend": "node scripts/check-frontend-build.mjs dist",
     "test:security": "node --env-file-if-exists=.env tests/security.test.mjs",
     "test:functional": "node --env-file-if-exists=.env tests/functional.test.mjs",
     "test": "npm run test:profile-plan && npm run test:security && npm run test:functional && npm run test:app && npm run test:billing && npm run test:subadmin && npm run test:partner && npm run test:plan && npm run test:journey",
     "test:profile-plan": "node --test tests/profile-plan.test.mjs",
     "test:profile-integration": "node tests/profile-plan.integration.mjs --related",
+    "test:audit": "node tests/profile-plan.integration.mjs --audit",
     "test:journey": "node --env-file-if-exists=.env tests/journey.test.mjs",
     "test:app": "node --env-file-if-exists=.env tests/app.test.mjs",
     "test:billing": "node --env-file-if-exists=.env tests/billing-rbac.test.mjs",
@@ -44,7 +46,6 @@
     "better-auth": "^1.7.6",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.3",
-    "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "express-rate-limit": "^8.6.0",
     "jspdf": "^4.2.1",
@@ -62,10 +63,10 @@
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
+    "write-excel-file": "^4.1.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@better-auth/cli": "^1.4.22",
     "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^4.17.21",
@@ -74,6 +75,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "esbuild": "^0.25.0",
+    "read-excel-file": "^9.3.14",
     "tsx": "^4.21.0"
   }
 }

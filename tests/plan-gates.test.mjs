@@ -67,11 +67,11 @@ ok('free: AI mentor refused', mentor.status === 403, `status ${mentor.status}`);
 ok('free: mentor refusal asks for upgrade', mentor.json?.proRequired === true);
 
 const cloudConnect = await api('/api/mt5/cloud/connect', { method: 'POST', cookie: free.cookie, body: {} });
-ok('free: MT5 cloud connect refused', cloudConnect.status === 403, `status ${cloudConnect.status}`);
-ok('free: MT5 refusal asks for upgrade', cloudConnect.json?.proRequired === true);
+ok('free: malformed MT5 cloud connect refused', cloudConnect.status === 400, `status ${cloudConnect.status}`);
+ok('free: validation failure is not an upgrade request', cloudConnect.json?.proRequired !== true);
 
 const cloudSync = await api('/api/mt5/cloud/sync', { method: 'POST', cookie: free.cookie, body: {} });
-ok('free: MT5 cloud sync refused', cloudSync.status === 403, `status ${cloudSync.status}`);
+ok('free: malformed MT5 cloud sync refused', cloudSync.status === 400, `status ${cloudSync.status}`);
 
 // ── portfolio accounts ───────────────────────────────────────────────────
 // Signup creates the initial portfolio, and free users can create unlimited manual accounts.
@@ -194,11 +194,11 @@ const stillFree = await api('/api/plan/entitlements', { cookie: free2.cookie });
 ok('and stays on free', stillFree.json?.plan === 'free', String(stillFree.json?.plan));
 
 // Claiming Pro in the request body must change nothing.
-const claim = await api('/api/auth/profile', {
+const claim = await api('/api/auth/update-profile', {
   method: 'POST', cookie: free2.cookie, body: { isPro: true, name: 'Cheat' },
 });
 const afterClaim = await api('/api/plan/entitlements', { cookie: free2.cookie });
-ok('claiming isPro in a profile update is ignored', afterClaim.json?.plan === 'free',
+ok('claiming isPro in a profile update is ignored', claim.status === 200 && afterClaim.json?.plan === 'free',
   `profile status ${claim.status}, plan ${afterClaim.json?.plan}`);
 
 console.log('');

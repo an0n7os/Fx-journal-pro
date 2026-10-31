@@ -32,7 +32,7 @@ import Logo from './components/Logo';
 import { TraderRankCard } from './components/TraderRankCard';
 import LegalFooter from './components/LegalFooter';
 import NextEventCard from './components/NextEventCard';
-import LoginPage from './pages/LoginPage';
+const LoginPage = React.lazy(() => import('./pages/LoginPage'));
 import { authClient } from './lib/auth-client';
 import ProUpgradeModal from './components/ProUpgradeModal';
 import ProFeaturePanel from './components/ProFeaturePanel';
@@ -4125,10 +4125,7 @@ export default function App() {
     const authorised = await fetchAuthorisedExport('csv');
     if (!authorised) return;
     const rows = authorised.trades;
-    const cell = (v: any) => {
-      const str = v === null || v === undefined ? '' : String(v);
-      return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-    };
+    const { csvCell: cell } = await import('./lib/csvExport');
     const header = ['Date', 'Symbol', 'Type', 'Lots', 'Entry', 'Exit', 'Profit', 'Strategy', 'Emotion', 'Notes'];
     const lines = [header.join(',')];
     for (const t of rows) {
@@ -4150,279 +4147,17 @@ export default function App() {
   const handleExportExcel = async () => {
     const authorised = await fetchAuthorisedExport('xlsx');
     if (!authorised) return;
-    const mod: any = await import('exceljs');
-    const ExcelJS = mod.default || mod;
-    const range = getExportRange();
-    const inRange = authorised.trades;
-    const tradingInRange = inRange.filter(isTradingTrade);
-    const stats = computeExportStats(tradingInRange);
-
-    const NAVY = 'FF0F1E36';
-    const BLUE = 'FF2F5B8E';
-    const NAVY_TEXT = 'FF1E3A5F';
-    const WHITE = 'FFFFFFFF';
-    const META_FILL = 'FFEEF2F7';
-    const SUMMARY_FILL = 'FFF1F5FA';
-    const ALT_FILL = 'FFF4F7FB';
-    const TOTAL_FILL = 'FFE3EAF3';
-    const GREEN = 'FF1E7D32';
-    const RED = 'FFC62828';
-    const GRAY = 'FF6B7280';
-    const TEXT_COLOR = 'FF1F2937';
-    const BORDER = 'FFB7C4D6';
-    const BRAND = 'FF1F4E79';
-
-    const TABLE_COLS = 10;
-    const SUMMARY_LABEL_COL = 12;
-    const SUMMARY_VALUE_COL = 13;
-    const TOTAL_COLS = 13;
-
-    const solid = (rgb: string) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: rgb } });
-    const fnt = (size: number, color: string, bold = false) => ({ name: 'Calibri', size, bold, color: { argb: color } });
-    const algn = (horizontal: 'left' | 'center' | 'right', vertical = 'middle') => ({ horizontal, vertical });
-    const borderAll = (color: string) => ({
-      top: { style: 'thin', color: { argb: color } },
-      bottom: { style: 'thin', color: { argb: color } },
-      left: { style: 'thin', color: { argb: color } },
-      right: { style: 'thin', color: { argb: color } },
-    });
-
-    const TABLE_HEADER = 7;
-    const DATA_START = 8;
-    const SUMMARY_START = 8;
-    const TOTAL = DATA_START + inRange.length;
-    const FOOTER = Math.max(TOTAL + 2, SUMMARY_START + 8);
-    const SPACER_AFTER = FOOTER - 1;
-
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Journal');
-
-    ws.getColumn(1).width = 12; // Symbol
-    ws.getColumn(2).width = 10; // Type
-    ws.getColumn(3).width = 15; // Entry
-    ws.getColumn(4).width = 15; // Exit
-    ws.getColumn(5).width = 30; // Entry Time
-    ws.getColumn(6).width = 30; // Exit Time
-    ws.getColumn(7).width = 10; // Volume
-    ws.getColumn(8).width = 15; // Net Profit
-    ws.getColumn(9).width = 15; // Emotion
-    ws.getColumn(10).width = 40; // Notes
-
-    // Summary table columns
-    ws.getColumn(12).width = 25; // Summary Label
-    ws.getColumn(13).width = 15; // Summary Value
-
-    const outlineMergedRow = (rowNum: number) => {
-      for (let c = 1; c <= TOTAL_COLS; c++) {
-        const cell = ws.getCell(rowNum, c);
-        cell.border = {
-          top: { style: 'thin', color: { argb: BORDER } },
-          bottom: { style: 'thin', color: { argb: BORDER } },
-          left: c === 1 ? { style: 'thin', color: { argb: BORDER } } : undefined,
-          right: c === TOTAL_COLS ? { style: 'thin', color: { argb: BORDER } } : undefined,
-        };
-      }
-    };
-
-    const title = ws.getCell('A1');
-    title.value = 'FX JOURNAL PRO - TRADING JOURNAL';
-    ws.mergeCells(1, 1, 1, TOTAL_COLS);
-    title.font = fnt(18, WHITE, true);
-    title.fill = solid(BRAND);
-    title.alignment = algn('center');
-    ws.getRow(1).height = 36;
-
-    const subtitle = ws.getCell('A2');
-    subtitle.value = 'Trading Performance Report';
-    ws.mergeCells(2, 1, 2, TOTAL_COLS);
-    subtitle.font = fnt(10, WHITE, true);
-    subtitle.fill = solid(BRAND);
-    subtitle.alignment = algn('center');
-    ws.getRow(2).height = 18;
-
-    const meta = [
-      `Account: ${activeAccount?.name || 'N/A'}`,
-      `Period: ${getPeriodLabel(range)}`,
-      `Exported: ${new Date().toLocaleString()}`,
-    ];
-    meta.forEach((text, i) => {
-      const r = 3 + i;
-      const cell = ws.getCell(r, 1);
-      cell.value = text;
-      ws.mergeCells(r, 1, r, TOTAL_COLS);
-      cell.font = fnt(10, NAVY_TEXT);
-      cell.fill = solid(META_FILL);
-      cell.alignment = algn('left');
-      ws.getRow(r).height = 16;
-      for (let c = 1; c <= TOTAL_COLS; c++) {
-        const cc = ws.getCell(r, c);
-        cc.border = {
-          top: { style: 'thin', color: { argb: BORDER } },
-          bottom: { style: 'thin', color: { argb: BORDER } },
-          left: c === 1 ? { style: 'thin', color: { argb: BORDER } } : undefined,
-          right: c === TOTAL_COLS ? { style: 'thin', color: { argb: BORDER } } : undefined,
-        };
-      }
-    });
-    ws.getRow(6).height = 6;
-
-    const sTitle = ws.getCell(TABLE_HEADER, SUMMARY_LABEL_COL);
-    sTitle.value = 'PERFORMANCE SUMMARY';
-    ws.mergeCells(TABLE_HEADER, SUMMARY_LABEL_COL, TABLE_HEADER, SUMMARY_VALUE_COL);
-    sTitle.font = fnt(10, WHITE, true);
-    sTitle.fill = solid(NAVY);
-    sTitle.alignment = algn('center');
-    sTitle.border = borderAll(BORDER);
-    ws.getRow(TABLE_HEADER).height = 22;
-
-    const net = stats.netProfit;
-    const summaryRows: { label: string; value: number; numFmt: string; color?: string; bold?: boolean }[] = [
-      { label: 'Total Trades', value: tradingInRange.length, numFmt: '0' },
-      { label: 'No. of Winning Trades', value: stats.wins.length, numFmt: '0' },
-      { label: 'No. of Losing Trades', value: stats.losses.length, numFmt: '0' },
-      { label: 'Win Rate (%)', value: stats.winRate, numFmt: '0.0' },
-      { label: 'Total Profit', value: stats.totalProfit, numFmt: '#,##0.00', color: GREEN, bold: true },
-      { label: 'Total Loss', value: stats.totalLoss, numFmt: '#,##0.00', color: RED, bold: true },
-      { label: 'Net Profit/Loss', value: stats.netProfit, numFmt: '#,##0.00', color: net > 0 ? GREEN : net < 0 ? RED : undefined, bold: true },
-    ];
-    summaryRows.forEach((s, i) => {
-      const r = SUMMARY_START + i;
-      const lc = ws.getCell(r, SUMMARY_LABEL_COL);
-      const vc = ws.getCell(r, SUMMARY_VALUE_COL);
-      lc.value = s.label;
-      vc.value = s.value;
-      lc.font = fnt(10, NAVY_TEXT, true);
-      lc.fill = solid(SUMMARY_FILL);
-      lc.alignment = algn('left');
-      lc.border = borderAll(BORDER);
-      vc.font = fnt(10, s.color || TEXT_COLOR, !!s.bold);
-      vc.fill = solid('FFFFFFFF');
-      vc.alignment = algn('center');
-      vc.border = borderAll(BORDER);
-      vc.numFmt = s.numFmt;
-      ws.getRow(r).height = 20;
-    });
-
-    const lastSum = SUMMARY_START + summaryRows.length - 1;
-    const tL = ws.getCell(TABLE_HEADER, SUMMARY_LABEL_COL);
-    const tV = ws.getCell(TABLE_HEADER, SUMMARY_VALUE_COL);
-    tL.border = { ...tL.border, top: { style: 'medium', color: { argb: BLUE } }, left: { style: 'medium', color: { argb: BLUE } } };
-    tV.border = { ...tV.border, top: { style: 'medium', color: { argb: BLUE } }, right: { style: 'medium', color: { argb: BLUE } } };
-    const bL = ws.getCell(lastSum, SUMMARY_LABEL_COL);
-    const bV = ws.getCell(lastSum, SUMMARY_VALUE_COL);
-    bL.border = { ...bL.border, left: { style: 'medium', color: { argb: BLUE } }, bottom: { style: 'medium', color: { argb: BLUE } } };
-    bV.border = { ...bV.border, right: { style: 'medium', color: { argb: BLUE } }, bottom: { style: 'medium', color: { argb: BLUE } } };
-
-    const headers = ['Symbol', 'Type', 'Entry', 'Exit', 'Entry Time', 'Exit Time', 'Volume', 'Net Profit', 'Emotion', 'Notes'];
-    const hr = ws.getRow(TABLE_HEADER);
-    headers.forEach((h, i) => {
-      const c = hr.getCell(i + 1);
-      c.value = h;
-      c.font = fnt(10, WHITE, true);
-      c.fill = solid(BLUE);
-      c.alignment = algn('center');
-      c.border = borderAll(BORDER);
-    });
-    hr.height = 22;
-
-    const fmtDateTime = (iso: string): string => {
-      const d = new Date(iso);
-      if (isNaN(d.getTime())) return iso;
-      const p = (n: number) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-    };
-
-    inRange.forEach((t, idx) => {
-      const row = ws.getRow(DATA_START + idx);
-      const exitDate = t.exitTime ? new Date(t.exitTime) : null;
-      const vals: (string | number)[] = [
-        t.symbol, t.type, t.entryPrice, t.exitPrice,
-        fmtDateTime(t.date), exitDate ? fmtDateTime(t.exitTime!) : '-',
-        t.lotSize, t.profit,
-        t.emotion || '-', t.notes || '-'
-      ];
-      vals.forEach((v, i) => {
-        const c = row.getCell(i + 1);
-        c.value = v;
-        c.border = borderAll(BORDER);
-        c.alignment = i === 4 || i === 5 ? algn('left') : i === 9 ? { ...algn('left'), wrapText: true } : algn('center');
-        if (i === 6) c.numFmt = '0.00';
-        // Note: Entry/Exit prices (i=2, i=3) are left with General formatting to avoid trailing zeros
-        if (i === 7) {
-          c.numFmt = '#,##0.00';
-          const num = Number(v);
-          c.font = fnt(10, num > 0 ? GREEN : num < 0 ? RED : GRAY, num !== 0);
-        }
-        if (idx % 2 === 1) c.fill = solid(ALT_FILL);
+    try {
+      const { createJournalWorkbook } = await import('./lib/journalExport');
+      const blob = await createJournalWorkbook({
+        trades: authorised.trades,
+        accountName: activeAccount?.name || 'N/A',
+        period: getPeriodLabel(getExportRange()),
       });
-      row.height = 20;
-    });
-
-    const netProfit = stats.netProfit;
-    const totLots = inRange.reduce((s, t) => s + (Number(t.lotSize) || 0), 0);
-    const tr = ws.getRow(TOTAL);
-    tr.getCell(1).value = 'TOTALS';
-    tr.getCell(7).value = totLots;
-    tr.getCell(8).value = netProfit;
-
-    // Format all cells in the TOTALS row up to column 10
-    for (let col = 1; col <= 10; col++) {
-      const c = tr.getCell(col);
-      c.fill = solid(TOTAL_FILL);
-      c.alignment = col === 1 ? algn('left') : algn('center');
-      c.border = { ...borderAll(BORDER), top: { style: 'medium', color: { argb: BLUE } } };
-
-      if (col === 7 || col === 8) {
-        c.numFmt = col === 7 ? '0.00' : '#,##0.00';
-        const num = Number(c.value);
-        c.font = fnt(10, num > 0 ? GREEN : num < 0 ? RED : NAVY_TEXT, true);
-      } else {
-        c.font = fnt(10, NAVY_TEXT, true);
-      }
+      downloadBlob(blob, getExportFilename('xlsx'));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Could not generate the Excel report. Please try again.');
     }
-    tr.height = 22;
-
-    ws.getRow(SPACER_AFTER).height = 6;
-
-    const foot = ws.getCell(FOOTER, 1);
-    foot.value = BRAND_WEBSITE;
-    ws.mergeCells(FOOTER, 1, FOOTER, TOTAL_COLS);
-    foot.font = fnt(10, WHITE, true);
-    foot.fill = solid(BRAND);
-    foot.alignment = algn('center');
-    ws.getRow(FOOTER).height = 22;
-
-    outlineMergedRow(FOOTER);
-
-    const fmtMoneyLen = (v: number) => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length;
-    const displayLen = (v: unknown, col: number): number => {
-      if (v === null || v === undefined) return 0;
-      if (typeof v === 'number') {
-        if (col === 4) return fmtMoneyLen(v);
-        if (col === 5 || col === 6) return v.toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 }).length;
-        if (col >= 7 && col <= 9) return fmtMoneyLen(v);
-        return String(v).length;
-      }
-      return String(v).length;
-    };
-    const colMax: number[] = Array(TABLE_COLS).fill(0);
-    for (let r = TABLE_HEADER; r <= TOTAL; r++) {
-      const row = ws.getRow(r);
-      for (let c = 1; c <= TABLE_COLS; c++) {
-        const cell = row.getCell(c);
-        if (cell.value === null || cell.value === undefined) continue;
-        colMax[c - 1] = Math.max(colMax[c - 1], displayLen(cell.value, c));
-      }
-    }
-    const minW = [11, 10, 8, 8, 10, 10, 10, 13, 10, 12, 12, 8];
-    const maxW = [14, 16, 12, 12, 14, 14, 14, 16, 12, 24, 18, 45];
-    const widths = colMax.map((len, i) => Math.max(minW[i], Math.min(maxW[i], Math.ceil(len * 1.15) + 2)));
-    widths.push(3, 23, 13);
-    ws.columns = widths.map(width => ({ width }));
-
-    const buf = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    downloadBlob(blob, getExportFilename('xlsx'));
   };
 
   const handleExportPdf = async () => {
@@ -4771,7 +4506,7 @@ export default function App() {
   // No user - show login page
   if (!user) {
     return (
-      <LoginPage
+      <React.Suspense fallback={<TabLoading />}><LoginPage
         isSupabaseConfigured={isSupabaseConfigured}
         onLoginSuccess={async () => {
           // Re-trigger bootstrapSession to fetch user details and accounts dynamically
@@ -4797,7 +4532,7 @@ export default function App() {
           navigate('/dashboard', { replace: true });
         }}
         authFetch={authFetch}
-      />
+      /></React.Suspense>
     );
   }
 
@@ -11445,6 +11180,14 @@ export default function App() {
 
       {/* Share Journal Modal (Pro) */}
       <ShareJournalModal
+        accountId={selectedAccountId || activeAccount?.id || (accounts.length > 0 ? accounts[0].id : undefined)}
+        accounts={accounts}
+        activeAccountName={activeAccount?.name}
+        onSelectAccount={(accId) => {
+          setSelectedAccountId(accId);
+          persistSelectedAccount(accId);
+          fetchTradesAndParams(accId);
+        }}
         isOpen={showShareModal}
         onClose={() => setShowShareModal(false)}
         isPro={isProActive}

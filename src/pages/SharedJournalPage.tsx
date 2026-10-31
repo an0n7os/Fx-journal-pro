@@ -44,6 +44,7 @@ export default function SharedJournalPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sharedData, setSharedData] = useState<{
+    portfolio?: { name: string; currency: string; startingCapital: number | null; currentBalance: number | null; netProfit: number | null; growthPercent: number | null } | null;
     valid: boolean;
     ownerName: string;
     sections: string[];
@@ -151,7 +152,7 @@ export default function SharedJournalPage({
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: sharedData?.portfolio?.currency || 'USD',
       minimumFractionDigits: 2,
     }).format(val);
   };
@@ -447,10 +448,22 @@ export default function SharedJournalPage({
         {/* 1. DASHBOARD TAB */}
         {activeSection === 'dashboard' && (
           <div className="space-y-6">
+            {sharedData.portfolio && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" aria-label="Shared portfolio balances">
+              {[
+                { label: 'Current Balance', value: sharedData.portfolio.currentBalance },
+                { label: 'Account Net P&L', value: sharedData.portfolio.netProfit },
+                { label: 'Starting Capital', value: sharedData.portfolio.startingCapital },
+                { label: 'Account Growth', value: sharedData.portfolio.growthPercent, percent: true },
+              ].map(item => <div key={item.label} className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 space-y-2">
+                <span className="text-xs text-slate-400">{item.label}</span>
+                <div className="text-xl sm:text-2xl font-bold text-white tabular-nums">{item.value === null ? '—' : item.percent ? `${item.value.toFixed(2)}%` : formatCurrency(item.value)}</div>
+                <span className="text-xs text-slate-500 block">{sharedData.portfolio?.name} · Current account totals</span>
+              </div>)}
+            </div>}
             {/* KPI Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm space-y-2">
-                <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Net P&L</span>
+                <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Trading Net P&L (selected period)</span>
                 <div
                   className={`text-xl sm:text-2xl font-extrabold ${
                     stats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'
@@ -492,8 +505,8 @@ export default function SharedJournalPage({
             <div className="p-5 sm:p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-sm font-bold text-white">Equity Growth Curve</h3>
-                  <p className="text-[11px] text-slate-400">Cumulative profit progression across all trades</p>
+                  <h3 className="text-sm font-bold text-white">{sharedData.portfolio ? 'Portfolio Growth Curve' : 'Cumulative Net P/L'}</h3>
+                  <p className="text-[11px] text-slate-400">{sharedData.portfolio ? 'Account capital plus recorded trade P/L and deposits/withdrawals' : 'Trading profit progression across the selected period'}</p>
                 </div>
               </div>
 
@@ -564,7 +577,7 @@ export default function SharedJournalPage({
           <div className="space-y-6">
             {sharedData.trades && sharedData.trades.length > 0 && (
               <KnowYourTrades
-                trades={sharedData.trades as Trade[]}
+                trades={sharedData.trades.map(t => ({ ...t, profit: t.netProfit ?? t.pnl ?? t.profit })) as Trade[]}
                 accounts={[]}
                 currency="USD"
               />
@@ -698,7 +711,7 @@ export default function SharedJournalPage({
                     paginatedTrades.map((t) => {
                       const entryDate = t.date || t.openTime || t.entryTime ? new Date(t.date || t.openTime || t.entryTime) : null;
                       const exitDate = t.exitTime || t.closeTime ? new Date(t.exitTime || t.closeTime) : null;
-                      const profit = Number(t.profit) || Number(t.pnl) || 0;
+                      const profit = Number(t.netProfit ?? t.pnl ?? (Number(t.profit || 0) + Number(t.commission || 0) + Number(t.swap || 0)));
                       const isProfit = profit >= 0;
                       return (
                         <tr key={t.id} className="border-b border-[#1f2937] hover:bg-white/[0.02] transition">
@@ -780,7 +793,7 @@ export default function SharedJournalPage({
               ) : (
                 paginatedTrades.map((t) => {
                   const isProfit = (Number(t.profit) || Number(t.pnl) || 0) >= 0;
-                  const profit = Number(t.profit) || Number(t.pnl) || 0;
+                  const profit = Number(t.netProfit ?? t.pnl ?? (Number(t.profit || 0) + Number(t.commission || 0) + Number(t.swap || 0)));
                   const entryDate = t.date || t.openTime || t.entryTime ? new Date(t.date || t.openTime || t.entryTime) : null;
                   return (
                     <div

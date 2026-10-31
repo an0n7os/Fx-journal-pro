@@ -17,6 +17,7 @@ import {
   Eye,
   Loader2,
   Sparkles,
+  Briefcase,
 } from 'lucide-react';
 import { useScrollLock } from '../lib/useScrollLock';
 
@@ -24,6 +25,7 @@ export interface SharedLinkItem {
   token: string;
   userId: string;
   userName: string;
+  accountId?: string;
   sections: string[];
   months: number | 'all';
   active: boolean;
@@ -33,6 +35,10 @@ export interface SharedLinkItem {
 }
 
 interface ShareJournalModalProps {
+  accountId?: string;
+  accounts?: any[];
+  activeAccountName?: string;
+  onSelectAccount?: (id: string) => void;
   isOpen: boolean;
   onClose: () => void;
   isPro: boolean;
@@ -46,6 +52,10 @@ export default function ShareJournalModal({
   isPro,
   onUpgrade,
   getAuthHeaders,
+  accountId,
+  accounts,
+  activeAccountName,
+  onSelectAccount,
 }: ShareJournalModalProps) {
   // Prevent background scrolling when share modal is open
   useScrollLock(isOpen);
@@ -57,7 +67,7 @@ export default function ShareJournalModal({
     'dashboard',
     'journal',
   ]);
-  const [selectedMonths, setSelectedMonths] = useState<number | 'all'>(3);
+  const [selectedMonths, setSelectedMonths] = useState<number | 'all'>('all');
   const [generating, setGenerating] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<{
     token: string;
@@ -67,6 +77,24 @@ export default function ShareJournalModal({
   } | null>(null);
   const [copied, setCopied] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Selected account state
+  const [selectedAccId, setSelectedAccId] = useState<string>(
+    accountId || (accounts && accounts.length > 0 ? accounts[0].id : '')
+  );
+
+  useEffect(() => {
+    if (accountId) {
+      setSelectedAccId(accountId);
+    } else if (accounts && accounts.length > 0) {
+      setSelectedAccId((prev) => prev || accounts[0].id);
+    }
+  }, [accountId, accounts]);
+
+  const currentAccount = React.useMemo(() => {
+    if (!accounts || accounts.length === 0) return null;
+    return accounts.find((a: any) => a.id === selectedAccId) || accounts[0];
+  }, [accounts, selectedAccId]);
 
   // Active links list
   const [links, setLinks] = useState<SharedLinkItem[]>([]);
@@ -128,12 +156,15 @@ export default function ShareJournalModal({
     setErrorMsg('');
     setGenerating(true);
 
+    const targetAccountId = selectedAccId || accountId || (accounts && accounts.length > 0 ? accounts[0].id : undefined);
+
     try {
       const res = await fetch('/api/shared-links', {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
           sections: selectedSections,
+          ...(targetAccountId ? { accountId: targetAccountId } : {}),
           months: selectedMonths,
         }),
       });
@@ -341,6 +372,53 @@ export default function ShareJournalModal({
             {activeTab === 'create' && (
               <>
                 <div className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6 flex-1 min-h-0">
+                  {/* Portfolio Scope */}
+                  <div className="p-3.5 rounded-xl border border-violet-200 dark:border-violet-900/50 bg-gradient-to-r from-violet-50/70 to-indigo-50/50 dark:from-violet-950/20 dark:to-indigo-950/20 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                        <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                          Active Portfolio Scope
+                        </span>
+                      </div>
+                      {currentAccount && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-600/10 text-violet-700 dark:text-violet-300 border border-violet-500/20">
+                          {currentAccount.currency || 'USD'}
+                        </span>
+                      )}
+                    </div>
+
+                    {accounts && accounts.length > 1 ? (
+                      <div>
+                        <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1 font-medium">
+                          Select which portfolio to share:
+                        </label>
+                        <select
+                          value={selectedAccId}
+                          onChange={(e) => {
+                            setSelectedAccId(e.target.value);
+                            if (onSelectAccount) onSelectAccount(e.target.value);
+                          }}
+                          className="w-full text-xs font-semibold px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        >
+                          {accounts.map((acc: any) => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.name || 'Portfolio Account'} {acc.broker ? `(${acc.broker})` : ''} - {acc.currency || 'USD'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                        {currentAccount?.name || activeAccountName || 'Active Portfolio Account'}
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-snug">
+                      🔒 <strong>Strict Portfolio Isolation:</strong> Only trades and metrics from this specific portfolio will appear in the shared link. Your other portfolios will never be merged.
+                    </p>
+                  </div>
+
                   {/* 1. Sections to Share */}
                   <div>
                     <label className="block text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-2">
@@ -560,6 +638,16 @@ export default function ShareJournalModal({
                           </div>
 
                           <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                            {link.accountId ? (
+                              <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-[10px] font-semibold flex items-center gap-1 border border-blue-200/50 dark:border-blue-800/40">
+                                <Briefcase className="h-2.5 w-2.5" />
+                                {accounts?.find((a: any) => a.id === link.accountId)?.name || 'Specific Portfolio'}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[10px] font-semibold border border-amber-200/50 dark:border-amber-800/40">
+                                All Portfolios (Legacy)
+                              </span>
+                            )}
                             {link.sections.map((s) => (
                               <span
                                 key={s}

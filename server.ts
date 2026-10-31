@@ -1,3 +1,5 @@
+import { sharedPortfolio, sharedBalanceCurve } from './src/lib/sharedPortfolio';
+import { selectSharedTrades } from './src/lib/sharedTradeScope';
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
@@ -237,6 +239,7 @@ try {
   if (
     err instanceof Error &&
     (err.message === 'Supabase credentials are required in production' ||
+      err.message === 'Database credentials (DATABASE_URL or Supabase) are required in production' ||
       err.message === 'A public Supabase key cannot be used as the server key')
   ) throw err;
   console.error('[AxyFx Journal Server] Failed to initialize Supabase client:', err);
@@ -2245,7 +2248,9 @@ async function ensureUserDbLoaded(userId?: string, email?: string) {
         trades: (shared.trades || []).filter((t: any) => t.userId === seeded.id || accountIds.has(t.accountId)),
         riskSettings: (shared.riskSettings || []).filter((r: any) => r.userId === seeded.id),
         supportTickets: (shared.supportTickets || []).filter((t: any) => t.userId === seeded.id),
-        mt5Deals: [],
+        mt5Deals: (shared.mt5Deals || []).filter((d: any) => d.userId === seeded.id || accountIds.has(d.accountId)),
+        mt5ConnectJobs: (shared.mt5ConnectJobs || []).filter((j: any) => j.userId === seeded.id || accountIds.has(j.accountId)),
+        mt5ConnectionErrors: (shared.mt5ConnectionErrors || []).filter((e: any) => e.userId === seeded.id || accountIds.has(e.accountId)),
         payments: (shared.payments || []).filter((p: any) => p.userId === seeded.id),
       };
       userDatabases.set(seeded.id, fromFile);
@@ -2346,7 +2351,33 @@ async function saveDatabase(
     userDatabases.delete(previousAliases.email.toLowerCase());
   }
 
-  if (!useSupabase) return {};
+  if (!useSupabase) {
+    // Local mode must survive process restarts too. Merge only this tenant's
+    // rows into the shared file; replacing the file with a per-user snapshot
+    // would erase other customers and payment history.
+    const shared = loadDatabaseFromFile();
+    shared.users = shared.users || [];
+    const storedUser = shared.users.find((u: any) => u.id === uid);
+    shared.users = shared.users.filter((u: any) => u.id !== uid);
+    shared.users.push({ ...storedUser, ...targetUser });
+    const ownedAccounts = new Set([
+      ...(shared.accounts || []).filter((a: any) => (a.userId || a.user_id) === uid).map((a: any) => a.id),
+      ...(data.accounts || []).filter((a: any) => (a.userId || a.user_id) === uid).map((a: any) => a.id),
+    ]);
+    const belongsToUser = (row: any) => {
+      const owner = row.userId || row.user_id;
+      return owner ? owner === uid : ownedAccounts.has(row.accountId || row.account_id);
+    };
+    for (const key of ['accounts', 'trades', 'riskSettings', 'supportTickets', 'mt5Deals', 'mt5ConnectJobs', 'mt5ConnectionErrors']) {
+      if (!Array.isArray(data[key])) continue;
+      shared[key] = [
+        ...(shared[key] || []).filter((row: any) => !belongsToUser(row)),
+        ...data[key].filter(belongsToUser),
+      ];
+    }
+    fs.writeFileSync(DB_FILE, JSON.stringify(shared, null, 2), 'utf-8');
+    return {};
+  }
 
   try {
     // Upsert users
@@ -6476,11 +6507,31 @@ function reapExpiredJobs(db: any): number {
 
 /** Every local database that might hold a queued job. */
 const allJobDbs = (): any[] => {
-  const seen = new Set<any>();
+  const seen = new Set<string>();
   const out: any[] = [];
-  const add = (d: any) => { if (d && !seen.has(d)) { seen.add(d); out.push(d); } };
-  try { add(loadDatabaseFromFile()); } catch { /* caches below still count */ }
+  const add = (d: any) => {
+    const uid = d?.users?.[0]?.id;
+    if (uid && !seen.has(uid)) { seen.add(uid); out.push(d); }
+  };
+  // One live copy per tenant. Reading both the persisted snapshot and its
+  // cache let a second worker claim the same formerly-PENDING job.
   for (const cached of userDatabases.values()) add(cached);
+  try {
+    const shared = loadDatabaseFromFile();
+    for (const user of shared.users || []) {
+      if (seen.has(user.id)) continue;
+      const accounts = (shared.accounts || []).filter((a: any) => (a.userId || a.user_id) === user.id);
+      const ids = new Set(accounts.map((a: any) => a.id));
+      const owned = (r: any) => (r.userId || r.user_id) === user.id || ids.has(r.accountId || r.account_id);
+      const db: any = { users: [user], accounts };
+      for (const key of ['trades', 'riskSettings', 'supportTickets', 'mt5Deals', 'mt5ConnectJobs', 'mt5ConnectionErrors']) {
+        db[key] = (shared[key] || []).filter(owned);
+      }
+      userDatabases.set(user.id, db);
+      if (user.email) userDatabases.set(user.email.toLowerCase(), db);
+      add(db);
+    }
+  } catch { /* live caches above still count */ }
   return out;
 };
 
@@ -13567,6 +13618,7 @@ app.get('/api/reminders/whatsapp', (req, res) => {
 // ==========================================
 
 interface SharedJournalLink {
+  accountId?: string;
   token: string;
   userId: string;
   userName: string;
@@ -13609,6 +13661,7 @@ async function getUserSharedLinks(userId: string): Promise<SharedJournalLink[]> 
               token: r.token,
               userId: r.user_id,
               userName: r.user_name || 'Trader',
+              accountId: r.account_id || r.accountId || undefined,
               sections: Array.isArray(r.sections) ? r.sections : ['dashboard', 'journal'],
               months: r.months === 'all' ? 'all' : (Number(r.months) || 3),
               active: r.active !== false,
@@ -13662,6 +13715,7 @@ async function saveUserSharedLink(userId: string, link: SharedJournalLink): Prom
           token: link.token,
           user_id: link.userId,
           user_name: link.userName,
+          account_id: link.accountId || null,
           sections: link.sections,
           months: String(link.months),
           active: link.active,
@@ -13699,6 +13753,7 @@ async function findSharedLinkByToken(token: string): Promise<{ link: SharedJourn
             token: row.token,
             userId: row.user_id,
             userName: row.user_name || userRow?.name || 'Trader',
+            accountId: row.account_id || row.accountId || undefined,
             sections: Array.isArray(row.sections) ? row.sections : ['dashboard', 'journal'],
             months: row.months === 'all' ? 'all' : (Number(row.months) || 3),
             active: row.active !== false,
@@ -13872,7 +13927,19 @@ app.post('/api/shared-links', async (req, res) => {
     });
   }
 
-  const { sections, months } = req.body || {};
+  const { sections, months, accountId } = req.body || {};
+  if (accountId !== undefined) {
+    let accounts = (req as any).userDb?.accounts || [];
+    if (accounts.length === 0 && useSupabase) {
+      try {
+        const { data: dbAccs } = await supabase.from('trading_accounts').select('id,user_id').eq('user_id', currentUser.id);
+        if (Array.isArray(dbAccs)) accounts = toCamel(dbAccs);
+      } catch (_) {}
+    }
+    if (typeof accountId !== 'string' || !accounts.some((a: any) => a.id === accountId && (a.userId || a.user_id) === currentUser.id)) {
+      return res.status(404).json({ error: 'Selected account not found.' });
+    }
+  }
   const allowedSections = ['dashboard', 'analysis', 'journal', 'calendar'];
   const validSections = (Array.isArray(sections) ? sections : [])
     .filter((s: string) => allowedSections.includes(s));
@@ -13894,6 +13961,7 @@ app.post('/api/shared-links', async (req, res) => {
   // Generate secure 12-char URL safe token
   const token = crypto.randomBytes(9).toString('base64url');
   const newLink: SharedJournalLink = {
+    ...(accountId ? { accountId } : {}),
     token,
     userId: currentUser.id,
     userName: currentUser.name || (currentUser.email ? currentUser.email.split('@')[0] : 'Trader'),
@@ -13954,26 +14022,30 @@ app.get('/api/shared/:token', async (req, res) => {
   // this endpoint is public and the viewer's own session must not change what
   // it returns.
   let allTrades: any[] = [];
+  let ownerAccounts: any[] = [];
   if (!useSupabase) {
     const ownerDb = await ensureUserDbLoaded(link.userId, match.ownerUser?.email || '');
-    const ownerAccountIds = new Set(
-      (ownerDb?.accounts || []).filter((a: any) => a.userId === link.userId).map((a: any) => a.id),
-    );
-    allTrades = (ownerDb?.trades || [])
-      .filter((t: any) => t.userId === link.userId || (t.accountId && ownerAccountIds.has(t.accountId)))
-      .sort((a: any, b: any) => String(b.date || '').localeCompare(String(a.date || '')));
+    ownerAccounts = ownerDb?.accounts || [];
+    allTrades = ownerDb?.trades || [];
   } else {
     try {
-      const { data: rows } = await supabase
-        .from('trades')
-        .select('*')
-        .eq('user_id', link.userId)
-        .order('date', { ascending: false });
-      if (rows) allTrades = toCamel(rows);
-    } catch (err: any) {
-      console.error('[GET /api/shared/:token] Error loading trades:', err?.message);
+      const [tradesResult, accountsResult] = await Promise.all([
+        supabase.from('trades').select('*').eq('user_id', link.userId).order('date', { ascending: false }),
+        supabase.from('trading_accounts').select('id,user_id,name,currency,starting_balance,current_balance').eq('user_id', link.userId),
+      ]);
+      if (tradesResult.error || accountsResult.error) throw new Error('Shared data unavailable');
+      allTrades = toCamel(tradesResult.data || []);
+      ownerAccounts = toCamel(accountsResult.data || []);
+    } catch {
+      return res.status(503).json({ error: 'Shared journal data is temporarily unavailable. Please try again.' });
     }
   }
+  if (link.accountId && !ownerAccounts.some(a => a.id === link.accountId && (a.userId || a.user_id) === link.userId)) {
+    return res.status(404).json({ error: 'The shared portfolio is no longer available.' });
+  }
+  allTrades = selectSharedTrades(allTrades, ownerAccounts, link.userId, link.accountId);
+  allTrades.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  const tradePnl = (t: any) => Number(t.profit ?? t.pnl ?? 0) + Number(t.commission || 0) + Number(t.swap || 0);
 
   // Filter out non-trading items (deposits, withdrawals)
   let tradingTrades = allTrades.filter(t => t.type !== 'Deposit' && t.type !== 'Withdrawal');
@@ -13989,30 +14061,25 @@ app.get('/api/shared/:token', async (req, res) => {
 
   // Compute summary stats
   const totalTrades = tradingTrades.length;
-  const wins = tradingTrades.filter(t => (Number(t.profit) || Number(t.pnl) || 0) > 0);
-  const losses = tradingTrades.filter(t => (Number(t.profit) || Number(t.pnl) || 0) < 0);
+  const wins = tradingTrades.filter(t => tradePnl(t) > 0);
+  const losses = tradingTrades.filter(t => tradePnl(t) < 0);
   const winRate = totalTrades > 0 ? (wins.length / totalTrades) * 100 : 0;
-  const netProfit = tradingTrades.reduce((acc, t) => acc + (Number(t.profit) || Number(t.pnl) || 0), 0);
-  const grossProfit = wins.reduce((acc, t) => acc + (Number(t.profit) || Number(t.pnl) || 0), 0);
-  const grossLoss = Math.abs(losses.reduce((acc, t) => acc + (Number(t.profit) || Number(t.pnl) || 0), 0));
+  const netProfit = tradingTrades.reduce((acc, t) => acc + tradePnl(t), 0);
+  const grossProfit = wins.reduce((acc, t) => acc + tradePnl(t), 0);
+  const grossLoss = Math.abs(losses.reduce((acc, t) => acc + tradePnl(t), 0));
   const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : (grossProfit > 0 ? 99.9 : 0);
   const avgWin = wins.length > 0 ? grossProfit / wins.length : 0;
   const avgLoss = losses.length > 0 ? grossLoss / losses.length : 0;
-  const bestTrade = totalTrades > 0 ? Math.max(...tradingTrades.map(t => Number(t.profit) || Number(t.pnl) || 0)) : 0;
-  const worstTrade = totalTrades > 0 ? Math.min(...tradingTrades.map(t => Number(t.profit) || Number(t.pnl) || 0)) : 0;
+  const bestTrade = totalTrades > 0 ? Math.max(...tradingTrades.map(t => tradePnl(t))) : 0;
+  const worstTrade = totalTrades > 0 ? Math.min(...tradingTrades.map(t => tradePnl(t))) : 0;
 
-  // Cumulative equity curve data for charts
-  let runningEquity = 0;
-  const sortedChrono = [...tradingTrades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const equityCurve = sortedChrono.map((t, idx) => {
-    runningEquity += (Number(t.profit) || Number(t.pnl) || 0);
-    return {
-      tradeNum: idx + 1,
-      date: t.date ? String(t.date).slice(0, 10) : '',
-      pnl: Number(t.profit) || Number(t.pnl) || 0,
-      equity: Math.round(runningEquity * 100) / 100,
-    };
-  });
+  const ownedAccounts = ownerAccounts.filter(a => (a.userId || a.user_id) === link.userId);
+  const selectedPortfolio = link.accountId ? ownedAccounts.find(a => a.id === link.accountId) : ownedAccounts.length === 1 ? ownedAccounts[0] : null;
+  const portfolio = sharedPortfolio(selectedPortfolio);
+  const cutoff = link.months === 'all' ? -Infinity : Date.now() - Number(link.months) * 30 * 86400000;
+  // The workspace chart starts at capital and includes deposits/withdrawals.
+  // Keep historical cash flows before a filtered period in its opening balance.
+  const equityCurve = sharedBalanceCurve(portfolio ? allTrades : tradingTrades, portfolio?.startingCapital ?? 0, cutoff);
 
   // Strict Privacy: Sanitize trade rows (strip private account ids, broker passwords, secret tags, emails)
   // ONLY return full trade table fields if 'journal' was selected by owner!
@@ -14027,8 +14094,9 @@ app.get('/api/shared/:token', async (req, res) => {
         exitPrice: t.exitPrice ?? 0,
         date: t.date || t.openTime || t.open_time || null,
         exitTime: t.exitTime || t.exit_time || t.closeTime || null,
-        profit: Number(t.profit) || Number(t.pnl) || 0,
-        pnl: Number(t.profit) || Number(t.pnl) || 0,
+        profit: Number(t.profit ?? t.pnl ?? 0),
+        netProfit: tradePnl(t),
+        pnl: tradePnl(t),
         sl: t.sl || null,
         tp: t.tp || null,
         emotion: t.emotion || 'Calm',
@@ -14044,8 +14112,8 @@ app.get('/api/shared/:token', async (req, res) => {
           type: t.type,
           date: t.date || t.openTime || t.open_time || null,
           exitTime: t.exitTime || t.exit_time || t.closeTime || null,
-          profit: Number(t.profit) || Number(t.pnl) || 0,
-          pnl: Number(t.profit) || Number(t.pnl) || 0,
+          profit: tradePnl(t),
+          pnl: tradePnl(t),
         }))
       : [];
 
@@ -14057,7 +14125,7 @@ app.get('/api/shared/:token', async (req, res) => {
     for (const t of tradingTrades) {
       const sym = (t.symbol || 'OTHER').toUpperCase();
       if (!pairMap[sym]) pairMap[sym] = { trades: 0, wins: 0, profit: 0 };
-      const p = Number(t.profit) || Number(t.pnl) || 0;
+      const p = tradePnl(t);
       pairMap[sym].trades += 1;
       if (p > 0) pairMap[sym].wins += 1;
       pairMap[sym].profit += p;
@@ -14079,6 +14147,7 @@ app.get('/api/shared/:token', async (req, res) => {
   res.json({
     valid: true,
     ownerName: link.userName || 'Verified Trader',
+    portfolio: link.sections.includes('dashboard') ? portfolio : null,
     sections: link.sections,
     months: link.months,
     createdAt: link.createdAt,

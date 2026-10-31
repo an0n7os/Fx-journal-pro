@@ -32,6 +32,7 @@ check('two users signed in', !!alice.cookie && !!bob.cookie);
 // Alice gets a default portfolio account
 const aliceAccounts = await api('/api/accounts', { cookie: alice.cookie });
 const aliceAccId = aliceAccounts.json?.accounts?.[0]?.id;
+const initialBalance = aliceAccounts.json?.accounts?.[0]?.currentBalance;
 check('default account created', !!aliceAccId, `accounts: ${aliceAccounts.json?.accounts?.length}`);
 
 // Log a trade
@@ -45,7 +46,7 @@ const trade = await api('/api/trades', {
 });
 check('trade created', trade.status === 200 && !!trade.json?.trade?.id, `status ${trade.status}`);
 check('trade id is a uuid', /^trade_[0-9a-f-]{36}$/.test(trade.json?.trade?.id || ''), trade.json?.trade?.id);
-check('balance updated', trade.json?.updatedAccount?.currentBalance === 10098,
+check('balance updated', trade.json?.updatedAccount?.currentBalance === initialBalance + 98,
   `balance ${trade.json?.updatedAccount?.currentBalance}`);
 
 // Update it — the old code could turn the balance into NaN here
@@ -55,7 +56,7 @@ const upd = await api(`/api/trades/${trade.json.trade.id}`, {
 const afterUpdate = await api('/api/accounts', { cookie: alice.cookie });
 const bal = afterUpdate.json?.accounts?.find((a) => a.id === aliceAccId)?.currentBalance;
 check('trade updated', upd.status === 200, `status ${upd.status}`);
-check('balance is a finite number (no NaN)', Number.isFinite(bal) && bal === 10148, `balance ${bal}`);
+check('balance is a finite number (no NaN)', Number.isFinite(bal) && bal === initialBalance + 148, `balance ${bal}`);
 
 // Batch import twice — the second run must be skipped as duplicates
 const rows = [
