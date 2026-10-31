@@ -343,8 +343,8 @@ export default function App() {
     window.localStorage.removeItem('auth_session_token');
     window.localStorage.removeItem('selected_account_id');
     try {
-      (authClient as any).signOut().catch(() => {});
-    } catch (_) {}
+      (authClient as any).signOut().catch(() => { });
+    } catch (_) { }
     return fetch('/api/auth/logout', {
       method: 'POST',
       credentials: 'include',
@@ -575,7 +575,7 @@ export default function App() {
             setViewingScreenshots({ images: parsed, index: 0 });
             return;
           }
-        } catch {}
+        } catch { }
       }
       setViewingScreenshots({ images: [url], index: 0 });
     }
@@ -1018,7 +1018,7 @@ export default function App() {
             data.user.avatar = localAvatar;
           }
           if (data.user.avatar && userId) {
-            try { localStorage.setItem(`user_avatar_${userId}`, data.user.avatar); } catch {}
+            try { localStorage.setItem(`user_avatar_${userId}`, data.user.avatar); } catch { }
           }
           // Keep sessionStorage in sync with the server's canonical user id
           persistAuthSession(data.user.id || userId, data.user.email || email, data.sessionToken);
@@ -1343,6 +1343,15 @@ export default function App() {
     }).format(val);
   };
 
+  // UI Trade Price formatting (clean floating-point precision artifacts)
+  const formatPrice = (val: any) => {
+    if (val === null || val === undefined || val === '') return '—';
+    const num = Number(val);
+    if (isNaN(num)) return String(val);
+    if (Number.isInteger(num)) return num.toString();
+    return parseFloat(num.toFixed(5)).toString();
+  };
+
   // authFetch — wraps native fetch and injects auth credentials, bearer tokens, and headers
   const authFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
     const storedUserId = user?.id || sessionStorage.getItem('auth_user_id') || localStorage.getItem('auth_user_id') || '';
@@ -1453,7 +1462,7 @@ export default function App() {
               };
               res = await fetch('/api/auth/me', { headers: retryHeaders, credentials: 'include' });
             }
-          } catch (_) {}
+          } catch (_) { }
         }
 
         if (res.ok) {
@@ -1468,7 +1477,7 @@ export default function App() {
               data.user.avatar = localAv;
             }
             if (data.user.avatar && uid) {
-              try { localStorage.setItem(`user_avatar_${uid}`, data.user.avatar); } catch {}
+              try { localStorage.setItem(`user_avatar_${uid}`, data.user.avatar); } catch { }
             }
             // If previous user in localStorage was different, clear previous user's cached accounts & trades immediately
             const prevStoredId = sessionStorage.getItem('auth_user_id') || localStorage.getItem('auth_user_id');
@@ -2843,7 +2852,7 @@ export default function App() {
           if (res.ok && data.user) {
             const uid = data.user.id || user?.id;
             if (dataUrl && uid) {
-              try { localStorage.setItem(`user_avatar_${uid}`, dataUrl); } catch {}
+              try { localStorage.setItem(`user_avatar_${uid}`, dataUrl); } catch { }
             }
             if (!data.user.avatar && dataUrl) {
               data.user.avatar = dataUrl;
@@ -2879,7 +2888,7 @@ export default function App() {
         setAvatarUploading(true);
         setSettingsAvatar('');
         if (user?.id) {
-          try { localStorage.removeItem(`user_avatar_${user.id}`); } catch {}
+          try { localStorage.removeItem(`user_avatar_${user.id}`); } catch { }
         }
         try {
           const res = await authFetch('/api/auth/update-profile', {
@@ -2943,9 +2952,9 @@ export default function App() {
         if (data.user) {
           const uid = data.user.id || user?.id;
           if (settingsAvatar && uid) {
-            try { localStorage.setItem(`user_avatar_${uid}`, settingsAvatar); } catch {}
+            try { localStorage.setItem(`user_avatar_${uid}`, settingsAvatar); } catch { }
           } else if (!settingsAvatar && uid) {
-            try { localStorage.removeItem(`user_avatar_${uid}`); } catch {}
+            try { localStorage.removeItem(`user_avatar_${uid}`); } catch { }
           }
           if (settingsAvatar && !data.user.avatar) {
             data.user.avatar = settingsAvatar;
@@ -4733,8 +4742,8 @@ export default function App() {
                     <button
                       onClick={() => setNotificationFilter('all')}
                       className={`flex-1 py-1 px-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${notificationFilter === 'all'
-                          ? 'bg-white/[0.08] text-white shadow-xs font-semibold'
-                          : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-white/[0.08] text-white shadow-xs font-semibold'
+                        : 'text-slate-400 hover:text-slate-200'
                         }`}
                     >
                       <span>All</span>
@@ -4743,8 +4752,8 @@ export default function App() {
                     <button
                       onClick={() => setNotificationFilter('unread')}
                       className={`flex-1 py-1 px-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${notificationFilter === 'unread'
-                          ? 'bg-white/[0.08] text-white shadow-xs font-semibold'
-                          : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-white/[0.08] text-white shadow-xs font-semibold'
+                        : 'text-slate-400 hover:text-slate-200'
                         }`}
                     >
                       <span>Unread</span>
@@ -4830,8 +4839,8 @@ export default function App() {
                             }
                           }}
                           className={`pt-2 pb-2 px-2.5 rounded-xl transition-all cursor-pointer flex items-start gap-2.5 relative group ${isUnread
-                              ? 'bg-white/[0.03] hover:bg-white/[0.05]'
-                              : 'hover:bg-white/[0.02] opacity-75 hover:opacity-100'
+                            ? 'bg-white/[0.03] hover:bg-white/[0.05]'
+                            : 'hover:bg-white/[0.02] opacity-75 hover:opacity-100'
                             }`}
                         >
                           {/* Clean minimal squircle icon */}
@@ -5304,11 +5313,10 @@ export default function App() {
 
         {/* Main Content Area */}
         <main
-          className={`flex-1 ${
-            activeTab === 'insights'
+          className={`flex-1 ${activeTab === 'insights'
               ? 'overflow-hidden p-0 flex flex-col h-[calc(100dvh-60px)] pb-16 md:pb-0 bg-white dark:bg-[#090b14]'
               : 'overflow-y-auto bg-[#FBFBFA] dark:bg-slate-950 px-3.5 sm:px-4 md:px-12 pt-3 sm:pt-4 md:pt-8 pb-32 md:pb-6 space-y-4 sm:space-y-6 md:space-y-8'
-          }`}
+            }`}
           onScroll={handleMainScroll}
         >
           <React.Suspense fallback={<TabLoading />}>
@@ -5359,9 +5367,8 @@ export default function App() {
             )}
 
             {/* Dynamic Title bar — hidden on insights (dedicated full window), and hidden on mobile dashboard */}
-            <div className={`flex flex-col sm:flex-row items-stretch sm:items-start justify-between gap-3 sm:gap-4 w-full ${
-              activeTab === 'insights' ? 'hidden' : activeTab === 'dashboard' ? 'hidden sm:flex' : ''
-            }`}>
+            <div className={`flex flex-col sm:flex-row items-stretch sm:items-start justify-between gap-3 sm:gap-4 w-full ${activeTab === 'insights' ? 'hidden' : activeTab === 'dashboard' ? 'hidden sm:flex' : ''
+              }`}>
               <div className="flex-1 min-w-0">
                 <div>
                   <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white font-display sm:truncate">
@@ -5478,8 +5485,8 @@ export default function App() {
                                 {activeAccount ? formatValue(_curBal) : '—'}
                               </p>
                               <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9.5px] font-bold border ${growthPct >= 0
-                                  ? 'bg-emerald-400/15 border-emerald-300/30 text-emerald-200'
-                                  : 'bg-rose-400/15 border-rose-300/30 text-rose-200'
+                                ? 'bg-emerald-400/15 border-emerald-300/30 text-emerald-200'
+                                : 'bg-rose-400/15 border-rose-300/30 text-rose-200'
                                 }`}>
                                 {growthPct >= 0 ? '↑' : '↓'} {Math.abs(growthPct).toFixed(2)}%
                               </span>
@@ -6201,11 +6208,11 @@ export default function App() {
                                         {t.type}
                                       </span>
                                     </td>
-                                    <td className="py-4 px-4 border-l border-slate-100 dark:border-[#1f2937] font-medium text-slate-700 dark:text-slate-300 text-center">
-                                      {t.entryPrice}
+                                    <td className="py-4 px-4 border-l border-slate-100 dark:border-[#1f2937] font-medium text-slate-700 dark:text-slate-300 text-center font-mono">
+                                      {formatPrice(t.entryPrice)}
                                     </td>
-                                    <td className="py-4 px-4 border-l border-slate-100 dark:border-[#1f2937] font-medium text-slate-700 dark:text-slate-300 text-center">
-                                      {t.exitPrice}
+                                    <td className="py-4 px-4 border-l border-slate-100 dark:border-[#1f2937] font-medium text-slate-700 dark:text-slate-300 text-center font-mono">
+                                      {formatPrice(t.exitPrice)}
                                     </td>
                                     <td className="py-4 px-4 border-l border-slate-100 dark:border-[#1f2937] text-slate-700 dark:text-slate-300 text-center">
                                       <div className="flex flex-col items-center justify-center gap-0.5">
@@ -6367,9 +6374,9 @@ export default function App() {
                               </div>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center text-[12px] text-slate-600 dark:text-slate-300 font-mono">
-                                  <span>{t.entryPrice}</span>
+                                  <span>{formatPrice(t.entryPrice)}</span>
                                   <span className="mx-2 text-slate-400">&rarr;</span>
-                                  <span>{t.exitPrice}</span>
+                                  <span>{formatPrice(t.exitPrice)}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
                                   {new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -7011,11 +7018,11 @@ export default function App() {
                             </div>
                             <div>
                               <span className="text-slate-400 font-medium block">Entry Price</span>
-                              <span className="font-bold text-slate-800 dark:text-slate-200">{bestTrade.entryPrice}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{formatPrice(bestTrade.entryPrice)}</span>
                             </div>
                             <div>
                               <span className="text-slate-400 font-medium block">Exit Price</span>
-                              <span className="font-bold text-slate-800 dark:text-slate-200">{bestTrade.exitPrice}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{formatPrice(bestTrade.exitPrice)}</span>
                             </div>
                           </div>
                         </div>
@@ -7060,11 +7067,11 @@ export default function App() {
                             </div>
                             <div>
                               <span className="text-slate-400 font-medium block">Entry Price</span>
-                              <span className="font-bold text-slate-800 dark:text-slate-200">{worstTrade.entryPrice}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{formatPrice(worstTrade.entryPrice)}</span>
                             </div>
                             <div>
                               <span className="text-slate-400 font-medium block">Exit Price</span>
-                              <span className="font-bold text-slate-800 dark:text-slate-200">{worstTrade.exitPrice}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{formatPrice(worstTrade.exitPrice)}</span>
                             </div>
                           </div>
                         </div>
@@ -7846,8 +7853,8 @@ export default function App() {
                               type="button"
                               onClick={() => setSettingsTab(tab.id as any)}
                               className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${isActive
-                                  ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30 ring-1 ring-violet-400/40'
-                                  : 'bg-slate-900/60 dark:bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-slate-200'
+                                ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30 ring-1 ring-violet-400/40'
+                                : 'bg-slate-900/60 dark:bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-slate-200'
                                 }`}
                             >
                               <TabIcon className="h-3.5 w-3.5 shrink-0" />
@@ -8220,8 +8227,8 @@ export default function App() {
                               <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between gap-1 border-t sm:border-t-0 border-slate-800 pt-3 sm:pt-0">
                                 <span className="text-[11px] text-slate-400 font-medium">Mentor Access:</span>
                                 <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-md ${partnerLink.allowPartnerTradeView || (mentorAccess && (mentorAccess.dashboard || mentorAccess.analysis || mentorAccess.journal || mentorAccess.calendar || mentorAccess.liveCharts))
-                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
-                                    : 'bg-amber-500/15 text-amber-300 border border-amber-500/25'
+                                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                                  : 'bg-amber-500/15 text-amber-300 border border-amber-500/25'
                                   }`}>
                                   {partnerLink.allowPartnerTradeView || (mentorAccess && (mentorAccess.dashboard || mentorAccess.analysis || mentorAccess.journal || mentorAccess.calendar || mentorAccess.liveCharts)) ? 'Trade Details Enabled' : 'Name & Plan Only'}
                                 </span>
@@ -9775,8 +9782,8 @@ export default function App() {
                       type="button"
                       onClick={() => setNewAccInstitutionType('Broker')}
                       className={`py-1.5 text-xs font-semibold rounded-md transition-all ${newAccInstitutionType === 'Broker'
-                          ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-300 shadow-xs'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-300 shadow-xs'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                         }`}
                     >
                       Broker
@@ -9785,8 +9792,8 @@ export default function App() {
                       type="button"
                       onClick={() => setNewAccInstitutionType('Prop Firm')}
                       className={`py-1.5 text-xs font-semibold rounded-md transition-all ${newAccInstitutionType === 'Prop Firm'
-                          ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-300 shadow-xs'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-300 shadow-xs'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                         }`}
                     >
                       Prop Firm
@@ -10103,11 +10110,10 @@ export default function App() {
                     key={i}
                     type="button"
                     onClick={() => setViewingScreenshots(prev => prev ? { ...prev, index: i } : null)}
-                    className={`relative w-12 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
-                      i === viewingScreenshots.index
+                    className={`relative w-12 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${i === viewingScreenshots.index
                         ? 'border-violet-500 ring-2 ring-violet-500/40 scale-105'
                         : 'border-white/20 opacity-60 hover:opacity-100 hover:border-white/50'
-                    }`}
+                      }`}
                   >
                     <img src={img} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" />
                   </button>

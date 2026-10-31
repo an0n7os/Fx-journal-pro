@@ -332,7 +332,7 @@ function generateOtp() {
 async function sendOtpEmail(email, otp, subject = 'Your FX Journal Pro Verification Code') {
   const sendgridKey = process.env.SENDGRID_API_KEY;
   const resendKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.SENDGRID_FROM_EMAIL || process.env.SENDER_EMAIL || 'noreply@fxjournalpro.com';
+  const fromEmail = process.env.SENDGRID_FROM_EMAIL || process.env.SENDER_EMAIL || 'Info@fxjournalpro.com';
   const isReset = subject.toLowerCase().includes('reset');
   const heading = isReset ? 'Reset your password' : 'Verify your email';
   const subheading = isReset
@@ -8248,6 +8248,221 @@ app.post('/api/payments/toggle-test-tier', async (req, res) => {
 });
 
 /**
+ * Resolves user email and name from DB or memory cache.
+ */
+async function resolveUserEmailAndName(userId: string, hintEmail?: string): Promise<{ email: string; name: string }> {
+  let email = hintEmail ? String(hintEmail).trim().toLowerCase() : '';
+  let name = '';
+  if (useSupabase) {
+    try {
+      const { data } = await supabase.from('users').select('email, name').eq('id', userId).maybeSingle();
+      if (data) {
+        if (!email && data.email) email = String(data.email).trim().toLowerCase();
+        if (data.name) name = String(data.name).trim();
+      }
+    } catch (_) {}
+  }
+  if (!email || !name) {
+    try {
+      const fileRow = (loadDatabaseFromFile()?.users || []).find((u: any) => u.id === userId);
+      if (fileRow) {
+        if (!email && fileRow.email) email = String(fileRow.email).trim().toLowerCase();
+        if (!name && fileRow.name) name = String(fileRow.name).trim();
+      }
+    } catch (_) {}
+  }
+  for (const cached of userDatabases.values()) {
+    const row = (cached?.users || []).find((u: any) => u.id === userId);
+    if (row) {
+      if (!email && row.email) email = String(row.email).trim().toLowerCase();
+      if (!name && row.name) name = String(row.name).trim();
+    }
+  }
+  return { email, name };
+}
+
+/**
+ * Sends a welcome email via Resend to new Pro members from Info@fxjournalpro.com.
+ */
+async function sendProWelcomeEmail(email: string, userName?: string, proUntilDate?: Date | string | null) {
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  const configuredFrom = process.env.RESEND_PRO_FROM?.trim() || 'FX Journal Pro <Info@fxjournalpro.com>';
+  const resendFrom = configuredFrom.includes('<') ? configuredFrom : `FX Journal Pro <${configuredFrom}>`;
+  const cleanEmail = email ? email.trim().toLowerCase() : '';
+  if (!cleanEmail) {
+    console.warn('[sendProWelcomeEmail] Skipped: no recipient email provided.');
+    return { success: false, error: 'No recipient email' };
+  }
+
+  const name = userName && userName.trim() ? userName.trim() : 'Trader';
+  const expiryFormatted = proUntilDate
+    ? new Date(proUntilDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : '30 Days Access';
+
+  const subject = 'Welcome to FX Journal Pro — Your Pro Membership is Active! ⭐';
+
+  const emailHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#070a13;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#e2e8f0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#070a13;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:600px;background:linear-gradient(180deg,#0f172a 0%,#0b0f19 100%);border-radius:18px;border:1px solid rgba(139,92,246,0.25);overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+        
+        <!-- Top Branded Banner -->
+        <tr><td style="padding:36px 40px 24px;text-align:center;background:linear-gradient(135deg,rgba(139,92,246,0.15) 0%,rgba(99,102,241,0.05) 100%);border-bottom:1px solid rgba(139,92,246,0.18);">
+          <div style="display:inline-block;padding:5px 16px;background:rgba(139,92,246,0.18);border:1px solid rgba(139,92,246,0.35);border-radius:999px;margin-bottom:14px;">
+            <span style="font-size:11px;font-weight:800;letter-spacing:1.5px;color:#c084fc;text-transform:uppercase;">★ PRO MEMBERSHIP ACTIVATED ★</span>
+          </div>
+          <div>
+            <h1 style="margin:0;font-size:26px;font-weight:800;background:linear-gradient(135deg,#ffffff 0%,#cbd5e1 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;color:#ffffff;letter-spacing:-0.5px;">
+              FX Journal Pro
+            </h1>
+          </div>
+        </td></tr>
+
+        <!-- Main Body -->
+        <tr><td style="padding:36px 40px;">
+          <p style="margin:0 0 16px;font-size:17px;font-weight:700;color:#f8fafc;">
+            Hello ${name},
+          </p>
+          <p style="margin:0 0 24px;font-size:15px;line-height:1.65;color:#94a3b8;">
+            Thank you for upgrading to <strong>FX Journal Pro</strong>! We are thrilled to welcome you to our community of disciplined, data-driven traders. Your Pro membership is now fully active on your account.
+          </p>
+
+          <!-- Plan Receipt Box -->
+          <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.25);border-radius:14px;padding:22px 24px;margin-bottom:28px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
+              <tr>
+                <td style="color:#64748b;padding-bottom:10px;font-weight:500;">Plan Tier</td>
+                <td align="right" style="color:#a855f7;font-weight:700;padding-bottom:10px;">FX Journal Pro Pass</td>
+              </tr>
+              <tr>
+                <td style="color:#64748b;padding-bottom:10px;font-weight:500;">Status</td>
+                <td align="right" style="color:#10b981;font-weight:700;padding-bottom:10px;">● Active</td>
+              </tr>
+              <tr>
+                <td style="color:#64748b;font-weight:500;">Valid Until</td>
+                <td align="right" style="color:#f1f5f9;font-weight:600;">${expiryFormatted}</td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- Unlocked Features Section -->
+          <h2 style="margin:0 0 16px;font-size:13px;font-weight:700;color:#cbd5e1;text-transform:uppercase;letter-spacing:1px;">
+            Your Unlocked Pro Superpowers:
+          </h2>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:30px;">
+            <tr>
+              <td style="padding-bottom:14px;vertical-align:top;width:28px;">
+                <span style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:#8b5cf6;color:#ffffff;text-align:center;font-size:12px;font-weight:bold;">✓</span>
+              </td>
+              <td style="padding-bottom:14px;padding-left:10px;vertical-align:top;">
+                <strong style="color:#f1f5f9;font-size:14px;">MT5 Real-Time Auto Sync:</strong>
+                <p style="margin:2px 0 0;color:#94a3b8;font-size:13px;line-height:1.5;">Connect your MetaTrader 5 terminal once and your trades, executions, and balances sync automatically in real-time.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-bottom:14px;vertical-align:top;width:28px;">
+                <span style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:#8b5cf6;color:#ffffff;text-align:center;font-size:12px;font-weight:bold;">✓</span>
+              </td>
+              <td style="padding-bottom:14px;padding-left:10px;vertical-align:top;">
+                <strong style="color:#f1f5f9;font-size:14px;">Advanced Analytics & Expectancy Edge:</strong>
+                <p style="margin:2px 0 0;color:#94a3b8;font-size:13px;line-height:1.5;">Gain deep statistical clarity with equity drawdown curves, day-of-week win rates, and expectancy edge metrics.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-bottom:14px;vertical-align:top;width:28px;">
+                <span style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:#8b5cf6;color:#ffffff;text-align:center;font-size:12px;font-weight:bold;">✓</span>
+              </td>
+              <td style="padding-bottom:14px;padding-left:10px;vertical-align:top;">
+                <strong style="color:#f1f5f9;font-size:14px;">Verified Journal Sharing:</strong>
+                <p style="margin:2px 0 0;color:#94a3b8;font-size:13px;line-height:1.5;">Create private, verified read-only links with portfolio-level isolation to showcase your track record to mentors or prop firms.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-bottom:14px;vertical-align:top;width:28px;">
+                <span style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:#8b5cf6;color:#ffffff;text-align:center;font-size:12px;font-weight:bold;">✓</span>
+              </td>
+              <td style="padding-bottom:14px;padding-left:10px;vertical-align:top;">
+                <strong style="color:#f1f5f9;font-size:14px;">Unlimited Portfolios & Trade Logs:</strong>
+                <p style="margin:2px 0 0;color:#94a3b8;font-size:13px;line-height:1.5;">No limits on your accounts, trade history, chart screenshots, or professional spreadsheet exports.</p>
+              </td>
+            </tr>
+          </table>
+
+          <!-- CTA Button -->
+          <div style="text-align:center;margin:32px 0;">
+            <a href="https://fxjournalpro.com" style="display:inline-block;padding:14px 34px;background:linear-gradient(135deg,#7c3aed 0%,#4f46e5 100%);color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;border-radius:10px;box-shadow:0 10px 20px -5px rgba(124,58,237,0.4);letter-spacing:0.3px;">
+              Open Your Pro Dashboard →
+            </a>
+          </div>
+
+          <p style="margin:28px 0 8px;font-size:13px;line-height:1.6;color:#94a3b8;">
+            If you ever need any assistance setting up your MT5 EA sync or have any questions, our dedicated team is always here for you. Simply reply to this email or write to us at <a href="mailto:Info@fxjournalpro.com" style="color:#a78bfa;text-decoration:none;">Info@fxjournalpro.com</a>.
+          </p>
+
+          <p style="margin:16px 0 0;font-size:13px;color:#64748b;line-height:1.6;">
+            Wishing you great discipline and consistent execution in your trades,<br>
+            <strong style="color:#cbd5e1;">The FX Journal Pro Team</strong>
+          </p>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:22px 40px;background:rgba(0,0,0,0.25);border-top:1px solid rgba(139,92,246,0.15);text-align:center;">
+          <p style="margin:0 0 6px;font-size:12px;color:#475569;">
+            © ${new Date().getFullYear()} FX Journal Pro · <a href="https://fxjournalpro.com" style="color:#7c3aed;text-decoration:none;">fxjournalpro.com</a>
+          </p>
+          <p style="margin:0;font-size:11px;color:#334155;">
+            Sent from Info@fxjournalpro.com · Dedicated Trader Support
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  if (resendKey && resendKey !== 'YOUR_RESEND_API_KEY' && !resendKey.startsWith('re_xxxx')) {
+    try {
+      console.log(`[Resend] Sending Pro Welcome email to ${cleanEmail} from ${resendFrom}...`);
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + resendKey
+        },
+        body: JSON.stringify({
+          from: resendFrom,
+          to: cleanEmail,
+          subject: subject,
+          html: emailHtml
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        console.error(`[Resend Pro Welcome Error] HTTP ${response.status}:`, JSON.stringify(data));
+        return { success: false, error: data };
+      }
+      console.log(`[Resend] Pro Welcome email sent successfully to ${cleanEmail} (id: ${data.id})`);
+      return { success: true, id: data.id };
+    } catch (err: any) {
+      console.error('[Resend Pro Welcome Exception]', err?.message || err);
+      return { success: false, error: err?.message || err };
+    }
+  } else {
+    console.log(`[Resend Pro Welcome DEV] Would send to ${cleanEmail} from ${resendFrom}`);
+    return { success: true, simulated: true };
+  }
+}
+
+/**
  * Extends Pro for one captured payment, exactly once.
  */
 const grantProForPayment = async (opts: {
@@ -8271,6 +8486,16 @@ const grantProForPayment = async (opts: {
   const base = existingUntil && existingUntil > Date.now() ? existingUntil : Date.now();
   const proUntil = new Date(base + periodDays * 86400000);
   await applyProState(userId, proUntil);
+
+  // Send Pro Welcome Email via Resend from Info@fxjournalpro.com
+  resolveUserEmailAndName(userId, userEmail).then(({ email, name }) => {
+    if (email) {
+      sendProWelcomeEmail(email, name, proUntil).catch(err => {
+        console.error('[sendProWelcomeEmail error]', err);
+      });
+    }
+  }).catch(() => {});
+
   return { granted: true, proUntil };
 };
 
@@ -12332,6 +12557,15 @@ app.post('/api/admin/users/:id/plan', async (req, res) => {
     }
     userDatabases.delete(id);
     await writeAuditLog(req, ctx, isPro ? 'user.grant_pro' : 'user.revoke_pro', 'user', id);
+    if (isPro) {
+      resolveUserEmailAndName(id).then(({ email, name }) => {
+        if (email) {
+          sendProWelcomeEmail(email, name, proUntil).catch(err => {
+            console.error('[sendProWelcomeEmail admin Supabase error]', err);
+          });
+        }
+      }).catch(() => {});
+    }
     return res.json({
       message: `User plan updated to ${isPro ? `Pro (${durationDays} days)` : 'Free'}`,
       isPro: !!isPro,
@@ -12344,6 +12578,15 @@ app.post('/api/admin/users/:id/plan', async (req, res) => {
 
   await applyProState(id, proUntil);
   await writeAuditLog(req, ctx, isPro ? 'user.grant_pro' : 'user.revoke_pro', 'user', id);
+  if (isPro) {
+    resolveUserEmailAndName(id, target.email).then(({ email, name }) => {
+      if (email) {
+        sendProWelcomeEmail(email, name || target.name, proUntil).catch(err => {
+          console.error('[sendProWelcomeEmail admin local error]', err);
+        });
+      }
+    }).catch(() => {});
+  }
   res.json({
     message: `User plan updated to ${isPro ? `Pro (${durationDays} days)` : 'Free'}`,
     isPro: !!isPro,
@@ -12710,11 +12953,41 @@ app.post('/api/admin/payments/record', async (req, res) => {
     proUntil: proUntilDate.toISOString()
   });
 
+  if (plan === 'pro') {
+    resolveUserEmailAndName(targetUser.id, targetUser.email).then(({ email, name }) => {
+      if (email) {
+        sendProWelcomeEmail(email, name || targetUser.name, proUntilDate).catch(err => {
+          console.error('[sendProWelcomeEmail manual payment error]', err);
+        });
+      }
+    }).catch(() => {});
+  }
+
   res.json({
     success: true,
     message: `Recorded ₹${amount} offline payment for ${targetUser.email}. Pro plan activated for ${days} days.`,
     paymentId,
     proUntil: proUntilDate.toISOString()
+  });
+});
+
+/**
+ * Diagnostic / admin test endpoint to send a sample Pro Welcome Email via Resend from Info@fxjournalpro.com
+ */
+app.post('/api/admin/test-welcome-email', async (req, res) => {
+  const ctx = await requirePermission(req, res, 'users.manage');
+  if (!ctx) return;
+  const targetEmail = (req.body?.email || ctx.user?.email || '').trim();
+  const targetName = (req.body?.name || ctx.user?.name || 'Valued Trader').trim();
+  if (!targetEmail) {
+    return res.status(400).json({ error: 'Target email is required.' });
+  }
+  const proUntil = new Date(Date.now() + 30 * 86400000);
+  const result = await sendProWelcomeEmail(targetEmail, targetName, proUntil);
+  return res.json({
+    message: result.success ? `Test welcome email sent to ${targetEmail} from Info@fxjournalpro.com` : 'Failed to send test email',
+    sender: process.env.RESEND_PRO_FROM || 'FX Journal Pro <Info@fxjournalpro.com>',
+    result,
   });
 });
 

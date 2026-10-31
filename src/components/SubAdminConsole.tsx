@@ -85,6 +85,14 @@ interface Detail {
 const money = (n: number) =>
   `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
+const formatPrice = (val: any) => {
+  if (val === null || val === undefined || val === '') return '—';
+  const num = Number(val);
+  if (isNaN(num)) return String(val);
+  if (Number.isInteger(num)) return num.toString();
+  return parseFloat(num.toFixed(5)).toString();
+};
+
 const shortDate = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
@@ -419,8 +427,8 @@ export default function SubAdminConsole({
                             }`}>{t.type}</span>
                           </td>
                           <td className="px-4 py-2.5 text-slate-400 tabular-nums">{t.lotSize}</td>
-                          <td className="px-4 py-2.5 text-slate-400 tabular-nums">{t.entryPrice ?? '—'}</td>
-                          <td className="px-4 py-2.5 text-slate-400 tabular-nums">{t.exitPrice ?? '—'}</td>
+                          <td className="px-4 py-2.5 text-slate-400 tabular-nums">{formatPrice(t.entryPrice)}</td>
+                          <td className="px-4 py-2.5 text-slate-400 tabular-nums">{formatPrice(t.exitPrice)}</td>
                           <td className={`px-4 py-2.5 font-bold tabular-nums ${net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                             {money(net)}
                           </td>
