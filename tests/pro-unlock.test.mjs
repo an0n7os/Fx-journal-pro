@@ -55,15 +55,20 @@ ok('starts on Free', freeMe.json?.user?.isPro !== true);
 const freeSecondAccount = await api('/api/accounts', {
   method: 'POST', cookie, body: { name: 'Second', broker: 'FTMO', startingBalance: 5000 },
 });
-ok('second account refused', freeSecondAccount.status === 403, `status ${freeSecondAccount.status}`);
+// Manual portfolios are unlimited on Free; broker-synced accounts require Pro.
+ok('second manual account allowed on Free', freeSecondAccount.status === 200, `status ${freeSecondAccount.status}`);
 
 const freeMt5 = await api('/api/accounts', {
   method: 'POST', cookie, body: { name: 'Synced', broker: 'Exness', isMt5Sync: true },
 });
 ok('MT5 sync account refused', freeMt5.status === 403, `status ${freeMt5.status}`);
 
-const freeCloud = await api('/api/mt5/cloud/connect', { method: 'POST', cookie, body: { accountId } });
-ok('MT5 cloud connect refused', freeCloud.status === 403, `status ${freeCloud.status}`);
+const cloudPayload = { accountId, login: '123456', server: 'Test-Demo', investorPassword: 'fake-read-only-password' };
+const freeCloud = await api('/api/mt5/cloud/connect', { method: 'POST', cookie, body: cloudPayload });
+// Cloud connect permits the first sync slot on Free; the isolated test server
+// has no cloud worker. Do not mistake an unavailable worker for a plan gate.
+ok('first cloud slot reaches worker availability check',
+  freeCloud.status === 503 && freeCloud.json?.code === 'CLOUD_WORKER_UNAVAILABLE', `status ${freeCloud.status}`);
 
 const freeMentor = await api('/api/ai/mentor', { method: 'POST', cookie, body: { message: 'Review my trades' } });
 ok('AI Mentor refused', freeMentor.status === 403, `status ${freeMentor.status}`);
@@ -101,9 +106,9 @@ ok('MT5 sync account allowed', proMt5.status === 200,
 
 // Cloud connect needs META_API_TOKEN to actually reach MT5. What matters here
 // is that it is no longer refused *for being on the free plan*.
-const proCloud = await api('/api/mt5/cloud/connect', { method: 'POST', cookie, body: { accountId } });
+const proCloud = await api('/api/mt5/cloud/connect', { method: 'POST', cookie, body: { ...cloudPayload, accountId: secondAccountId } });
 ok('MT5 cloud connect no longer blocked by plan',
-  proCloud.status !== 403 || proCloud.json?.proRequired !== true,
+  proCloud.status === 503 && proCloud.json?.code === 'CLOUD_WORKER_UNAVAILABLE',
   `status ${proCloud.status} ${proCloud.json?.error || ''}`);
 
 // The mentor needs GEMINI_API_KEY to answer. Again: not a plan refusal.

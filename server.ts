@@ -4247,6 +4247,49 @@ app.post('/api/auth/onboarding', async (req, res) => {
   }
 });
 
+// Profile writes must never upsert a request's snapshot of billing/roles.
+// A payment can complete after that snapshot was loaded.
+async function saveProfileFields(user: any, fields: any): Promise<any> {
+  let saved: any;
+  if (useSupabase) {
+    const patch = toSnake(fields);
+    let result = await supabase.from('users').update(patch).eq('id', user.id).select('*').single();
+    if (result.error && Object.hasOwn(fields, 'avatar') && /avatar/i.test(result.error.message || '')) {
+      delete patch.avatar;
+      result = await supabase.from('users').update(patch).eq('id', user.id).select('*').single();
+    }
+    if (result.error || !result.data) throw new Error('Could not save profile');
+    saved = toCamel(result.data);
+  } else {
+    const shared = loadDatabaseFromFile();
+    // Local registrations may still live only in the authenticated cache.
+    // Persist them before invalidating anything so rename survives a restart.
+    shared.users = shared.users || [];
+    let row = shared.users.find((u: any) => u.id === user.id);
+    if (!row) {
+      row = { ...user };
+      shared.users.push(row);
+    }
+    Object.assign(row, fields);
+    fs.writeFileSync(DB_FILE, JSON.stringify(shared, null, 2), 'utf-8');
+    saved = { ...row };
+  }
+  // Return the current persisted plan, not the pre-payment request snapshot.
+  const until = saved.proUntil ?? saved.pro_until;
+  if (until) saved.isPro = saved.is_pro = new Date(until).getTime() > Date.now();
+  if (useSupabase) {
+    userDatabases.delete(user.id);
+    if (user.email) userDatabases.delete(user.email.toLowerCase());
+  } else {
+    // Local caches can hold unsaved portfolios/trades. Keep those intact.
+    for (const db of userDatabases.values()) {
+      const row = db.users?.find((u: any) => u.id === user.id);
+      if (row) Object.assign(row, saved);
+    }
+  }
+  return saved;
+}
+
 app.post('/api/auth/update-profile', async (req, res) => {
 
   let db = (req as any).userDb;
@@ -4260,18 +4303,18 @@ app.post('/api/auth/update-profile', async (req, res) => {
 
   const userIdx = db.users.findIndex((u: any) => u.id === currentUser?.id);
   if (userIdx !== -1) {
-    const previousUserId = db.users[userIdx].id;
-    const previousEmail = db.users[userIdx].email;
-    if (name) db.users[userIdx].name = name;
+    const fields: any = {};
+    if (name) fields.name = name;
     if (avatar !== undefined) {
-      db.users[userIdx].avatar = avatar;
-      if (!db.users[userIdx].preferences) db.users[userIdx].preferences = {};
-      db.users[userIdx].preferences.avatar = avatar;
+      fields.avatar = avatar;
+      fields.preferences = { ...(currentUser.preferences || {}), avatar };
     }
-
-    await saveDatabase(db, db.users[userIdx].id, db.users[userIdx].email, { userId: previousUserId, email: previousEmail });
-    currentUser = db.users[userIdx];
-    res.json({ message: 'Profile updated successfully', user: sanitizeUser(currentUser) });
+    try {
+      currentUser = await saveProfileFields(currentUser, fields);
+      res.json({ message: 'Profile updated successfully', user: sanitizeUser(currentUser) });
+    } catch {
+      res.status(500).json({ error: 'Could not save profile. Please try again.' });
+    }
   } else {
     res.status(404).json({ error: 'User not found' });
   }
@@ -4292,11 +4335,12 @@ app.patch('/api/auth/preferences', async (req, res) => {
 
   // Merge incoming preferences with existing ones
   const existing = db.users[userIdx].preferences || {};
-  db.users[userIdx].preferences = { ...existing, ...req.body };
-
-  await saveDatabase(db, authEmail);
-  currentUser = db.users[userIdx];
-  res.json({ message: 'Preferences saved', user: currentUser });
+  try {
+    currentUser = await saveProfileFields(currentUser, { preferences: { ...existing, ...req.body } });
+    res.json({ message: 'Preferences saved', user: sanitizeUser(currentUser) });
+  } catch {
+    res.status(500).json({ error: 'Could not save preferences. Please try again.' });
+  }
 });
 
 // ==========================================
