@@ -1793,6 +1793,11 @@ export default function App() {
         focusField('mt5_account_num_field');
         return;
       }
+      if (!/^\d+$/.test(newAccMt5Login.trim())) {
+        showAlert('MT5 Login ID must be your numeric account number (e.g. 51012345), not the server name.', { title: 'Invalid MT5 Login ID', type: 'warning' });
+        focusField('mt5_account_num_field');
+        return;
+      }
       if (!newAccMt5Server.trim()) {
         showAlert('Please enter your MT5 Server name.', { title: 'MT5 Server is empty', type: 'warning' });
         focusField('mt5_server_field');
@@ -9212,6 +9217,7 @@ export default function App() {
                 user={user}
                 account={activeAccount}
                 onUpgradeToPro={goToSubscriptionSettings}
+                onOpenTradeModal={handleOpenTradeModal}
               />
             )}
 
