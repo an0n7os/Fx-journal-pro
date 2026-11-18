@@ -10,6 +10,7 @@ interface QueryFilter {
 interface OrderBy {
   column: string;
   ascending: boolean;
+  nullsFirst?: boolean;
 }
 
 export class NeonQueryBuilder {
@@ -105,8 +106,12 @@ export class NeonQueryBuilder {
     return this;
   }
 
-  order(column: string, options?: { ascending?: boolean }) {
-    this.orderBys.push({ column, ascending: options?.ascending !== false });
+  order(column: string, options?: { ascending?: boolean; nullsFirst?: boolean }) {
+    this.orderBys.push({
+      column,
+      ascending: options?.ascending !== false,
+      nullsFirst: options?.nullsFirst
+    });
     return this;
   }
 
@@ -237,7 +242,14 @@ export class NeonQueryBuilder {
 
     let sql = `SELECT ${selectList} FROM "${this.tableName}"${where.sql}`;
     if (this.orderBys.length > 0) {
-      const orderParts = this.orderBys.map(o => `"${o.column}" ${o.ascending ? 'ASC' : 'DESC'}`);
+      const orderParts = this.orderBys.map(o => {
+        const dir = o.ascending ? 'ASC' : 'DESC';
+        let nulls = '';
+        if (o.nullsFirst === true) nulls = ' NULLS FIRST';
+        else if (o.nullsFirst === false) nulls = ' NULLS LAST';
+        else nulls = o.ascending ? ' NULLS FIRST' : ' NULLS LAST';
+        return `"${o.column}" ${dir}${nulls}`;
+      });
       sql += ` ORDER BY ${orderParts.join(', ')}`;
     }
     if (this.limitCount !== undefined && this.limitCount !== null) {

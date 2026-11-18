@@ -111,6 +111,8 @@ export default function AdminPanel({ onPublishAnnouncement, onInspectUser, role 
   const [userSearch, setUserSearch] = useState('');
   const [planFilter, setPlanFilter] = useState<'ALL' | 'PRO' | 'FREE'>('ALL');
   const [partnerFilter, setPartnerFilter] = useState<string>('ALL');
+  const [userSortField, setUserSortField] = useState<'lastActivity' | 'joined' | 'name'>('lastActivity');
+  const [userSortOrder, setUserSortOrder] = useState<'desc' | 'asc'>('desc');
 
   // Partner inspection
   const [inspectPartner, setInspectPartner] = useState<any | null>(null);
@@ -692,23 +694,44 @@ Their referral link stops working and ` +
     }
   };
 
-  // Filtered users list
-  const filteredUsers = users.filter(u => {
-    const matchesSearch = !userSearch || 
-      (u.name || '').toLowerCase().includes(userSearch.toLowerCase()) ||
-      (u.email || '').toLowerCase().includes(userSearch.toLowerCase()) ||
-      (u.referralCode || '').toLowerCase().includes(userSearch.toLowerCase());
-    const matchesPlan = planFilter === 'ALL' ? true : planFilter === 'PRO' ? !!u.isPro : !u.isPro;
-    const matchesPartner = partnerFilter === 'ALL' ? true : (
-      u.referredBy === partnerFilter ||
-      u.referred_by === partnerFilter ||
-      (partners.find(p => p.id === partnerFilter)?.referralCode &&
-       (u.referralCode === partners.find(p => p.id === partnerFilter)?.referralCode ||
-        u.referredBy === partners.find(p => p.id === partnerFilter)?.referralCode ||
-        u.referred_by === partners.find(p => p.id === partnerFilter)?.referralCode))
-    );
-    return matchesSearch && matchesPlan && matchesPartner;
-  });
+  // Filtered and sorted users list
+  const filteredUsers = useMemo(() => {
+    const list = users.filter(u => {
+      const matchesSearch = !userSearch || 
+        (u.name || '').toLowerCase().includes(userSearch.toLowerCase()) ||
+        (u.email || '').toLowerCase().includes(userSearch.toLowerCase()) ||
+        (u.referralCode || '').toLowerCase().includes(userSearch.toLowerCase());
+      const matchesPlan = planFilter === 'ALL' ? true : planFilter === 'PRO' ? !!u.isPro : !u.isPro;
+      const matchesPartner = partnerFilter === 'ALL' ? true : (
+        u.referredBy === partnerFilter ||
+        u.referred_by === partnerFilter ||
+        (partners.find(p => p.id === partnerFilter)?.referralCode &&
+         (u.referralCode === partners.find(p => p.id === partnerFilter)?.referralCode ||
+          u.referredBy === partners.find(p => p.id === partnerFilter)?.referralCode ||
+          u.referred_by === partners.find(p => p.id === partnerFilter)?.referralCode))
+      );
+      return matchesSearch && matchesPlan && matchesPartner;
+    });
+
+    list.sort((a, b) => {
+      if (userSortField === 'name') {
+        const aName = (a.name || a.email || '').toLowerCase();
+        const bName = (b.name || b.email || '').toLowerCase();
+        return userSortOrder === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
+      }
+      if (userSortField === 'joined') {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return userSortOrder === 'desc' ? bTime - aTime : aTime - bTime;
+      }
+      // Default: lastActivity
+      const aTime = a.lastLogin || a.createdAt ? new Date(a.lastLogin || a.createdAt).getTime() : 0;
+      const bTime = b.lastLogin || b.createdAt ? new Date(b.lastLogin || b.createdAt).getTime() : 0;
+      return userSortOrder === 'desc' ? bTime - aTime : aTime - bTime;
+    });
+
+    return list;
+  }, [users, userSearch, planFilter, partnerFilter, partners, userSortField, userSortOrder]);
 
   const totalProCount = users.filter(u => !!u.isPro).length;
   const totalFreeCount = users.filter(u => !u.isPro).length;
@@ -1091,9 +1114,45 @@ Their referral link stops working and ` +
             <table className="min-w-[1120px] w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-white/[0.08] text-slate-400 uppercase tracking-wider font-extrabold bg-white/[0.02] text-[10px]">
-                  <th className="py-3 px-4 min-w-[210px]">User Details</th>
+                  <th 
+                    className="py-3 px-4 min-w-[210px] cursor-pointer hover:text-white transition select-none"
+                    onClick={() => {
+                      if (userSortField === 'name') {
+                        setUserSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setUserSortField('name');
+                        setUserSortOrder('asc');
+                      }
+                    }}
+                    title="Click to sort by Name"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>User Details</span>
+                      {userSortField === 'name' && (
+                        <span className="text-violet-400 font-bold">{userSortOrder === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </th>
                   <th className="py-3 px-4 min-w-[130px]">Plan Tier</th>
-                  <th className="py-3 px-4 min-w-[150px]">Last Activity</th>
+                  <th 
+                    className="py-3 px-4 min-w-[150px] cursor-pointer hover:text-white transition select-none"
+                    onClick={() => {
+                      if (userSortField === 'lastActivity') {
+                        setUserSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+                      } else {
+                        setUserSortField('lastActivity');
+                        setUserSortOrder('desc');
+                      }
+                    }}
+                    title="Click to toggle: Most recently active first or oldest active first"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Last Activity</span>
+                      {userSortField === 'lastActivity' && (
+                        <span className="text-violet-400 font-bold">{userSortOrder === 'desc' ? '↓ (Recent)' : '↑ (Oldest)'}</span>
+                      )}
+                    </div>
+                  </th>
                   <th className="py-3 px-4 min-w-[130px]">Trading Profile</th>
                   <th className="py-3 px-4 text-center min-w-[190px]">Accounts &amp; Trades</th>
                   <th className="py-3 px-4 min-w-[150px]">Referral Info</th>

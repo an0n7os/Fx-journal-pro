@@ -12241,6 +12241,14 @@ app.get('/api/admin/users', async (req, res) => {
         isPro: !!u.is_pro
       };
     });
+
+    // Sort by effective last activity descending so most recently active users are at the top
+    usersWithStats.sort((a, b) => {
+      const aTime = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
+      const bTime = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+      return bTime - aTime;
+    });
+
     return res.json({ users: usersWithStats });
   }
 

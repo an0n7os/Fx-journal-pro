@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Search, Crown, Gift, BarChart3, Users, RefreshCw } from 'lucide-react';
 
 interface PartnerUser {
@@ -51,6 +51,8 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [planFilter, setPlanFilter] = useState<'ALL' | 'PRO' | 'FREE'>('ALL');
+  const [sortField, setSortField] = useState<'lastActivity' | 'name'>('lastActivity');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -78,18 +80,33 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
   const totalPro = users.filter((u) => u.isPro).length;
   const totalFree = users.filter((u) => !u.isPro).length;
 
-  const filteredUsers = users.filter((u) => {
-    if (planFilter === 'PRO' && !u.isPro) return false;
-    if (planFilter === 'FREE' && u.isPro) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      const nameMatch = (u.name || '').toLowerCase().includes(q);
-      const emailMatch = (u.email || '').toLowerCase().includes(q);
-      const refMatch = (u.referralCode || '').toLowerCase().includes(q);
-      if (!nameMatch && !emailMatch && !refMatch) return false;
-    }
-    return true;
-  });
+  const filteredUsers = useMemo(() => {
+    const list = users.filter((u) => {
+      if (planFilter === 'PRO' && !u.isPro) return false;
+      if (planFilter === 'FREE' && u.isPro) return false;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const nameMatch = (u.name || '').toLowerCase().includes(q);
+        const emailMatch = (u.email || '').toLowerCase().includes(q);
+        const refMatch = (u.referralCode || '').toLowerCase().includes(q);
+        if (!nameMatch && !emailMatch && !refMatch) return false;
+      }
+      return true;
+    });
+
+    list.sort((a, b) => {
+      if (sortField === 'name') {
+        const aName = (a.name || a.email || '').toLowerCase();
+        const bName = (b.name || b.email || '').toLowerCase();
+        return sortOrder === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
+      }
+      const aTime = a.lastLogin || a.createdAt ? new Date(a.lastLogin || a.createdAt).getTime() : 0;
+      const bTime = b.lastLogin || b.createdAt ? new Date(b.lastLogin || b.createdAt).getTime() : 0;
+      return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
+    });
+
+    return list;
+  }, [users, planFilter, search, sortField, sortOrder]);
 
   return (
     <div className="space-y-4">
@@ -147,7 +164,25 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
             <tr className="border-b border-slate-800/90 text-slate-400 uppercase tracking-wider font-extrabold text-[10.5px] bg-slate-900/60">
               <th className="py-3.5 px-4">User Details</th>
               <th className="py-3.5 px-4">Plan Tier</th>
-              <th className="py-3.5 px-4">Last Activity</th>
+              <th 
+                className="py-3.5 px-4 cursor-pointer hover:text-white transition select-none"
+                onClick={() => {
+                  if (sortField === 'lastActivity') {
+                    setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+                  } else {
+                    setSortField('lastActivity');
+                    setSortOrder('desc');
+                  }
+                }}
+                title="Click to toggle: Most recently active first or oldest active first"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span>Last Activity</span>
+                  {sortField === 'lastActivity' && (
+                    <span className="text-violet-400 font-bold">{sortOrder === 'desc' ? '↓ (Recent)' : '↑ (Oldest)'}</span>
+                  )}
+                </div>
+              </th>
               <th className="py-3.5 px-4">Trading Profile</th>
               <th className="py-3.5 px-4 text-center">Accounts &amp; Trades</th>
               <th className="py-3.5 px-4">Referral Info</th>

@@ -1684,7 +1684,11 @@ var NeonQueryBuilder = class {
     return this;
   }
   order(column, options) {
-    this.orderBys.push({ column, ascending: options?.ascending !== false });
+    this.orderBys.push({
+      column,
+      ascending: options?.ascending !== false,
+      nullsFirst: options?.nullsFirst
+    });
     return this;
   }
   limit(count) {
@@ -1795,7 +1799,14 @@ var NeonQueryBuilder = class {
     }
     let sql = `SELECT ${selectList} FROM "${this.tableName}"${where.sql}`;
     if (this.orderBys.length > 0) {
-      const orderParts = this.orderBys.map((o) => `"${o.column}" ${o.ascending ? "ASC" : "DESC"}`);
+      const orderParts = this.orderBys.map((o) => {
+        const dir = o.ascending ? "ASC" : "DESC";
+        let nulls = "";
+        if (o.nullsFirst === true) nulls = " NULLS FIRST";
+        else if (o.nullsFirst === false) nulls = " NULLS LAST";
+        else nulls = o.ascending ? " NULLS FIRST" : " NULLS LAST";
+        return `"${o.column}" ${dir}${nulls}`;
+      });
       sql += ` ORDER BY ${orderParts.join(", ")}`;
     }
     if (this.limitCount !== void 0 && this.limitCount !== null) {
@@ -11769,6 +11780,11 @@ app.get("/api/admin/users", async (req, res) => {
         referralIncome: (earnedByReferrer2[u.id] || 0) + (earnedByReferrer2[refCode] || 0),
         isPro: !!u.is_pro
       };
+    });
+    usersWithStats2.sort((a, b) => {
+      const aTime = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
+      const bTime = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+      return bTime - aTime;
     });
     return res.json({ users: usersWithStats2 });
   }
