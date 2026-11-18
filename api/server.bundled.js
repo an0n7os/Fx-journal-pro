@@ -4729,11 +4729,18 @@ var LEGACY_AUTH_ROUTES = /* @__PURE__ */ new Set([
   "/api/auth/preferences",
   "/api/auth/update-profile"
 ]);
-app.all("/api/auth/*", (req, res, next) => {
+app.all("/api/auth/*", async (req, res, next) => {
   if (LEGACY_AUTH_ROUTES.has(req.path)) {
     return next();
   }
-  return betterAuthNodeHandler(req, res);
+  try {
+    await betterAuthNodeHandler(req, res);
+  } catch (err) {
+    console.error("[Better Auth Handler Error]:", err?.message || err);
+    if (!res.headersSent) {
+      res.status(503).json({ error: "Authentication service temporarily unavailable", detail: err?.message || "Database error" });
+    }
+  }
 });
 app.use(express.json({
   limit: "15mb",

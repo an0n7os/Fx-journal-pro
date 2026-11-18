@@ -1527,7 +1527,14 @@ export default function App() {
       bootstrapDoneRef.current = true;
     };
 
-    bootstrapSession();
+    // Safety timeout: ensure loading screen is dismissed even if DB/network hangs
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 6000);
+
+    bootstrapSession().finally(() => {
+      clearTimeout(safetyTimer);
+    });
 
     let subscription: any = null;
     if (isSupabaseConfigured) {
