@@ -5361,18 +5361,27 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 self-stretch md:self-auto justify-end">
+                <div className="flex items-center gap-2.5 self-stretch md:self-auto justify-end flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setShowShareModal(true)}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:via-purple-500 hover:to-indigo-500 text-white text-xs font-black tracking-wide uppercase transition-all shadow-lg shadow-violet-600/30 hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer shrink-0 border border-violet-400/30"
+                    title="Generate and copy a public shareable verified journal link for this student"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    <span>Share Student Journal</span>
+                  </button>
                   <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] text-slate-300">
                     <Lock className="h-3.5 w-3.5 text-amber-400" />
-                    <span>Trade Edits & Deletions Prohibited</span>
+                    <span>Read-Only</span>
                   </div>
                   <button
                     onClick={handleExitMentorMode}
                     className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 hover:from-red-500 hover:via-rose-500 hover:to-pink-500 text-white text-xs font-black tracking-wide uppercase transition-all shadow-lg shadow-red-600/30 hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer shrink-0"
-                    title="Close Mentor View and return to Operations Console"
+                    title="Close Mentor View and return to Console"
                   >
                     <ArrowLeft className="h-4 w-4" />
-                    <span>Return to Admin Console</span>
+                    <span>{isPartner ? 'Return to Partner Portal' : 'Return to Console'}</span>
                   </button>
                 </div>
               </div>
@@ -11209,8 +11218,10 @@ export default function App() {
         }}
         isOpen={showShareModal}
         onClose={() => setShowShareModal(false)}
-        isPro={isProActive}
+        isPro={isMentorReadOnlyMode || isProActive}
         onUpgrade={() => setShowProModal(true)}
+        targetUserId={isMentorReadOnlyMode && inspectedUser ? inspectedUser.id : undefined}
+        targetUserName={isMentorReadOnlyMode && inspectedUser ? inspectedUser.name : undefined}
       />
 
       {/* Pro Upgrade Modal */}

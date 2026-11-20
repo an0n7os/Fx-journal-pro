@@ -44,6 +44,8 @@ interface ShareJournalModalProps {
   isPro: boolean;
   onUpgrade: () => void;
   getAuthHeaders?: () => Record<string, string>;
+  targetUserId?: string;
+  targetUserName?: string;
 }
 
 export default function ShareJournalModal({
@@ -56,6 +58,8 @@ export default function ShareJournalModal({
   accounts,
   activeAccountName,
   onSelectAccount,
+  targetUserId,
+  targetUserName,
 }: ShareJournalModalProps) {
   // Prevent background scrolling when share modal is open
   useScrollLock(isOpen);
@@ -114,7 +118,8 @@ export default function ShareJournalModal({
   const loadActiveLinks = async () => {
     try {
       setLoadingLinks(true);
-      const res = await fetch('/api/shared-links', {
+      const url = targetUserId ? `/api/shared-links?userId=${encodeURIComponent(targetUserId)}` : '/api/shared-links';
+      const res = await fetch(url, {
         headers: authHeaders,
       });
       if (res.ok) {
@@ -166,6 +171,7 @@ export default function ShareJournalModal({
           sections: selectedSections,
           ...(targetAccountId ? { accountId: targetAccountId } : {}),
           months: selectedMonths,
+          ...(targetUserId ? { targetUserId } : {}),
         }),
       });
 
@@ -273,7 +279,7 @@ export default function ShareJournalModal({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                  Share Your Journal
+                  {targetUserName ? `Share ${targetUserName}'s Journal` : 'Share Your Journal'}
                 </h3>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-amber-500/20 to-violet-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                   <Crown className="h-3 w-3" />
@@ -281,7 +287,7 @@ export default function ShareJournalModal({
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Generate secure, privacy-guarded links to showcase your verified trading.
+                {targetUserName ? `Generate secure, verified public link for ${targetUserName}'s journal.` : 'Generate secure, privacy-guarded links to showcase your verified trading.'}
               </p>
             </div>
           </div>

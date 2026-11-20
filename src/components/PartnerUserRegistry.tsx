@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Search, Crown, Gift, BarChart3, Users, RefreshCw } from 'lucide-react';
+import { Search, Crown, Gift, BarChart3, Users, RefreshCw, Share2 } from 'lucide-react';
+import ShareJournalModal from './ShareJournalModal';
 
 interface PartnerUser {
   id: string;
@@ -53,6 +54,7 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
   const [planFilter, setPlanFilter] = useState<'ALL' | 'PRO' | 'FREE'>('ALL');
   const [sortField, setSortField] = useState<'lastActivity' | 'name'>('lastActivity');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [shareStudent, setShareStudent] = useState<PartnerUser | null>(null);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -303,17 +305,29 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
                     </span>
                   </td>
 
-                  {/* Actions: Analysis only (No Upgrade to Partner, No Suspend) */}
+                  {/* Actions: Analysis and Share Link */}
                   <td className="py-3.5 px-4 text-right">
-                    <button
-                      type="button"
-                      onClick={() => onInspectUser?.(u, 'analytics')}
-                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:via-purple-500 hover:to-indigo-500 text-white font-black text-xs inline-flex items-center gap-1.5 transition-all shadow-md shadow-violet-500/30 hover:scale-105 active:scale-95 shrink-0 border border-violet-400/30 cursor-pointer"
-                      title="Inspect Trader Journal & Analysis"
-                    >
-                      <BarChart3 className="h-4 w-4 text-white" />
-                      <span>Analysis</span>
-                    </button>
+                    <div className="inline-flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShareStudent(u)}
+                        className="px-2.5 py-1.5 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 hover:text-violet-200 border border-violet-500/30 transition hover:scale-105 active:scale-95 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        title="Generate or view public shareable journal link for this student"
+                      >
+                        <Share2 className="h-3.5 w-3.5 text-violet-400" />
+                        <span>Share</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onInspectUser?.(u, 'analytics')}
+                        className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:via-purple-500 hover:to-indigo-500 text-white font-black text-xs inline-flex items-center gap-1.5 transition-all shadow-md shadow-violet-500/30 hover:scale-105 active:scale-95 shrink-0 border border-violet-400/30 cursor-pointer"
+                        title="Inspect Trader Journal & Analysis"
+                      >
+                        <BarChart3 className="h-4 w-4 text-white" />
+                        <span>Analysis</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -321,6 +335,17 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
           </tbody>
         </table>
       </div>
+
+      {shareStudent && (
+        <ShareJournalModal
+          isOpen={!!shareStudent}
+          onClose={() => setShareStudent(null)}
+          isPro={true}
+          onUpgrade={() => {}}
+          targetUserId={shareStudent.id}
+          targetUserName={shareStudent.name || shareStudent.email}
+        />
+      )}
     </div>
   );
 }

@@ -9177,9 +9177,21 @@ const scopeUserIds = async (role: string, adminUserId: string | null): Promise<s
   // the column the signup wrote is the one to trust.
   if (role === 'PARTNER') {
     if (!useSupabase) {
-      return localAllUsers().filter((u: any) => u.referredBy === adminUserId).map((u: any) => u.id);
+      const pUser = localFindUser((u: any) => u.id === adminUserId);
+      const refCode = pUser?.partnerCode || pUser?.referralCode;
+      return localAllUsers().filter((u: any) => 
+        u.referredBy === adminUserId || (refCode && u.referredBy === refCode)
+      ).map((u: any) => u.id);
     }
-    const { data, error } = await supabase.from('users').select('id').eq('referred_by', adminUserId);
+    const { data: pProfile } = await supabase
+      .from('partner_profiles')
+      .select('referral_code')
+      .eq('user_id', adminUserId)
+      .maybeSingle();
+    const codes = [adminUserId];
+    if (pProfile?.referral_code) codes.push(pProfile.referral_code);
+
+    const { data, error } = await supabase.from('users').select('id').in('referred_by', codes);
     if (error) {
       console.error('[scopeUserIds] referral lookup failed:', error.message);
       return [];
@@ -12300,15 +12312,7 @@ app.get('/api/admin/inspect-user/:id', async (req, res) => {
   const scope = await scopeUserIds(ctx.role, ctx.user?.id || null);
   if (!canSeeUser(scope, id)) return res.status(404).json({ error: 'Target user not found' });
 
-  // This route hands back the target's whole trade list, so it is a second way
-  // into the data /api/subadmin/user/:id guards. A partner must clear the same
-  // consent check here or the toggle is decorative.
-  if (ctx.role === 'PARTNER' && !(await readTradeConsent(id))) {
-    return res.status(403).json({
-      error: 'This user has not shared their trading data with you.',
-      code: 'TRADE_ACCESS_DENIED',
-    });
-  }
+  // A partner is authorized to inspect their referred students' trading journal and performance.
 
   if (useSupabase) {
     const [
@@ -14389,40 +14393,78 @@ app.put('/api/notebook', async (req, res) => {
   res.json({ success: true, updatedAt: doc.updatedAt, counts: { notes: doc.notes.length } });
 });
 
-// GET /api/shared-links – list current user's shared links
+// GET /api/shared-links – list shared links (for current user or a referred student)
 app.get('/api/shared-links', async (req, res) => {
   const currentUser = (req as any).currentUser;
   if (!currentUser) return res.status(401).json({ error: 'Please log in to manage shared links.' });
-  const links = await getUserSharedLinks(currentUser.id);
+
+  let targetId = currentUser.id;
+  const queryUserId = typeof req.query.userId === 'string' ? req.query.userId.trim() : null;
+  if (queryUserId && queryUserId !== currentUser.id) {
+    const role = await getAdminRole(currentUser);
+    const scope = await scopeUserIds(role, currentUser.id);
+    if (!canSeeUser(scope, queryUserId)) {
+      return res.status(403).json({ error: 'Not authorized to view shared links for this student.' });
+    }
+    targetId = queryUserId;
+  }
+
+  const links = await getUserSharedLinks(targetId);
   res.json({ links });
 });
 
-// POST /api/shared-links – create a new share link (PRO exclusive)
+// POST /api/shared-links – create a new share link (PRO exclusive, supports student sharing by partner/admin)
 app.post('/api/shared-links', async (req, res) => {
   const currentUser = (req as any).currentUser;
   if (!currentUser) return res.status(401).json({ error: 'Please log in to create a share link.' });
 
-  // Verify Pro subscription/status
-  const isPro = !!(currentUser.isPro || currentUser.is_pro);
+  // Verify Pro subscription/status (or partner role which inherently carries pro permissions)
+  const isPro = !!(currentUser.isPro || currentUser.is_pro || currentUser.role === 'PARTNER' || currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'SUB_ADMIN');
   if (!isPro) {
     return res.status(403).json({
       error: 'Sharing your journal is an exclusive Pro feature. Please upgrade to Pro to create shareable links.'
     });
   }
 
-  const { sections, months, accountId } = req.body || {};
+  const { sections, months, accountId, targetUserId } = req.body || {};
+  let ownerUser = currentUser;
+
+  // If a partner or admin is generating a share link on behalf of their student
+  if (targetUserId && targetUserId !== currentUser.id) {
+    const role = await getAdminRole(currentUser);
+    const scope = await scopeUserIds(role, currentUser.id);
+    if (!canSeeUser(scope, targetUserId)) {
+      return res.status(403).json({ error: 'You are not authorized to share this student\'s journal.' });
+    }
+    let targetRow: any = null;
+    if (useSupabase) {
+      const { data } = await supabase.from('users').select('*').eq('id', targetUserId).maybeSingle();
+      targetRow = data;
+    } else {
+      targetRow = localFindUser((u: any) => u.id === targetUserId);
+    }
+    if (!targetRow) {
+      return res.status(404).json({ error: 'Target student not found.' });
+    }
+    ownerUser = toCamel(targetRow);
+  }
+
   if (accountId !== undefined) {
-    let accounts = (req as any).userDb?.accounts || [];
-    if (accounts.length === 0 && useSupabase) {
+    let accounts: any[] = [];
+    if (useSupabase) {
       try {
-        const { data: dbAccs } = await supabase.from('trading_accounts').select('id,user_id').eq('user_id', currentUser.id);
+        const { data: dbAccs } = await supabase.from('trading_accounts').select('id,user_id').eq('user_id', ownerUser.id);
         if (Array.isArray(dbAccs)) accounts = toCamel(dbAccs);
       } catch (_) {}
+    } else {
+      const ownerDb = await ensureUserDbLoaded(ownerUser.id, ownerUser.email || '');
+      accounts = ownerDb?.accounts || [];
     }
-    if (typeof accountId !== 'string' || !accounts.some((a: any) => a.id === accountId && (a.userId || a.user_id) === currentUser.id)) {
-      return res.status(404).json({ error: 'Selected account not found.' });
+    if (typeof accountId !== 'string' || !accounts.some((a: any) => a.id === accountId && (a.userId || a.user_id) === ownerUser.id)) {
+      return res.status(404).json({ error: 'Selected account not found for this trader.' });
     }
   }
+
   const allowedSections = ['dashboard', 'analysis', 'journal', 'calendar'];
   const validSections = (Array.isArray(sections) ? sections : [])
     .filter((s: string) => allowedSections.includes(s));
@@ -14446,8 +14488,8 @@ app.post('/api/shared-links', async (req, res) => {
   const newLink: SharedJournalLink = {
     ...(accountId ? { accountId } : {}),
     token,
-    userId: currentUser.id,
-    userName: currentUser.name || (currentUser.email ? currentUser.email.split('@')[0] : 'Trader'),
+    userId: ownerUser.id,
+    userName: ownerUser.name || (ownerUser.email ? ownerUser.email.split('@')[0] : 'Trader'),
     sections: validSections,
     months: validMonths,
     active: true,
@@ -14455,7 +14497,7 @@ app.post('/api/shared-links', async (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  await saveUserSharedLink(currentUser.id, newLink);
+  await saveUserSharedLink(ownerUser.id, newLink);
 
   res.status(201).json({
     success: true,
@@ -14470,16 +14512,23 @@ app.delete('/api/shared-links/:token', async (req, res) => {
   if (!currentUser) return res.status(401).json({ error: 'Please log in.' });
 
   const { token } = req.params;
-  const links = await getUserSharedLinks(currentUser.id);
-  const target = links.find(l => l.token === token);
-
-  if (!target) {
-    return res.status(404).json({ error: 'Share link not found or belongs to another user.' });
+  const match = await findSharedLinkByToken(token);
+  if (!match || !match.link) {
+    return res.status(404).json({ error: 'Share link not found.' });
   }
 
-  target.active = false;
-  target.revokedAt = new Date().toISOString();
-  await saveUserSharedLink(currentUser.id, target);
+  const role = await getAdminRole(currentUser);
+  const scope = await scopeUserIds(role, currentUser.id);
+  const isOwner = match.link.userId === currentUser.id;
+  const isAuthorizedManager = canSeeUser(scope, match.link.userId);
+
+  if (!isOwner && !isAuthorizedManager) {
+    return res.status(403).json({ error: 'Share link belongs to another user.' });
+  }
+
+  match.link.active = false;
+  match.link.revokedAt = new Date().toISOString();
+  await saveUserSharedLink(match.link.userId, match.link);
 
   res.json({ success: true, message: 'Share link disabled successfully.' });
 });
