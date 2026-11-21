@@ -1017,57 +1017,57 @@ Their referral link stops working and ` +
         <div className="space-y-4">
           {/* Top Quick Stats Strip */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="p-4 bg-slate-900/70 border border-slate-800/90 rounded-2xl flex items-center justify-between">
+            <div className="p-4 bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800/90 rounded-2xl flex items-center justify-between shadow-xs">
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Users</span>
-                <span className="text-2xl font-black text-white font-mono">{users.length}</span>
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Total Users</span>
+                <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">{users.length}</span>
               </div>
-              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
                 <Users className="h-4 w-4" />
               </div>
             </div>
 
-            <div className="p-4 bg-slate-900/70 border border-violet-500/20 rounded-2xl flex items-center justify-between bg-gradient-to-br from-violet-950/20 to-transparent">
+            <div className="p-4 bg-white dark:bg-slate-900/70 border border-violet-200 dark:border-violet-500/20 rounded-2xl flex items-center justify-between bg-gradient-to-br from-violet-50/60 dark:from-violet-950/20 to-transparent shadow-xs">
               <div>
-                <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider block">Paid Users (Pro)</span>
-                <span className="text-2xl font-black text-violet-300 font-mono">{totalProCount}</span>
+                <span className="text-[10px] font-bold text-violet-700 dark:text-violet-300 uppercase tracking-wider block">Paid Users (Pro)</span>
+                <span className="text-2xl font-black text-violet-700 dark:text-violet-300 font-mono">{totalProCount}</span>
               </div>
-              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                 <Crown className="h-4 w-4" />
               </div>
             </div>
 
-            <div className="p-4 bg-slate-900/70 border border-slate-800/90 rounded-2xl flex items-center justify-between">
+            <div className="p-4 bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800/90 rounded-2xl flex items-center justify-between shadow-xs">
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Free Plan Users</span>
-                <span className="text-2xl font-black text-slate-300 font-mono">{totalFreeCount}</span>
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Free Plan Users</span>
+                <span className="text-2xl font-black text-slate-800 dark:text-slate-300 font-mono">{totalFreeCount}</span>
               </div>
-              <div className="p-2 rounded-xl bg-slate-700/40 text-slate-400 border border-slate-600/30">
+              <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-700/40 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-600/30">
                 <UserCheck className="h-4 w-4" />
               </div>
             </div>
 
-            <div className="p-4 bg-slate-900/70 border border-emerald-500/20 rounded-2xl flex items-center justify-between bg-gradient-to-br from-emerald-950/20 to-transparent">
+            <div className="p-4 bg-white dark:bg-slate-900/70 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl flex items-center justify-between bg-gradient-to-br from-emerald-50/60 dark:from-emerald-950/20 to-transparent shadow-xs">
               <div>
-                <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider block">Referral Income</span>
-                <span className="text-2xl font-black text-emerald-400 font-mono">₹{totalReferralEarnings}</span>
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider block">Referral Income</span>
+                <span className="text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono">₹{totalReferralEarnings}</span>
               </div>
-              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                 <Gift className="h-4 w-4" />
               </div>
             </div>
           </div>
 
           {/* Search and Filters Toolbar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-slate-900/60 rounded-2xl border border-slate-800/90">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-white dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800/90 shadow-xs">
             <div className="relative w-full sm:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
                 placeholder={isSubAdmin ? "Search by trader name or referral code..." : "Search by name, email, or referral code..."}
-                className="w-full pl-9 pr-4 py-2 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition"
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-violet-500 transition"
               />
             </div>
 
@@ -1077,7 +1077,7 @@ Their referral link stops working and ` +
                   <select
                     value={partnerFilter}
                     onChange={(e) => setPartnerFilter(e.target.value)}
-                    className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500 transition cursor-pointer font-medium max-w-[260px] truncate"
+                    className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-violet-500 transition cursor-pointer font-medium max-w-[260px] truncate"
                     title="Filter traders by referring Partner"
                   >
                     <option value="ALL">All Partners &amp; Direct Traders</option>
@@ -1090,7 +1090,7 @@ Their referral link stops working and ` +
                 </div>
               )}
 
-              <div className="flex rounded-xl bg-slate-800/80 p-1 border border-slate-700/80 text-xs">
+              <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80 text-xs">
                 {(['ALL', 'PRO', 'FREE'] as const).map(filter => (
                   <button
                     key={filter}
@@ -1098,7 +1098,7 @@ Their referral link stops working and ` +
                     className={`px-3 py-1 rounded-lg font-semibold transition ${
                       planFilter === filter
                         ? 'bg-violet-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-white'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     {filter === 'ALL' ? `All (${filteredUsers.length})` : filter === 'PRO' ? `Pro (${totalProCount})` : `Free (${totalFreeCount})`}
@@ -1109,13 +1109,12 @@ Their referral link stops working and ` +
           </div>
 
           {/* User Table */}
-          {/* User Table */}
-          <div className="overflow-x-auto bg-[#0a0d17]/80 rounded-2xl border border-white/[0.08] shadow-2xl backdrop-blur-xl">
+          <div className="overflow-x-auto bg-white dark:bg-[#0a0d17]/80 rounded-2xl border border-slate-200 dark:border-white/[0.08] shadow-sm dark:shadow-2xl">
             <table className="min-w-[1120px] w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-white/[0.08] text-slate-400 uppercase tracking-wider font-extrabold bg-white/[0.02] text-[10px]">
+                <tr className="border-b border-slate-200 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-extrabold bg-slate-50/80 dark:bg-white/[0.02] text-[10px]">
                   <th 
-                    className="py-3 px-4 min-w-[210px] cursor-pointer hover:text-white transition select-none"
+                    className="py-3 px-4 min-w-[210px] cursor-pointer hover:text-slate-900 dark:hover:text-white transition select-none"
                     onClick={() => {
                       if (userSortField === 'name') {
                         setUserSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -1129,13 +1128,13 @@ Their referral link stops working and ` +
                     <div className="flex items-center gap-1.5">
                       <span>User Details</span>
                       {userSortField === 'name' && (
-                        <span className="text-violet-400 font-bold">{userSortOrder === 'asc' ? '↑' : '↓'}</span>
+                        <span className="text-violet-600 dark:text-violet-400 font-bold">{userSortOrder === 'asc' ? '↑' : '↓'}</span>
                       )}
                     </div>
                   </th>
                   <th className="py-3 px-4 min-w-[130px]">Plan Tier</th>
                   <th 
-                    className="py-3 px-4 min-w-[150px] cursor-pointer hover:text-white transition select-none"
+                    className="py-3 px-4 min-w-[150px] cursor-pointer hover:text-slate-900 dark:hover:text-white transition select-none"
                     onClick={() => {
                       if (userSortField === 'lastActivity') {
                         setUserSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
@@ -1149,7 +1148,7 @@ Their referral link stops working and ` +
                     <div className="flex items-center gap-1.5">
                       <span>Last Activity</span>
                       {userSortField === 'lastActivity' && (
-                        <span className="text-violet-400 font-bold">{userSortOrder === 'desc' ? '↓ (Recent)' : '↑ (Oldest)'}</span>
+                        <span className="text-violet-600 dark:text-violet-400 font-bold">{userSortOrder === 'desc' ? '↓ (Recent)' : '↑ (Oldest)'}</span>
                       )}
                     </div>
                   </th>
@@ -1160,33 +1159,33 @@ Their referral link stops working and ` +
                   <th className="py-3 px-4 text-right min-w-[230px]">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.05]">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/[0.05]">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={8} className="py-12 text-center text-slate-400 dark:text-slate-500 font-medium">
                       No matching users found in registry.
                     </td>
                   </tr>
                 ) : (
                   filteredUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-white/[0.025] transition-colors group">
+                    <tr key={u.id} className="hover:bg-slate-50/80 dark:hover:bg-white/[0.025] transition-colors group">
                       {/* User Details */}
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-white flex items-center gap-1.5 flex-wrap">
-                          <span className="text-sm font-bold text-white tracking-tight">{u.name || 'Trader'}</span>
+                        <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">{u.name || 'Trader'}</span>
                           {u.authProvider === 'google' && (
-                            <span title="Google Account" className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.06] text-slate-300 border border-white/10 font-bold">
+                            <span title="Google Account" className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 font-bold">
                               G
                             </span>
                           )}
                           {u.role && u.role !== 'USER' && (
-                            <span className="text-[9.5px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-violet-500/15 text-violet-300 border border-violet-500/25">
+                            <span className="text-[9.5px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-violet-500/10 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/20 dark:border-violet-500/25">
                               {u.role === 'SUPER_ADMIN' ? 'Super Admin' : u.role}
                             </span>
                           )}
                         </div>
                         {!isSubAdmin && (
-                          <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate max-w-[220px]" title={u.email}>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 truncate max-w-[220px]" title={u.email}>
                             {u.email}
                           </div>
                         )}
@@ -1197,10 +1196,10 @@ Their referral link stops working and ` +
                         <div className="flex flex-col items-start gap-1.5">
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap shadow-xs ${
                             u.isPro 
-                              ? 'bg-amber-400/[0.08] text-amber-300 border border-amber-400/25' 
-                              : 'bg-slate-800/60 text-slate-400 border border-slate-700/50'
+                              ? 'bg-amber-500/10 dark:bg-amber-400/[0.08] text-amber-700 dark:text-amber-300 border border-amber-500/25 dark:border-amber-400/25' 
+                              : 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50'
                           }`}>
-                            {u.isPro ? <Crown className="h-3 w-3 text-amber-400 fill-amber-400/80 shrink-0" /> : null}
+                            {u.isPro ? <Crown className="h-3 w-3 text-amber-500 dark:text-amber-400 fill-amber-500/80 dark:fill-amber-400/80 shrink-0" /> : null}
                             {u.isPro ? 'Pro Member' : 'Free Basic'}
                           </span>
                           <div className="flex items-center gap-1.5">
@@ -1209,16 +1208,16 @@ Their referral link stops working and ` +
                                 <button
                                   type="button"
                                   onClick={() => setGrantProModalUser(u)}
-                                  className="text-[10.5px] text-amber-400 hover:text-amber-300 font-semibold hover:underline cursor-pointer"
+                                  className="text-[10.5px] text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-semibold hover:underline cursor-pointer"
                                   title="Extend or manage Pro duration"
                                 >
                                   Extend Pro
                                 </button>
-                                <span className="text-slate-600 text-xs">•</span>
+                                <span className="text-slate-300 dark:text-slate-600 text-xs">•</span>
                                 <button
                                   type="button"
                                   onClick={() => handleToggleUserPlan(u.id, true)}
-                                  className="text-[10.5px] text-slate-400 hover:text-red-400 font-medium hover:underline cursor-pointer"
+                                  className="text-[10.5px] text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 font-medium hover:underline cursor-pointer"
                                   title="Revoke Pro"
                                 >
                                   Revoke
@@ -1228,10 +1227,10 @@ Their referral link stops working and ` +
                               <button
                                 type="button"
                                 onClick={() => setGrantProModalUser(u)}
-                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25 text-[11px] font-semibold transition cursor-pointer active:scale-95 shadow-xs"
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/25 text-[11px] font-semibold transition cursor-pointer active:scale-95 shadow-xs"
                                 title="Grant Pro access to this user"
                               >
-                                <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                <Sparkles className="w-2.5 h-2.5 text-amber-500 dark:text-amber-400" />
                                 <span>Make Pro</span>
                               </button>
                             )}
@@ -1241,31 +1240,31 @@ Their referral link stops working and ` +
 
                       {/* Last Activity */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="text-slate-200 font-medium text-xs">{formatDateTime(u.lastLogin || u.createdAt)}</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">
+                        <div className="text-slate-800 dark:text-slate-200 font-medium text-xs">{formatDateTime(u.lastLogin || u.createdAt)}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                           Joined: {u.createdAt && !isNaN(new Date(u.createdAt).getTime()) ? new Date(u.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
                         </div>
                       </td>
 
                       {/* Trading Profile */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="text-slate-200 font-medium text-xs">{u.tradingStyle || 'Discretionary'}</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">{u.experience || 'Intermediate'}</div>
+                        <div className="text-slate-800 dark:text-slate-200 font-medium text-xs">{u.tradingStyle || 'Discretionary'}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{u.experience || 'Intermediate'}</div>
                       </td>
 
                       {/* Accounts & Trades Count */}
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-300 text-xs font-semibold whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06]">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-semibold whitespace-nowrap">
                             {u.accountsCount || 0} acc
                           </span>
                           <button
                             type="button"
                             onClick={() => onInspectUser?.(u)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 border border-emerald-500/20 hover:border-emerald-500/35 text-xs font-semibold transition-all whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200 border border-emerald-500/20 hover:border-emerald-500/35 text-xs font-semibold transition-all whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
                             title="Click to inspect all trades & journal"
                           >
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/25 shrink-0" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 ring-2 ring-emerald-500/25 dark:ring-emerald-400/25 shrink-0" />
                             <span>{u.tradesCount || 0} trades</span>
                           </button>
                         </div>
@@ -1273,38 +1272,38 @@ Their referral link stops working and ` +
 
                       {/* Referral Info */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5 text-xs font-mono text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded-lg border border-violet-500/20 whitespace-nowrap">
-                          <Gift className="h-3 w-3 text-violet-400 shrink-0" />
+                        <div className="inline-flex items-center gap-1.5 text-xs font-mono text-violet-700 dark:text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded-lg border border-violet-500/20 whitespace-nowrap">
+                          <Gift className="h-3 w-3 text-violet-600 dark:text-violet-400 shrink-0" />
                           <span className="font-bold">{u.referralCode || 'FX-100'}</span>
                         </div>
                         {u.referredBy && (
-                          <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
-                            <span className="text-slate-500">Partner:</span>
-                            <span className="text-violet-300 font-semibold truncate max-w-[130px]">
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                            <span className="text-slate-400 dark:text-slate-500">Partner:</span>
+                            <span className="text-violet-700 dark:text-violet-300 font-semibold truncate max-w-[130px]">
                               {partners.find(p => p.id === u.referredBy || p.referralCode === u.referredBy)?.name || u.referredBy}
                             </span>
                           </div>
                         )}
-                        <div className="text-[10.5px] text-slate-400 mt-1 flex items-center gap-1.5 whitespace-nowrap">
-                          <span>Ref: <strong className="text-white font-semibold">{u.referralCount || 0}</strong></span>
-                          <span className="text-slate-600">•</span>
-                          <span>Earned: <strong className="text-emerald-400 font-semibold">₹{u.referralIncome || 0}</strong></span>
+                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 whitespace-nowrap">
+                          <span>Ref: <strong className="text-slate-900 dark:text-white font-semibold">{u.referralCount || 0}</strong></span>
+                          <span className="text-slate-300 dark:text-slate-600">•</span>
+                          <span>Earned: <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">₹{u.referralIncome || 0}</strong></span>
                         </div>
                       </td>
 
                       {/* Status */}
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         {u.role === 'PARTNER' && (
-                          <span className="mb-1 block mx-auto w-fit px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-violet-500/15 text-violet-300 border border-violet-500/25 whitespace-nowrap">
+                          <span className="mb-1 block mx-auto w-fit px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-violet-500/10 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/20 dark:border-violet-500/25 whitespace-nowrap">
                             Partner
                           </span>
                         )}
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase whitespace-nowrap ${
                           !u.status || u.status === 'ACTIVE' 
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                            : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20' 
+                            : 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20'
                         }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${(!u.status || u.status === 'ACTIVE') ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                          <span className={`w-1.5 h-1.5 rounded-full ${(!u.status || u.status === 'ACTIVE') ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-red-500 dark:bg-red-400'}`} />
                           {u.status || 'ACTIVE'}
                         </span>
                       </td>
@@ -1330,7 +1329,7 @@ Their referral link stops working and ` +
                                 onClick={() => handleRemovePartner(u)}
                                 disabled={partnerBusy === u.id}
                                 title="Remove Partner access"
-                                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] text-slate-300 border border-white/[0.08] transition disabled:opacity-40 cursor-pointer"
+                                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-white/[0.05] hover:bg-slate-200 dark:hover:bg-white/[0.09] text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/[0.08] transition disabled:opacity-40 cursor-pointer"
                               >
                                 Remove Partner
                               </button>
@@ -1339,7 +1338,7 @@ Their referral link stops working and ` +
                                 onClick={() => handleUpgradeToPartner(u)}
                                 disabled={partnerBusy === u.id}
                                 title="Make this user a Partner — grants Pro and a referral link"
-                                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-violet-500/10 text-violet-300 hover:bg-violet-500/20 border border-violet-500/25 transition disabled:opacity-40 cursor-pointer"
+                                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-violet-500/10 text-violet-700 dark:text-violet-300 hover:bg-violet-500/20 border border-violet-500/25 transition disabled:opacity-40 cursor-pointer"
                               >
                                 {partnerBusy === u.id ? 'Working…' : 'Upgrade to Partner'}
                               </button>
@@ -1352,14 +1351,14 @@ Their referral link stops working and ` +
                               {(!u.status || u.status === 'ACTIVE') ? (
                                 <button
                                   onClick={() => handleUpdateUserStatus(u.id, 'SUSPENDED')}
-                                  className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition cursor-pointer"
+                                  className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/20 border border-red-500/20 transition cursor-pointer"
                                 >
                                   Suspend
                                 </button>
                               ) : (
                                 <button
                                   onClick={() => handleUpdateUserStatus(u.id, 'ACTIVE')}
-                                  className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition cursor-pointer"
+                                  className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition cursor-pointer"
                                 >
                                   Reactivate
                                 </button>
@@ -1368,7 +1367,7 @@ Their referral link stops working and ` +
                               <button
                                 onClick={() => openDeleteModal(u)}
                                 title="Permanently delete user and all associated data"
-                                className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition cursor-pointer"
+                                className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-rose-500/10 text-rose-700 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition cursor-pointer"
                               >
                                 <Trash2 className="w-3 h-3" />
                                 Delete

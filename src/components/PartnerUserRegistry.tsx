@@ -113,20 +113,20 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
   return (
     <div className="space-y-4">
       {/* Search and Filters Toolbar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 sm:p-4 bg-slate-900/60 rounded-2xl border border-slate-800/90 shadow-sm">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 sm:p-4 bg-white dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800/90 shadow-xs">
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, email, or referral code..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition"
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-violet-500 transition"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex rounded-xl bg-slate-950/70 p-1 border border-slate-800 text-xs">
+          <div className="flex rounded-xl bg-slate-100 dark:bg-slate-950/70 p-1 border border-slate-200 dark:border-slate-800 text-xs">
             {(['ALL', 'PRO', 'FREE'] as const).map((filter) => (
               <button
                 key={filter}
@@ -135,7 +135,7 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
                 className={`px-3.5 py-1 rounded-lg font-bold text-xs transition cursor-pointer ${
                   planFilter === filter
                     ? 'bg-violet-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 {filter === 'ALL'
@@ -152,7 +152,7 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
             onClick={fetchUsers}
             disabled={loading}
             title="Refresh list"
-            className="p-2 rounded-xl border border-slate-800 bg-slate-950/70 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer disabled:opacity-50"
+            className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition cursor-pointer disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-violet-400' : ''}`} />
           </button>
@@ -160,14 +160,14 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
       </div>
 
       {/* Users Table */}
-      <div className="overflow-x-auto bg-[#070b14]/90 rounded-2xl border border-slate-800/90 shadow-xl">
+      <div className="overflow-x-auto bg-white dark:bg-[#070b14]/90 rounded-2xl border border-slate-200 dark:border-slate-800/90 shadow-sm dark:shadow-xl">
         <table className="w-full text-left border-collapse text-xs min-w-[840px]">
           <thead>
-            <tr className="border-b border-slate-800/90 text-slate-400 uppercase tracking-wider font-extrabold text-[10.5px] bg-slate-900/60">
+            <tr className="border-b border-slate-200 dark:border-slate-800/90 text-slate-500 dark:text-slate-400 uppercase tracking-wider font-extrabold text-[10.5px] bg-slate-50/80 dark:bg-slate-900/60">
               <th className="py-3.5 px-4">User Details</th>
               <th className="py-3.5 px-4">Plan Tier</th>
               <th 
-                className="py-3.5 px-4 cursor-pointer hover:text-white transition select-none"
+                className="py-3.5 px-4 cursor-pointer hover:text-slate-900 dark:hover:text-white transition select-none"
                 onClick={() => {
                   if (sortField === 'lastActivity') {
                     setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
@@ -181,7 +181,7 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
                 <div className="flex items-center gap-1.5">
                   <span>Last Activity</span>
                   {sortField === 'lastActivity' && (
-                    <span className="text-violet-400 font-bold">{sortOrder === 'desc' ? '↓ (Recent)' : '↑ (Oldest)'}</span>
+                    <span className="text-violet-600 dark:text-violet-400 font-bold">{sortOrder === 'desc' ? '↓ (Recent)' : '↑ (Oldest)'}</span>
                   )}
                 </div>
               </th>
@@ -192,10 +192,10 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
               <th className="py-3.5 px-4 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/60">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
             {loading ? (
               <tr>
-                <td colSpan={8} className="py-12 text-center text-slate-500">
+                <td colSpan={8} className="py-12 text-center text-slate-400 dark:text-slate-500">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <div className="h-6 w-6 rounded-full border-2 border-violet-500/30 border-t-violet-500 animate-spin" />
                     <span className="text-xs">Loading referred traders…</span>
@@ -204,15 +204,15 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-rose-400 text-xs">
+                <td colSpan={8} className="py-8 text-center text-rose-500 dark:text-rose-400 text-xs">
                   {error}
                 </td>
               </tr>
             ) : filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-12 text-center text-slate-500">
-                  <Users className="h-8 w-8 mx-auto mb-2 text-slate-600 opacity-60" />
-                  <p className="font-semibold text-slate-400 text-sm">No referred traders found</p>
+                <td colSpan={8} className="py-12 text-center text-slate-400 dark:text-slate-500">
+                  <Users className="h-8 w-8 mx-auto mb-2 text-slate-400 dark:text-slate-600 opacity-60" />
+                  <p className="font-semibold text-slate-700 dark:text-slate-400 text-sm">No referred traders found</p>
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     {search ? 'Try changing your search keywords' : 'Traders who register with your referral link will appear here'}
                   </p>
@@ -220,18 +220,18 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
               </tr>
             ) : (
               filteredUsers.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-800/30 transition group">
+                <tr key={u.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition group">
                   {/* User Details */}
                   <td className="py-3.5 px-4">
-                    <div className="font-bold text-white flex items-center gap-1.5 text-xs">
+                    <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
                       <span>{u.name || 'Trader'}</span>
                       {u.authProvider === 'google' && (
-                        <span title="Google Account" className="text-[10px] px-1 py-0.2 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold">
+                        <span title="Google Account" className="text-[10px] px-1 py-0.2 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold">
                           G
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-slate-400 font-mono mt-0.5">{u.email}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">{u.email}</div>
                   </td>
 
                   {/* Plan Tier */}
@@ -239,40 +239,40 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap shadow-xs ${
                         u.isPro
-                          ? 'bg-amber-400/[0.08] text-amber-300 border border-amber-400/25'
-                          : 'bg-slate-800/60 text-slate-400 border border-slate-700/50'
+                          ? 'bg-amber-500/10 dark:bg-amber-400/[0.08] text-amber-700 dark:text-amber-300 border border-amber-500/25 dark:border-amber-400/25'
+                          : 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50'
                       }`}
                     >
-                      {u.isPro && <Crown className="h-3 w-3 text-amber-400 fill-amber-400/80 shrink-0" />}
+                      {u.isPro && <Crown className="h-3 w-3 text-amber-500 dark:text-amber-400 fill-amber-500/80 dark:fill-amber-400/80 shrink-0" />}
                       {u.isPro ? 'Pro Member' : 'Free Basic'}
                     </span>
                   </td>
 
                   {/* Last Activity */}
                   <td className="py-3.5 px-4 whitespace-nowrap">
-                    <div className="text-slate-200 font-medium text-xs">{formatDateTime(u.lastLogin || u.createdAt)}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">Joined: {formatDate(u.createdAt)}</div>
+                    <div className="text-slate-800 dark:text-slate-200 font-medium text-xs">{formatDateTime(u.lastLogin || u.createdAt)}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Joined: {formatDate(u.createdAt)}</div>
                   </td>
 
                   {/* Trading Profile */}
                   <td className="py-3.5 px-4 whitespace-nowrap">
-                    <div className="text-slate-200 font-medium text-xs">{u.tradingStyle || 'Day Trading'}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">{u.experience || 'Intermediate'}</div>
+                    <div className="text-slate-800 dark:text-slate-200 font-medium text-xs">{u.tradingStyle || 'Day Trading'}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{u.experience || 'Intermediate'}</div>
                   </td>
 
                   {/* Accounts & Trades */}
                   <td className="py-3.5 px-4 text-center whitespace-nowrap">
                     <div className="inline-flex items-center gap-2">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-500/[0.08] text-indigo-300 border border-indigo-500/20 text-xs font-semibold whitespace-nowrap shadow-xs">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 text-xs font-semibold whitespace-nowrap shadow-xs">
                         {u.accountsCount || 0} acc
                       </span>
                       <button
                         type="button"
                         onClick={() => onInspectUser?.(u, 'journal')}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/[0.08] hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 border border-emerald-500/20 hover:border-emerald-500/35 text-xs font-semibold transition-all whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200 border border-emerald-500/20 hover:border-emerald-500/35 text-xs font-semibold transition-all whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
                         title="Click to inspect all trades & journal"
                       >
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/25 shrink-0" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 ring-2 ring-emerald-500/25 dark:ring-emerald-400/25 shrink-0" />
                         <span>{u.tradesCount || 0} trades</span>
                       </button>
                     </div>
@@ -280,15 +280,15 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
 
                   {/* Referral Info */}
                   <td className="py-3.5 px-4">
-                    <div className="flex items-center gap-1 text-[11px] font-mono text-violet-300">
-                      <Gift className="h-3 w-3 text-violet-400" />
+                    <div className="flex items-center gap-1 text-[11px] font-mono text-violet-700 dark:text-violet-300">
+                      <Gift className="h-3 w-3 text-violet-600 dark:text-violet-400" />
                       <span className="bg-violet-500/10 px-1.5 py-0.2 rounded border border-violet-500/20">
                         {u.referralCode || 'FX-100'}
                       </span>
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
-                      <span>Ref: <strong className="text-white">{u.referralCount || 0}</strong></span>
-                      <span>Earned: <strong className="text-emerald-400">₹{u.referralIncome || 0}</strong></span>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
+                      <span>Ref: <strong className="text-slate-900 dark:text-white">{u.referralCount || 0}</strong></span>
+                      <span>Earned: <strong className="text-emerald-600 dark:text-emerald-400">₹{u.referralIncome || 0}</strong></span>
                     </div>
                   </td>
 
@@ -297,8 +297,8 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
                     <span
                       className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase ${
                         !u.status || u.status === 'ACTIVE'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
+                          : 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20'
                       }`}
                     >
                       {u.status || 'ACTIVE'}
@@ -311,10 +311,10 @@ export default function PartnerUserRegistry({ onInspectUser }: PartnerUserRegist
                       <button
                         type="button"
                         onClick={() => setShareStudent(u)}
-                        className="px-2.5 py-1.5 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 hover:text-violet-200 border border-violet-500/30 transition hover:scale-105 active:scale-95 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        className="px-2.5 py-1.5 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-700 dark:text-violet-300 hover:text-violet-800 dark:hover:text-violet-200 border border-violet-500/30 transition hover:scale-105 active:scale-95 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
                         title="Generate or view public shareable journal link for this student"
                       >
-                        <Share2 className="h-3.5 w-3.5 text-violet-400" />
+                        <Share2 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
                         <span>Share</span>
                       </button>
 
