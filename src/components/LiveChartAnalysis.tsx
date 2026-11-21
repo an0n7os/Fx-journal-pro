@@ -258,30 +258,43 @@ export default function LiveChartAnalysis({
   const isPro = !!user?.isPro;
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto px-3 sm:px-6 py-4 md:py-6 max-w-6xl mx-auto w-full space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-violet-700 via-indigo-700 to-purple-700 dark:from-slate-900 dark:via-slate-900/95 dark:to-violet-950/80 border border-violet-500/30 text-white shadow-lg relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 dark:bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white/15 dark:bg-gradient-to-tr dark:from-violet-600 dark:to-indigo-600 flex items-center justify-center text-white shadow-md shadow-black/20 shrink-0 border border-white/20">
-            <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                HEYZA AI <span className="text-white/80 font-medium text-xs px-2 py-0.5 rounded-full bg-white/15 border border-white/25">Live Chart Vision</span>
-              </h1>
+    <div className="flex-1 min-h-0 flex flex-col overflow-y-auto px-3 sm:px-6 py-4 md:py-6 max-w-6xl mx-auto w-full space-y-4 sm:space-y-6">
+      {/* Header Banner - Fixed height & shrink protection */}
+      <div className="shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-violet-700 via-indigo-700 to-purple-700 dark:from-slate-900 dark:via-slate-900/95 dark:to-violet-950/80 border border-violet-500/30 text-white shadow-lg relative overflow-hidden min-h-[76px]">
+        {/* Ambient glow blobs */}
+        <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 dark:bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-500/20 rounded-full blur-2xl pointer-events-none" />
+
+        {/* Left: Icon + Title + Subtitle */}
+        <div className="relative z-10 flex items-center gap-3 sm:gap-3.5 min-w-0">
+          {/* Heyza AI Avatar with Glowing Gradient & Online indicator */}
+          <div className="relative shrink-0">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-violet-500 via-purple-500 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-violet-950/40 border border-white/30 ring-2 ring-white/20">
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.9)]" />
             </div>
-            <p className="text-xs sm:text-sm text-white/75 font-normal mt-0.5 leading-snug">
-              Upload or paste (<kbd className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/15 border border-white/25">Ctrl+V</kbd>) MT5 or TradingView chart screenshots for institutional signal analysis.
+            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-violet-900 shadow-[0_0_6px_#34d399]" title="Heyza AI Active" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-base sm:text-lg font-black tracking-tight text-white drop-shadow-sm">
+                HEYZA AI
+              </h1>
+              <span className="text-white font-bold text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-white/20 border border-white/30 backdrop-blur-sm shadow-sm whitespace-nowrap">
+                Live Chart Vision
+              </span>
+            </div>
+            <p className="text-[11px] sm:text-sm text-white/85 font-normal mt-0.5 leading-snug">
+              Upload or paste (<kbd className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/20 border border-white/30 text-white font-bold">Ctrl+V</kbd>) MT5 or TradingView chart screenshots for institutional signal analysis.
             </p>
           </div>
         </div>
 
-        <div className="relative z-10 flex items-center gap-2 text-xs text-white/80 shrink-0">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            AI Scanner Ready
+        {/* Right: AI Scanner Ready badge (shown on sm+ screens) */}
+        <div className="relative z-10 hidden sm:flex items-center shrink-0">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 text-xs text-white font-semibold shadow-sm whitespace-nowrap">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#4ade80] shrink-0" />
+            <span>AI Scanner Ready</span>
           </span>
         </div>
       </div>
