@@ -260,26 +260,26 @@ export default function LiveChartAnalysis({
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto px-3 sm:px-6 py-4 md:py-6 max-w-6xl mx-auto w-full space-y-6">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900/95 to-violet-950/80 border border-violet-500/20 text-white shadow-lg relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-violet-500/40 shrink-0">
-            <Sparkles className="w-6 h-6 animate-pulse" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-violet-700 via-indigo-700 to-purple-700 dark:from-slate-900 dark:via-slate-900/95 dark:to-violet-950/80 border border-violet-500/30 text-white shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 dark:bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white/15 dark:bg-gradient-to-tr dark:from-violet-600 dark:to-indigo-600 flex items-center justify-center text-white shadow-md shadow-black/20 shrink-0 border border-white/20">
+            <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                HEYZA AI <span className="text-violet-400 font-medium text-xs px-2 py-0.5 rounded-full bg-violet-500/20 border border-violet-500/30">Live Chart Vision</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                HEYZA AI <span className="text-white/80 font-medium text-xs px-2 py-0.5 rounded-full bg-white/15 border border-white/25">Live Chart Vision</span>
               </h1>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 font-normal mt-0.5">
-              Upload or paste (<kbd className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/10 border border-white/20">Ctrl+V</kbd>) MT5 or TradingView chart screenshots for institutional signal analysis.
+            <p className="text-xs sm:text-sm text-white/75 font-normal mt-0.5 leading-snug">
+              Upload or paste (<kbd className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/15 border border-white/25">Ctrl+V</kbd>) MT5 or TradingView chart screenshots for institutional signal analysis.
             </p>
           </div>
         </div>
 
-        <div className="relative z-10 flex items-center gap-2 text-xs text-slate-300 shrink-0">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 font-medium">
+        <div className="relative z-10 flex items-center gap-2 text-xs text-white/80 shrink-0">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             AI Scanner Ready
           </span>
@@ -356,16 +356,16 @@ export default function LiveChartAnalysis({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3 py-4">
+                  <div className="space-y-3 py-4">
                   <div className="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-violet-500 flex items-center justify-center mx-auto">
                     <Upload className="w-6 h-6 animate-bounce" />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    <p className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200">
                       Drop MT5 or TradingView screenshot here
                     </p>
-                    <p className="text-[11px] text-slate-400">
-                      Or press <kbd className="px-1 py-0.5 text-[10px] font-mono rounded bg-slate-200 dark:bg-slate-800 border">Ctrl+V</kbd> anywhere to paste
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                      Or press <kbd className="px-1 py-0.5 text-[10px] font-mono rounded bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300">Ctrl+V</kbd> anywhere to paste
                     </p>
                   </div>
                   <span className="inline-block px-3 py-1 rounded-full text-[11px] font-medium bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800/40">
