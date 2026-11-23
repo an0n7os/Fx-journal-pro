@@ -10,10 +10,16 @@ import {
   FileSpreadsheet, FileText, Mail, Wrench, X, Newspaper, Trophy, Lock, MessageSquare, MoreHorizontal, Users,
   Settings, Instagram, Phone, GraduationCap, Share2, Loader2, ShieldCheck, CheckCheck, Camera, Crown
 } from 'lucide-react';
-import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from 'recharts';
+
+const EquityCurveChart = React.lazy(() => import('./components/DashboardCharts').then(m => ({ default: m.EquityCurveChart })));
+const WinLossPieChart = React.lazy(() => import('./components/DashboardCharts').then(m => ({ default: m.WinLossPieChart })));
+const MonthlyPnlBarChart = React.lazy(() => import('./components/DashboardCharts').then(m => ({ default: m.MonthlyPnlBarChart })));
+const SymbolPerformanceBarChart = React.lazy(() => import('./components/DashboardCharts').then(m => ({ default: m.SymbolPerformanceBarChart })));
+const SessionConcentrationPieChart = React.lazy(() => import('./components/DashboardCharts').then(m => ({ default: m.SessionConcentrationPieChart })));
+const WinPerformanceChart = React.lazy(() => import('./components/DashboardCharts').then(m => ({ default: m.WinPerformanceChart })));
+const LossPerformanceChart = React.lazy(() => import('./components/DashboardCharts').then(m => ({ default: m.LossPerformanceChart })));
+const UnderwaterCurveChart = React.lazy(() => import('./components/DashboardCharts').then(m => ({ default: m.UnderwaterCurveChart })));
+const DayOfWeekPerformanceChart = React.lazy(() => import('./components/DashboardCharts').then(m => ({ default: m.DayOfWeekPerformanceChart })));
 
 import {
   User as UserType,
@@ -28,7 +34,7 @@ import {
 import { supabase } from './supabaseClient';
 
 import Logo from './components/Logo';
-import { TraderRankCard } from './components/TraderRankCard';
+const TraderRankCard = React.lazy(() => import('./components/TraderRankCard').then(m => ({ default: m.TraderRankCard })));
 import LegalFooter from './components/LegalFooter';
 import NextEventCard from './components/NextEventCard';
 const LoginPage = React.lazy(() => import('./pages/LoginPage'));
@@ -5628,27 +5634,13 @@ export default function App() {
                           </div>
                         </div>
                         <div className="flex-1 w-full min-h-0 -mt-1 sm:-mt-2">
-                          {totalTradesCount > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                              <AreaChart data={equityCurveData}>
-                                <defs>
-                                  <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={getChartColors().gradient} stopOpacity={0.15} />
-                                    <stop offset="95%" stopColor={getChartColors().gradient} stopOpacity={0} />
-                                  </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} domain={['dataMin - 100', 'dataMax + 100']} />
-                                <Tooltip formatter={(value) => [formatValue(Number(value)), 'Equity']} />
-                                <Area type="monotone" dataKey="equity" stroke={getChartColors().stroke} strokeWidth={2.5} fillOpacity={1} fill="url(#colorEquity)" activeDot={{ r: 5, strokeWidth: 0, fill: getChartColors().stroke }} />
-                              </AreaChart>
-                            </ResponsiveContainer>
-                          ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-xs text-slate-400 space-y-2">
-                              <span>Your equity curve appears here once you log your first trade.</span>
-                            </div>
-                          )}
+                          <EquityCurveChart
+                            data={equityCurveData}
+                            totalTradesCount={totalTradesCount}
+                            gradientColor={getChartColors().gradient}
+                            strokeColor={getChartColors().stroke}
+                            formatValue={formatValue}
+                          />
                         </div>
                       </div>
                     </div>
@@ -5952,37 +5944,13 @@ export default function App() {
                       </div>
 
                       <div className="relative w-full flex-1 flex items-center justify-center my-1 sm:my-2">
-                        {totalTradesCount > 0 ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={[
-                                  { name: "Winning Trades", value: wins.length, color: "#10b981" },
-                                  { name: "Losing Trades", value: losses.length, color: "#ef4444" }
-                                ]}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={48}
-                                outerRadius={68}
-                                paddingAngle={5}
-                                dataKey="value"
-                                stroke="none"
-                              >
-                                {
-                                  [{ color: "#10b981" }, { color: "#ef4444" }].map((entry, index) => (
-                                    <Cell key={"cell-" + index} fill={entry.color} />
-                                  ))
-                                }
-                              </Pie>
-                              <Tooltip
-                                contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" }}
-                                itemStyle={{ fontWeight: "bold" }}
-                              />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <div className="text-xs text-slate-400 text-center">No trades yet</div>
-                        )}
+                        <WinLossPieChart
+                          totalTradesCount={totalTradesCount}
+                          winsCount={wins.length}
+                          lossesCount={losses.length}
+                          innerRadius={48}
+                          outerRadius={68}
+                        />
 
                         {totalTradesCount > 0 && (
                           <div className="absolute flex flex-col items-center justify-center pointer-events-none">
@@ -6686,27 +6654,13 @@ export default function App() {
                       </div>
                     </div>
                     <div className="h-60 sm:h-64">
-                      {totalTradesCount > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={equityCurveData}>
-                            <defs>
-                              <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor={getChartColors().gradient} stopOpacity={0.15} />
-                                <stop offset="95%" stopColor={getChartColors().gradient} stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                            <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} domain={['dataMin - 100', 'dataMax + 100']} />
-                            <Tooltip formatter={(value) => [formatValue(Number(value)), 'Equity']} />
-                            <Area type="monotone" dataKey="equity" stroke={getChartColors().stroke} strokeWidth={2.5} fillOpacity={1} fill="url(#colorEquity)" activeDot={{ r: 5, strokeWidth: 0, fill: getChartColors().stroke }} />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                          Your metrics appear here once you log your first trade.
-                        </div>
-                      )}
+                      <EquityCurveChart
+                        data={equityCurveData}
+                        totalTradesCount={totalTradesCount}
+                        gradientColor={getChartColors().gradient}
+                        strokeColor={getChartColors().stroke}
+                        formatValue={formatValue}
+                      />
                     </div>
                   </div>
 
@@ -6894,48 +6848,14 @@ export default function App() {
                     </div>
 
                     <div className="relative w-full flex-1 flex items-center justify-center mt-1 sm:mt-2">
-                      {totalTradesCount > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={[
-                                { name: "Winning Trades", value: wins.length, color: "#10b981" },
-                                { name: "Losing Trades", value: losses.length, color: "#ef4444" }
-                              ]}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={58}
-                              outerRadius={78}
-                              paddingAngle={5}
-                              dataKey="value"
-                              stroke="none"
-                            >
-                              {
-                                [{ color: "#10b981" }, { color: "#ef4444" }].map((entry, index) => (
-                                  <Cell key={"cell-" + index} fill={entry.color} />
-                                ))
-                              }
-                            </Pie>
-                            <Tooltip
-                              contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" }}
-                              itemStyle={{ fontWeight: "bold" }}
-                            />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="text-xs text-slate-500 text-center">No trades yet</div>
-                      )}
-
-                      {totalTradesCount > 0 && (
-                        <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter">
-                            {totalTradesCount}
-                          </span>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 sm:mt-1">
-                            Trades
-                          </span>
-                        </div>
-                      )}
+                      <WinLossPieChart
+                        totalTradesCount={totalTradesCount}
+                        winsCount={wins.length}
+                        lossesCount={losses.length}
+                        innerRadius={58}
+                        outerRadius={78}
+                        showCenterText
+                      />
                     </div>
 
                     <div className="flex justify-between items-center mt-3 sm:mt-4 border-t border-slate-100 dark:border-slate-800 pt-3 sm:pt-4">
@@ -6958,25 +6878,7 @@ export default function App() {
                     <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-1">Monthly P&L Distribution</h3>
                     <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-3 sm:mb-4 font-semibold">Net profit or loss grouped chronologically by month</p>
                     <div className="h-60 sm:h-64">
-                      {monthlyPnlChartData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={monthlyPnlChartData}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.15} />
-                            <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                            <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
-                            <Tooltip formatter={(value) => [formatValue(Number(value)), 'Net Profit']} />
-                            <Bar dataKey="profit" maxBarSize={36} radius={[4, 4, 0, 0]}>
-                              {monthlyPnlChartData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.profit >= 0 ? '#10b981' : '#f43f5e'} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                          No monthly trading history found.
-                        </div>
-                      )}
+                      <MonthlyPnlBarChart data={monthlyPnlChartData} formatValue={formatValue} />
                     </div>
                   </div>
 
@@ -6984,25 +6886,7 @@ export default function App() {
                   <div className="dx-panel p-4 sm:p-6 shadow-xs">
                     <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-3 sm:mb-4">Cumulative Profit by Instrument</h3>
                     <div className="h-60 sm:h-64">
-                      {symbolChartData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={symbolChartData} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#334155" opacity={0.15} />
-                            <XAxis type="number" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                            <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                            <Tooltip formatter={(value) => [formatValue(Number(value)), 'Cumulative Net']} />
-                            <Bar dataKey="profit" maxBarSize={28} fill="#3b82f6" radius={[0, 4, 4, 0]}>
-                              {symbolChartData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.profit >= 0 ? '#10b981' : '#f43f5e'} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                          No asset configurations calculated yet.
-                        </div>
-                      )}
+                      <SymbolPerformanceBarChart data={symbolChartData} formatValue={formatValue} />
                     </div>
                   </div>
                 </section>
@@ -7111,29 +6995,7 @@ export default function App() {
                     <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-1">Session Concentration</h3>
                     <p className="text-[10px] text-slate-400 mb-3 sm:mb-4 font-semibold">Allocations of executions across operational timezones</p>
                     <div className="h-60 sm:h-64 flex items-center justify-center">
-                      {sessionData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={sessionData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={45}
-                              outerRadius={70}
-                              paddingAngle={3}
-                              dataKey="value"
-                            >
-                              {sessionData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip />
-                            <Legend verticalAlign="bottom" height={36} iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="text-xs text-slate-400">No session metrics available.</div>
-                      )}
+                      <SessionConcentrationPieChart data={sessionData} />
                     </div>
                   </div>
                 </section>
@@ -7459,27 +7321,12 @@ export default function App() {
                           </div>
 
                           <div className="h-48 sm:h-52 w-full my-2">
-                            {winPerformanceChartData.length > 0 ? (
-                              <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={winPerformanceChartData}>
-                                  <defs>
-                                    <linearGradient id="winGradient" x1="0" y1="0" x2="0" y2="1">
-                                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
-                                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                                    </linearGradient>
-                                  </defs>
-                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#1e293b' : '#f1f5f9'} />
-                                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                                  <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(val) => winShowVolume ? `${val}` : `$${val}`} />
-                                  <Tooltip formatter={(value: any) => [winShowVolume ? `${value} Lots` : formatValue(Number(value)), winShowVolume ? 'Volume' : 'Cumulative Profit']} />
-                                  <Area type="monotone" dataKey="val" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#winGradient)" />
-                                </AreaChart>
-                              </ResponsiveContainer>
-                            ) : (
-                              <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                                No winning performance recorded.
-                              </div>
-                            )}
+                            <WinPerformanceChart
+                              data={winPerformanceChartData}
+                              theme={theme}
+                              showVolume={winShowVolume}
+                              formatValue={formatValue}
+                            />
                           </div>
                         </div>
 
@@ -7545,27 +7392,12 @@ export default function App() {
                           </div>
 
                           <div className="h-48 sm:h-52 w-full my-2">
-                            {lossPerformanceChartData.length > 0 ? (
-                              <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={lossPerformanceChartData}>
-                                  <defs>
-                                    <linearGradient id="lossGradient" x1="0" y1="0" x2="0" y2="1">
-                                      <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.35} />
-                                      <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
-                                    </linearGradient>
-                                  </defs>
-                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#1e293b' : '#f1f5f9'} />
-                                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                                  <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(val) => lossShowVolume ? `${val}` : `-$${Math.abs(val)}`} />
-                                  <Tooltip formatter={(value: any) => [lossShowVolume ? `${value} Lots` : `-${formatValue(Math.abs(Number(value)))}`, lossShowVolume ? 'Volume' : 'Cumulative Loss']} />
-                                  <Area type="monotone" dataKey="val" stroke="#f43f5e" strokeWidth={2.5} fillOpacity={1} fill="url(#lossGradient)" />
-                                </AreaChart>
-                              </ResponsiveContainer>
-                            ) : (
-                              <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                                No loss performance recorded.
-                              </div>
-                            )}
+                            <LossPerformanceChart
+                              data={lossPerformanceChartData}
+                              theme={theme}
+                              showVolume={lossShowVolume}
+                              formatValue={formatValue}
+                            />
                           </div>
                         </div>
 
@@ -7772,8 +7604,8 @@ export default function App() {
                           </span>
                         </div>
                         <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={isProActive ? equityDrawdownData : [
+                          <UnderwaterCurveChart
+                            data={isProActive ? equityDrawdownData : [
                               { name: 'Start', equity: 10000, drawdown: 0, pnl: 0 },
                               { name: 'W1', equity: 10450, drawdown: 0, pnl: 450 },
                               { name: 'W2', equity: 10200, drawdown: -2.39, pnl: -250 },
@@ -7781,26 +7613,9 @@ export default function App() {
                               { name: 'W4', equity: 11250, drawdown: 0, pnl: 450 },
                               { name: 'W5', equity: 10900, drawdown: -3.11, pnl: -350 },
                               { name: 'W6', equity: 11600, drawdown: 0, pnl: 700 }
-                            ]}>
-                              <defs>
-                                <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} />
-                                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.0} />
-                                </linearGradient>
-                                <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
-                                  <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.05} />
-                                </linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.15} />
-                              <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                              <YAxis yAxisId="left" stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(v) => `$${v}`} />
-                              <YAxis yAxisId="right" orientation="right" stroke="#f43f5e" fontSize={10} tickLine={false} tickFormatter={(v) => `${v}%`} domain={[-20, 0]} />
-                              <Tooltip formatter={(value: any, name: any) => [name === 'drawdown' ? `${value}%` : formatValue(Number(value)), name === 'drawdown' ? 'Drawdown' : 'Equity']} />
-                              <Area yAxisId="left" type="monotone" dataKey="equity" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#equityGrad)" />
-                              <Area yAxisId="right" type="monotone" dataKey="drawdown" stroke="#f43f5e" strokeWidth={1.5} fillOpacity={1} fill="url(#ddGrad)" />
-                            </AreaChart>
-                          </ResponsiveContainer>
+                            ]}
+                            formatValue={formatValue}
+                          />
                         </div>
                       </div>
 
@@ -7816,27 +7631,16 @@ export default function App() {
                           </span>
                         </div>
                         <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={isProActive ? dayOfWeekPerformance : [
+                          <DayOfWeekPerformanceChart
+                            data={isProActive ? dayOfWeekPerformance : [
                               { name: 'Mon', profit: 320, winRate: 66.7, trades: 3, wins: 2, losses: 1 },
                               { name: 'Tue', profit: 540, winRate: 75.0, trades: 4, wins: 3, losses: 1 },
                               { name: 'Wed', profit: -120, winRate: 40.0, trades: 5, wins: 2, losses: 3 },
                               { name: 'Thu', profit: 680, winRate: 80.0, trades: 5, wins: 4, losses: 1 },
                               { name: 'Fri', profit: 210, winRate: 60.0, trades: 5, wins: 3, losses: 2 }
-                            ]}>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.15} />
-                              <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                              <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
-                              <Tooltip formatter={(val: any, name: any) => [name === 'profit' ? formatValue(Number(val)) : `${val}%`, name === 'profit' ? 'Net P&L' : 'Win Rate']} />
-                              <Bar dataKey="profit" maxBarSize={32} radius={[4, 4, 0, 0]}>
-                                {(isProActive ? dayOfWeekPerformance : [
-                                  { profit: 320 }, { profit: 540 }, { profit: -120 }, { profit: 680 }, { profit: 210 }
-                                ]).map((entry, index) => (
-                                  <Cell key={`dow-${index}`} fill={entry.profit >= 0 ? '#10b981' : '#f43f5e'} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
+                            ]}
+                            formatValue={formatValue}
+                          />
                         </div>
                       </div>
                     </div>
