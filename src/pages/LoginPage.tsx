@@ -38,41 +38,23 @@ function useScrollReveal() {
 
     root.classList.add('js-reveal');
 
-    const pending = new Set(document.querySelectorAll<HTMLElement>('[data-reveal]'));
-    let frame = 0;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            (entry.target as HTMLElement).classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.05 }
+    );
 
-    // A position sweep rather than an IntersectionObserver: jumping straight to
-    // an anchor (or a restored scroll position) moves elements from below the
-    // viewport to above it without ever intersecting, and an observer would
-    // leave those sections hidden for good.
-    const sweep = () => {
-      frame = 0;
-      const triggerLine = window.innerHeight * 0.92;
-      for (const el of pending) {
-        const rect = el.getBoundingClientRect();
-        const isApproaching = rect.top < triggerLine;
-        if (!isApproaching) continue;
-        // Anything already scrolled past appears without replaying its motion.
-        if (rect.bottom < 0) el.style.transition = 'none';
-        el.classList.add('is-visible');
-        pending.delete(el);
-      }
-      if (pending.size === 0) window.removeEventListener('scroll', onScroll);
-    };
-
-    const onScroll = () => {
-      if (frame) return;
-      frame = requestAnimationFrame(sweep);
-    };
-
-    sweep();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
+    const elements = document.querySelectorAll<HTMLElement>('[data-reveal]');
+    elements.forEach((el) => observer.observe(el));
 
     return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      if (frame) cancelAnimationFrame(frame);
+      observer.disconnect();
       root.classList.remove('js-reveal');
     };
   }, []);

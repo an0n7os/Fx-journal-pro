@@ -22,28 +22,46 @@ function hasStoredSession(): boolean {
 export default function Root() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [session, setSession] = useState<'checking' | 'public' | 'workspace'>(() =>
-    needsWorkspace(location.pathname, location.search, location.hash, hasStoredSession()) ? 'workspace' : 'checking');
+  const hasSession = hasStoredSession();
+  const isProtectedPath = needsWorkspace(location.pathname, location.search, location.hash, false);
+
+  const [session, setSession] = useState<'checking' | 'public' | 'workspace'>(() => {
+    if (hasSession || isProtectedPath) return 'workspace';
+    return 'public';
+  });
 
   useEffect(() => {
-    if (session !== 'checking') return;
+    if (session === 'workspace' && hasSession) return;
     let active = true;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
-    // Cookie-only sessions must still restore when browser storage was cleared.
+    // Cookie-only sessions still restore in the background without blocking public render
     fetch('/api/auth/me', { credentials: 'include', signal: controller.signal })
-      .then(response => { if (active) setSession(response.status === 401 ? 'public' : 'workspace'); })
-      .catch(() => { if (active) setSession('workspace'); })
+      .then(response => {
+        if (!active) return;
+        if (response.ok) {
+          setSession('workspace');
+        } else if (isProtectedPath) {
+          setSession('public');
+        }
+      })
+      .catch(() => {})
       .finally(() => clearTimeout(timeout));
     return () => { active = false; clearTimeout(timeout); controller.abort(); };
-  }, [session]);
+  }, [hasSession, isProtectedPath, session]);
 
-  const workspace = session === 'workspace' || needsWorkspace(location.pathname, location.search, location.hash, hasStoredSession());
-  return <Suspense fallback={<LoadingPage />}>
-    {workspace ? <Workspace /> : session === 'checking' ? <LoadingPage /> : <PublicPage
-      isSupabaseConfigured={false}
-      authFetch={(url, options = {}) => fetch(url, { ...options, credentials: 'include' })}
-      onLoginSuccess={() => { setSession('workspace'); navigate('/dashboard', { replace: true }); }}
-    />}
-  </Suspense>;
+  const workspace = session === 'workspace';
+  return (
+    <Suspense fallback={<LoadingPage />}>
+      {workspace ? (
+        <Workspace />
+      ) : (
+        <PublicPage
+          isSupabaseConfigured={false}
+          authFetch={(url, options = {}) => fetch(url, { ...options, credentials: 'include' })}
+          onLoginSuccess={() => { setSession('workspace'); navigate('/dashboard', { replace: true }); }}
+        />
+      )}
+    </Suspense>
+  );
 }
