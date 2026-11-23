@@ -27,18 +27,18 @@ import {
 
 import { supabase } from './supabaseClient';
 
-import GuidedTour from './components/GuidedTour';
 import Logo from './components/Logo';
 import { TraderRankCard } from './components/TraderRankCard';
 import LegalFooter from './components/LegalFooter';
 import NextEventCard from './components/NextEventCard';
 const LoginPage = React.lazy(() => import('./pages/LoginPage'));
 import { authClient } from './lib/auth-client';
-import ProUpgradeModal from './components/ProUpgradeModal';
+const GuidedTour = React.lazy(() => import('./components/GuidedTour'));
+const ProUpgradeModal = React.lazy(() => import('./components/ProUpgradeModal'));
 import ProFeaturePanel from './components/ProFeaturePanel';
 import CustomAlertModal from './components/CustomAlertModal';
-import OnboardingWizardModal from './components/OnboardingWizardModal';
-import ShareJournalModal from './components/ShareJournalModal';
+const OnboardingWizardModal = React.lazy(() => import('./components/OnboardingWizardModal'));
+const ShareJournalModal = React.lazy(() => import('./components/ShareJournalModal'));
 import KnowYourTrades from './components/KnowYourTrades';
 import { resolveDocKeyFromPath } from './legalDocs';
 const SharedJournalPage = React.lazy(() => import('./pages/SharedJournalPage'));
@@ -4563,20 +4563,22 @@ export default function App() {
   const isUserOnboardingDone = !!(user?.onboardingCompleted || (user as any)?.onboarding_completed);
   if (showOnboardingWizard && !isMentorReadOnlyMode) {
     return (
-      <OnboardingWizardModal
-        onboardingStep={onboardingStep}
-        setOnboardingStep={setOnboardingStep}
-        obExperience={obExperience}
-        setObExperience={setObExperience}
-        obStyle={obStyle}
-        setObStyle={setObStyle}
-        obMarkets={obMarkets}
-        setObMarkets={setObMarkets}
-        actionLoading={actionLoading}
-        onSubmit={submitOnboarding}
-        canDismiss={isUserOnboardingDone}
-        onClose={() => setShowOnboardingWizard(false)}
-      />
+      <React.Suspense fallback={<TabLoading />}>
+        <OnboardingWizardModal
+          onboardingStep={onboardingStep}
+          setOnboardingStep={setOnboardingStep}
+          obExperience={obExperience}
+          setObExperience={setObExperience}
+          obStyle={obStyle}
+          setObStyle={setObStyle}
+          obMarkets={obMarkets}
+          setObMarkets={setObMarkets}
+          actionLoading={actionLoading}
+          onSubmit={submitOnboarding}
+          canDismiss={isUserOnboardingDone}
+          onClose={() => setShowOnboardingWizard(false)}
+        />
+      </React.Suspense>
     );
   }
 
@@ -11090,14 +11092,16 @@ export default function App() {
 
       {/* First-time onboarding guided tour */}
       {showGuidedTour && user && (
-        <GuidedTour
-          step={guidedTourStep}
-          accountCreated={accounts.length > 0}
-          onNext={nextGuidedTourStep}
-          onBack={backGuidedTourStep}
-          onSkip={completeGuidedTour}
-          onFinish={completeGuidedTour}
-        />
+        <React.Suspense fallback={null}>
+          <GuidedTour
+            step={guidedTourStep}
+            accountCreated={accounts.length > 0}
+            onNext={nextGuidedTourStep}
+            onBack={backGuidedTourStep}
+            onSkip={completeGuidedTour}
+            onFinish={completeGuidedTour}
+          />
+        </React.Suspense>
       )}
 
 
@@ -11207,22 +11211,26 @@ export default function App() {
       )}
 
       {/* Share Journal Modal (Pro) */}
-      <ShareJournalModal
-        accountId={selectedAccountId || activeAccount?.id || (accounts.length > 0 ? accounts[0].id : undefined)}
-        accounts={accounts}
-        activeAccountName={activeAccount?.name}
-        onSelectAccount={(accId) => {
-          setSelectedAccountId(accId);
-          persistSelectedAccount(accId);
-          fetchTradesAndParams(accId);
-        }}
-        isOpen={showShareModal}
-        onClose={() => setShowShareModal(false)}
-        isPro={isMentorReadOnlyMode || isProActive}
-        onUpgrade={() => setShowProModal(true)}
-        targetUserId={isMentorReadOnlyMode && inspectedUser ? inspectedUser.id : undefined}
-        targetUserName={isMentorReadOnlyMode && inspectedUser ? inspectedUser.name : undefined}
-      />
+      {showShareModal && (
+        <React.Suspense fallback={null}>
+          <ShareJournalModal
+            accountId={selectedAccountId || activeAccount?.id || (accounts.length > 0 ? accounts[0].id : undefined)}
+            accounts={accounts}
+            activeAccountName={activeAccount?.name}
+            onSelectAccount={(accId) => {
+              setSelectedAccountId(accId);
+              persistSelectedAccount(accId);
+              fetchTradesAndParams(accId);
+            }}
+            isOpen={showShareModal}
+            onClose={() => setShowShareModal(false)}
+            isPro={isMentorReadOnlyMode || isProActive}
+            onUpgrade={() => setShowProModal(true)}
+            targetUserId={isMentorReadOnlyMode && inspectedUser ? inspectedUser.id : undefined}
+            targetUserName={isMentorReadOnlyMode && inspectedUser ? inspectedUser.name : undefined}
+          />
+        </React.Suspense>
+      )}
 
       {/* Pro Upgrade Modal */}
       {/* Never over an inspected trader. Their plan drives every paywall on
@@ -11231,18 +11239,20 @@ export default function App() {
           the admin's session, charging the admin and granting the admin Pro
           while the screen says the trader's name. Gated here rather than at
           the sixteen call sites that open it. */}
-      <ProUpgradeModal
-        isOpen={showProModal && !isMentorReadOnlyMode}
-        onClose={() => setShowProModal(false)}
-        user={user}
-        authFetch={authFetch}
-        onSuccess={async () => {
-          await fetchAccountData();
-          try {
-            const storedUserId = sessionStorage.getItem('auth_user_id') || localStorage.getItem('auth_user_id');
-            const storedEmail = sessionStorage.getItem('auth_email') || localStorage.getItem('auth_email');
-            const headers: Record<string, string> = {};
-            if (storedUserId) headers['x-auth-user-id'] = storedUserId;
+      {showProModal && !isMentorReadOnlyMode && (
+        <React.Suspense fallback={null}>
+          <ProUpgradeModal
+            isOpen={showProModal && !isMentorReadOnlyMode}
+            onClose={() => setShowProModal(false)}
+            user={user}
+            authFetch={authFetch}
+            onSuccess={async () => {
+              await fetchAccountData();
+              try {
+                const storedUserId = sessionStorage.getItem('auth_user_id') || localStorage.getItem('auth_user_id');
+                const storedEmail = sessionStorage.getItem('auth_email') || localStorage.getItem('auth_email');
+                const headers: Record<string, string> = {};
+                if (storedUserId) headers['x-auth-user-id'] = storedUserId;
             if (storedEmail) headers['x-auth-email'] = storedEmail;
             const res = await fetch('/api/auth/me', { headers });
             if (res.ok) {
@@ -11254,6 +11264,8 @@ export default function App() {
           }
         }}
       />
+    </React.Suspense>
+  )}
 
       {/* Modern In-App Custom Alert & Pro Gate Modal */}
       <CustomAlertModal

@@ -9,7 +9,7 @@ import {
   Trophy, Twitter, Wallet, X, Youtube, Zap, MapPin, Mail
 } from 'lucide-react';
 import Logo from '../components/Logo';
-import FXNewsPreview from '../components/FXNewsPreview';
+const FXNewsPreview = React.lazy(() => import('../components/FXNewsPreview'));
 import { LEGAL_DOCS, type LegalDocKey } from '../legalDocs';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { signIn } from '../lib/auth-client';
@@ -1361,7 +1361,9 @@ export default function LoginPage({ isSupabaseConfigured, onLoginSuccess, authFe
           </div>
 
           <div className="animate-fade-up">
-            <FXNewsPreview />
+            <React.Suspense fallback={<div className="h-64 rounded-2xl bg-white/[0.02] border border-white/[0.06] animate-pulse" />}>
+              <FXNewsPreview />
+            </React.Suspense>
           </div>
         </div>
       </section>

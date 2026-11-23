@@ -4,6 +4,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import zlib from 'node:zlib';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
@@ -14730,8 +14731,55 @@ if (IS_DEV) {
   // Static hosting inside Express is only needed on a self-hosted production
   // box. Vercel and Netlify serve dist/ from their own CDN.
   const distPath = path.join(process.cwd(), 'dist');
-  app.use(express.static(distPath));
+
+  // Gzip compression middleware for static & API responses
+  app.use((req, res, next) => {
+    const acceptEncoding = (req.headers['accept-encoding'] as string) || '';
+    if (!acceptEncoding.includes('gzip')) return next();
+
+    const originalSend = res.send;
+    res.send = function (body: any): any {
+      if (res.headersSent || !body) {
+        return originalSend.call(this, body);
+      }
+      const contentType = (res.getHeader('Content-Type') as string) || '';
+      if (!/text|javascript|json|css|svg|xml/.test(contentType)) {
+        return originalSend.call(this, body);
+      }
+      const buffer = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === 'object' ? JSON.stringify(body) : String(body));
+      if (buffer.length < 1024) {
+        return originalSend.call(this, body);
+      }
+      zlib.gzip(buffer, (err, gzipped) => {
+        if (err) {
+          return originalSend.call(this, body);
+        }
+        res.setHeader('Content-Encoding', 'gzip');
+        res.setHeader('Content-Length', gzipped.length);
+        res.removeHeader('ETag');
+        originalSend.call(this, gzipped);
+      });
+    };
+    next();
+  });
+
+  // Long-term immutable caching for hashed assets
+  app.use('/assets', express.static(path.join(distPath, 'assets'), {
+    maxAge: '1y',
+    immutable: true
+  }));
+
+  // General static serving with no-cache for HTML
+  app.use(express.static(distPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      }
+    }
+  }));
+
   app.get('*', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(distPath, 'index.html'));
   });
 
